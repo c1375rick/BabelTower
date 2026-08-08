@@ -1,4 +1,4 @@
-// Babel Tower - 常用短语词典(外置可配置 + 自适应学习)
+﻿// Babel Tower - 常用短语词典(外置可配置 + 自适应学习)
 //
 // 设计:
 //   - 词典按"目标语言"分组,任何语言用户都可受益(不偏袒中文)
@@ -18,6 +18,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const heroNames = require("./hero_names");
 
 // 学习参数
 const LEARN_MIN_HITS = 3;        // 同一译文出现次数达到该值才固化
@@ -77,7 +78,7 @@ function load() {
     } catch (e2) {}
     ensureFile();
   }
-  cache = { user: data.user, learned: data.learned, enabled: isEnabled(), loadedAt: Date.now() };
+  cache = { user: data.user, learned: data.learned, builtin: loadBuiltin(), enabled: isEnabled(), loadedAt: Date.now() };
   return cache;
 }
 
@@ -120,7 +121,7 @@ function record(text, targetLanguage, translation, detectedLanguage) {
   if (!prefix) return;
   const key = normalizeKey(text);
   // 已在 user/learned 表内的词不再重复学习
-  if ((dict.user[prefix] && dict.user[prefix][key]) || (dict.learned[prefix] && dict.learned[prefix][key])) return;
+  if ((dict.user[prefix] && dict.user[prefix][key]) || (dict.builtin[prefix] && dict.builtin[prefix][key]) || (dict.learned[prefix] && dict.learned[prefix][key])) return;
   const statsKey = prefix + "\x00" + key;
   let entry = learnStats.get(statsKey);
   if (!entry) {
@@ -157,7 +158,7 @@ function flushLearned() {
     const prefix = key.slice(0, sep);
     const text = key.slice(sep + 1);
     // 固化前再次确认不在表内(避免重复固化)
-    if ((dict.learned[prefix] && dict.learned[prefix][text]) || (dict.user[prefix] && dict.user[prefix][text])) {
+    if ((dict.learned[prefix] && dict.learned[prefix][text]) || (dict.builtin[prefix] && dict.builtin[prefix][text]) || (dict.user[prefix] && dict.user[prefix][text])) {
       learnStats.delete(key);
       continue;
     }
@@ -187,8 +188,42 @@ function startAutoFlush() {
   process.on("SIGTERM", () => { flushLearned(); process.exit(0); });
 }
 
+
+// 内置词典(随发行附带,中文常用短句/游戏术语;查表顺序 user > builtin > learned)
+function loadBuiltin() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "config", "dictionary.builtin.json"), "utf8"));
+    if (raw && raw.user && typeof raw.user === "object") return raw.user;
+  } catch (e) {}
+  return {};
+}
+
+// 英雄简写组合:"abr mid" -> 亚伯兰 中路;
+// 要求每个词都能查表(词典或英雄简写)且至少一个词是英雄简写,
+// 避免抢走译服务商的工作
+function lookupComposed(text, prefix, dict) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 40) return null;
+  const words = t.toLowerCase().split(/[^a-z0-9']+/).filter(Boolean);
+  if (!words.length || words.length > 6) return null;
+  let anyHero = false;
+  const parts = [];
+  for (const w of words) {
+    let tr = null;
+    if (dict.user[prefix] && dict.user[prefix][w]) tr = dict.user[prefix][w];
+    if (!tr && dict.builtin[prefix] && dict.builtin[prefix][w]) tr = dict.builtin[prefix][w];
+    if (!tr && dict.learned[prefix] && dict.learned[prefix][w]) tr = dict.learned[prefix][w];
+    if (!tr) tr = heroNames.lookupHeroAbbr(w);
+    if (!tr) return null;
+    if (heroNames.isHeroAbbr(w)) anyHero = true;
+    parts.push(String(tr));
+  }
+  if (!anyHero) return null;
+  return { translation: parts.join(" "), detectedLanguage: "en", viaDictionary: true, viaComposed: true };
+}
+
 // ---------- 查表 ----------
-// 查表顺序: user 区 > learned 区
+// 查表顺序: user 区 > builtin 区 > learned 区
 function lookup(text, targetLanguage) {
   const dict = load();
   if (!dict.enabled) return null;
@@ -201,10 +236,13 @@ function lookup(text, targetLanguage) {
   if (dict.user[prefix] && typeof dict.user[prefix] === "object") {
     hit = dict.user[prefix][key];
   }
+  if (!hit && dict.builtin[prefix] && typeof dict.builtin[prefix] === "object") {
+    hit = dict.builtin[prefix][key];
+  }
   if (!hit && dict.learned[prefix] && typeof dict.learned[prefix] === "object") {
     hit = dict.learned[prefix][key];
   }
-  if (!hit) return null;
+  if (!hit) return lookupComposed(text, prefix, dict);
   return { translation: String(hit), detectedLanguage: "en", viaDictionary: true };
 }
 
