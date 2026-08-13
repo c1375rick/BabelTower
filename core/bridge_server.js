@@ -83,7 +83,7 @@ function log(level, msg) {
   } catch (e) {}
 }
 
-// ---------- 进程监视:Deadlock 退出时自动关闭桥 ----------
+// ---------- 进程监视:记录游戏开关状态(桥常驻,不随游戏退出) ----------
 const WATCH_INTERVAL_MS = 2000;
 let gameProcessSeen = false;
 let watchTimer = null;
@@ -100,9 +100,11 @@ function checkGameProcess() {
         if (!gameProcessSeen) log("info", "检测到 " + gameExe + " 运行,监视退出中");
         gameProcessSeen = true;
       } else if (gameProcessSeen) {
-        log("info", gameExe + " 已退出,桥自动关闭");
-        clearTimeout(watchTimer);
-        process.exit(0);
+        // 2026-08-12 修复: 原来这里 process.exit(0) 导致"关游戏再开就没桥"
+        // (桥退出后没有任何机制重新拉起)。改为常驻: 游戏退出后桥保持运行,
+        // 下次游戏启动时直接可用。
+        log("info", gameExe + " 已退出,桥保持运行(等待下次游戏启动)");
+        gameProcessSeen = false;
       }
       if (!process.exitCode) watchTimer = setTimeout(checkGameProcess, WATCH_INTERVAL_MS);
     }

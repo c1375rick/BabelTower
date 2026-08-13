@@ -1,7 +1,7 @@
 ﻿# Babel Tower - 开机自启安装/卸载脚本
 # ------------------------------------------------------------------
-# 目标:不再需要 StartDeadlock.bat —— 桥随 Windows 登录静默启动,
-#      游戏关闭时桥自动退出(由 bridge_server.js 的进程监视实现)。
+# 目标:不再需要 StartDeadlock.bat —— 桥随 Windows 登录静默启动并常驻,
+#      游戏开关不影响桥(2026-08-12 起: 桥不再随游戏退出, 避免"关游戏再开就没桥")。
 #
 # 方式:注册表 HKCU Run 键 + wscript 无窗口运行项目内 vbs
 #      (不依赖启动文件夹,避免已知文件夹重定向问题)
@@ -58,7 +58,8 @@ if ($Action -eq "Install") {
   Write-Host "已注册开机自启(Run 键): $installed"
   Write-Host "vbs 位置: $VbsPath"
   Write-Host ""
-  Write-Host "之后直接 Steam 启动 Deadlock 即可;游戏退出时桥自动关闭。"
+  Write-Host "之后直接 Steam 启动 Deadlock 即可;桥常驻,游戏开关不影响。"
+  Write-Host "若桥意外不在(如手动杀掉): 双击 restart_bridge.bat 重启。"
   Write-Host "卸载: powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Remove"
 } else {
   $removed = $false

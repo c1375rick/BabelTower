@@ -11,7 +11,13 @@
       "enemy team push now": "敌方队伍正在推进",
       "hello world test": "你好，世界测试",
       "hello no settimeout test": "你好，没有 settimeout 测试",
-      "go mid": "去中路"
+      "go mid": "去中路",
+      "gg": "游戏结束",
+      "glhf": "祝你好运，玩得开心",
+      "srry": "抱歉",
+      "help": "帮助",
+      "lul": "阴茎",
+      "ok": "好的"
     }
   }
 }
