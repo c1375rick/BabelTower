@@ -1,3 +1,4 @@
+// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
 // Babel Tower - 本地翻译桥服务器
 //
 // 职责(只做翻译相关的事,不做通用代理):
@@ -83,9 +84,15 @@ function log(level, msg) {
   } catch (e) {}
 }
 
-// ---------- 进程监视:记录游戏开关状态(桥常驻,不随游戏退出) ----------
+// ---------- 进程监视:记录游戏开关状态;桥常驻,不随游戏退出 ----------
+// 2026-08-12 修复(0.1.3-beta.5):原逻辑游戏退出后 process.exit(0) 自杀,
+// 导致"关游戏再开就没桥"。改为常驻:游戏退出后桥保持运行,下次游戏启动直接可用。
+// 2026-08-13 合并 Thirt927 贡献:tasklist 偶发失败/空输出跳过本轮;
+// 游戏"消失"需连续确认 WATCH_CONFIRM_MISSES 次(约 6 秒)才判定退出(仍不自杀)。
 const WATCH_INTERVAL_MS = 2000;
+const WATCH_CONFIRM_MISSES = 3;
 let gameProcessSeen = false;
+let watchMissCount = 0;
 let watchTimer = null;
 
 function checkGameProcess() {
@@ -95,16 +102,28 @@ function checkGameProcess() {
     ["/FI", "IMAGENAME eq " + gameExe, "/FO", "CSV", "/NH"],
     { windowsHide: true },
     function (err, stdout) {
-      const running = !err && String(stdout || "").toLowerCase().indexOf(gameExe) !== -1;
+      if (err) {
+        // tasklist 执行失败(系统繁忙/被杀软拦截):跳过本轮,不改变状态,避免误判
+        if (!process.exitCode) watchTimer = setTimeout(checkGameProcess, WATCH_INTERVAL_MS);
+        return;
+      }
+      const running = String(stdout || "").toLowerCase().indexOf(gameExe) !== -1;
       if (running) {
-        if (!gameProcessSeen) log("info", "检测到 " + gameExe + " 运行,监视退出中");
+        if (!gameProcessSeen) {
+          log("info", "检测到 " + gameExe + " 运行,监视其退出(需连续 " + WATCH_CONFIRM_MISSES + " 次未检测到才记录退出)");
+        }
         gameProcessSeen = true;
+        watchMissCount = 0;
       } else if (gameProcessSeen) {
-        // 2026-08-12 修复: 原来这里 process.exit(0) 导致"关游戏再开就没桥"
-        // (桥退出后没有任何机制重新拉起)。改为常驻: 游戏退出后桥保持运行,
-        // 下次游戏启动时直接可用。
-        log("info", gameExe + " 已退出,桥保持运行(等待下次游戏启动)");
-        gameProcessSeen = false;
+        watchMissCount += 1;
+        if (watchMissCount >= WATCH_CONFIRM_MISSES) {
+          // 桥常驻:游戏退出后桥保持运行,等待下次游戏启动
+          log("info", gameExe + " 已退出,桥保持运行(等待下次游戏启动)");
+          gameProcessSeen = false;
+          watchMissCount = 0;
+        } else {
+          log("info", "未检测到 " + gameExe + " (" + watchMissCount + "/" + WATCH_CONFIRM_MISSES + "),等待确认...");
+        }
       }
       if (!process.exitCode) watchTimer = setTimeout(checkGameProcess, WATCH_INTERVAL_MS);
     }
@@ -158,6 +177,37 @@ function sendJson(res, status, obj) {
   res.end(body);
 }
 
+// ---------- 聊天日志(按比赛 ID 划分) ----------
+function safeMatchId(id) {
+  // 只保留字母数字与 - _ . 防止路径穿越
+  return String(id || "unknown").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64) || "unknown";
+}
+
+function appendChatLog(cfg, body) {
+  const matchId = safeMatchId(body.matchId || (body.lines && body.lines[0] && body.lines[0].matchId) || "");
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!lines.length) return 0;
+  const dir = path.resolve(__dirname, "..", String((cfg.chatLog && cfg.chatLog.dir) || "logs/chat"));
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, matchId + ".jsonl");
+  const out = [];
+  for (const ln of lines) {
+    out.push(JSON.stringify({
+      t: String(ln.t || new Date().toISOString()),
+      matchId: matchId,
+      sender: String(ln.sender || ""),
+      hero: String(ln.hero || ""),
+      heroId: String(ln.heroId || ""),
+      steamid: String(ln.steamid || ""),
+      channel: String(ln.channel || ""),
+      isOwn: !!ln.isOwn,
+      text: String(ln.text || "").slice(0, 2000),
+    }));
+  }
+  fs.appendFileSync(file, out.join("\n") + "\n", "utf8");
+  return out.length;
+}
+
 // ---------- 翻译执行 ----------
 async function runTranslate(cfg, payload) {
   const provider = providerRegistry.getProvider(payload.provider || cfg.provider);
@@ -181,15 +231,52 @@ async function runTranslate(cfg, payload) {
   }
 
   const providerCfg = (cfg[provider.id] || {});
-  const result = await provider.translate(text, {
-    apiKey: providerCfg.apiKey,
-    region: providerCfg.region,
-    endpoint: providerCfg.endpoint,
+  const baseOpts = {
     sourceLanguage: payload.sourceLanguage || cfg.defaults.sourceLanguage || "auto",
     targetLanguage: payload.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans",
     timeoutMs: Number(payload.timeoutMs) || cfg.timeoutMs,
-  });
-  return result;
+  };
+  const errors = [];
+  try {
+    const result = await provider.translate(text, Object.assign({}, baseOpts, {
+      apiKey: providerCfg.apiKey,
+      region: providerCfg.region,
+      endpoint: providerCfg.endpoint,
+      baseUrl: providerCfg.baseUrl,
+      model: providerCfg.model,
+    }));
+    return Object.assign(result, { provider: provider.id });
+  } catch (e) {
+    errors.push(provider.id + ": " + (e && e.message ? e.message : String(e)));
+  }
+
+  // 回退链:按配置依次尝试备用服务商(只尝试已配置 Key 的,避免连环失败浪费时间)
+  const fallbacks = Array.isArray(cfg.fallbackProviders) ? cfg.fallbackProviders : [];
+  for (const pid of fallbacks) {
+    if (pid === provider.id) continue;
+    const fb = providerRegistry.getProvider(pid);
+    if (!fb) continue;
+    const fc = (cfg[pid] || {});
+    // 需要 Key 的服务商没配 Key 就跳过
+    if (pid !== "bing" && !fc.apiKey) continue;
+    try {
+      const fbResult = await fb.translate(text, Object.assign({}, baseOpts, {
+        apiKey: fc.apiKey,
+        region: fc.region,
+        endpoint: fc.endpoint,
+        baseUrl: fc.baseUrl,
+        model: fc.model,
+      }));
+      log("info", "fallback -> " + pid + " (primary " + provider.id + " failed: " + (errors[0] || "").slice(0, 80) + ")");
+      return Object.assign(fbResult, { provider: pid, viaFallback: true });
+    } catch (e2) {
+      errors.push(pid + ": " + (e2 && e2.message ? e2.message : String(e2)));
+    }
+  }
+
+  const last = new Error(errors.join(" | "));
+  last.status = 502;
+  throw last;
 }
 
 // ---------- 桥页面(供游戏内隐藏 HTML 面板加载) ----------
@@ -213,11 +300,14 @@ function bridgePage(query) {
     "try{location.hash='#'+encodeURIComponent(s);}catch(e){}",
     "}",
     "try{document.title='lct-alive';}catch(e){}",
-    "setTimeout(function(){if(!done){done=true;out({ok:false,error:'bridge_timeout'});}},8000);",
-    "var req={operation:op,text:q.get('text')||'',sourceLanguage:q.get('source')||'auto',targetLanguage:q.get('target')||'zh-Hans'};",
+    "var t=Math.max(Number(q.get('timeoutMs'))||8000,8000);",
+    "setTimeout(function(){if(!done){done=true;out({ok:false,error:'bridge_timeout'});}},t);",
+    "var req={operation:op,text:q.get('text')||'',sourceLanguage:q.get('source')||'auto',targetLanguage:q.get('target')||'zh-Hans',timeoutMs:Number(q.get('timeoutMs'))||undefined};",
     "var d=q.get('d');if(d){try{req=JSON.parse(d);}catch(e){}}",
     "var path='/api/v1/'+(op==='translate'?'translate':op);",
-    "fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req)})",
+    "var fetchOpts={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req)};",
+    "if(op==='health'){fetchOpts={method:'GET'};}",
+    "fetch(path,fetchOpts)",
     ".then(function(r){return r.json();})",
     ".then(function(j){if(done)return;done=true;out(j);})",
     ".catch(function(e){if(done)return;done=true;out({ok:false,error:String(e)});});",
@@ -227,16 +317,61 @@ function bridgePage(query) {
 }
 
 // ---------- API 路由 ----------
+// GET 兼容:游戏侧 $.AsyncWebRequest 只能发 GET,请求体通过 ?d=<JSON> 传递;
+// 无 d 时 translate/test 用 query 参数(text/source/target/provider)构造。
+function bodyFromRequest(url, bodyObj) {
+  if (bodyObj) return bodyObj;
+  const d = url.searchParams.get("d");
+  if (d) {
+    try { return JSON.parse(d); } catch (e) {}
+  }
+  if (url.pathname === "/api/v1/translate") {
+    return {
+      text: url.searchParams.get("text") || "",
+      sourceLanguage: url.searchParams.get("source") || "auto",
+      targetLanguage: url.searchParams.get("target") || "zh-Hans",
+      provider: url.searchParams.get("provider") || undefined,
+      timeoutMs: Number(url.searchParams.get("timeoutMs")) || undefined,
+    };
+  }
+  return null;
+}
+
 async function handleApi(req, res, url, bodyObj) {
   const p = url.pathname;
 
-  if (p === "/api/v1/health") {
-    sendJson(res, 200, { ok: true, name: "Babel Tower Bridge", version: "0.1.0" });
+  if (p === "/api/v1/log" && (req.method === "POST" || req.method === "GET")) {
+    bodyObj = bodyFromRequest(url, bodyObj);
+    if (!bodyObj) return sendJson(res, 400, { ok: false, error: "bad_json" });
+    const cfgL = configStore.load();
+    if (!(cfgL.chatLog && cfgL.chatLog.enabled)) return sendJson(res, 200, { ok: true, skipped: "chat_log_disabled" });
+    try {
+      const n = appendChatLog(cfgL, bodyObj);
+      sendJson(res, 200, { ok: true, written: n });
+    } catch (e) {
+      log("warn", "chat log write failed: " + (e && e.message ? e.message : String(e)));
+      sendJson(res, 500, { ok: false, error: "chat_log_write_failed" });
+    }
     return;
   }
 
-  if (p === "/api/v1/translate" && req.method === "POST") {
-    if (!bodyObj) return sendJson(res, 400, { ok: false, error: "bad_json" });
+  if (p === "/api/v1/health") {
+    const cfgH = configStore.load();
+    sendJson(res, 200, {
+      ok: true,
+      name: "Babel Tower Bridge",
+      version: "0.1.3",
+      provider: cfgH.provider,
+      providers: providerRegistry.listProviders(),
+      fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],
+      chatLog: Object.assign({ enabled: true, dir: "logs/chat" }, cfgH.chatLog || {}),
+    });
+    return;
+  }
+
+  if (p === "/api/v1/translate" && (req.method === "POST" || req.method === "GET")) {
+    bodyObj = bodyFromRequest(url, bodyObj);
+    if (!bodyObj || !String(bodyObj.text || "").trim()) return sendJson(res, 400, { ok: false, error: "bad_json" });
     const cfg = configStore.load();
     try {
       const result = await runTranslate(cfg, bodyObj);
@@ -272,10 +407,15 @@ async function handleApi(req, res, url, bodyObj) {
     return;
   }
 
-  if (p === "/api/v1/test" && req.method === "POST") {
+  if (p === "/api/v1/test" && (req.method === "POST" || req.method === "GET")) {
     const cfg = configStore.load();
+    const tBody = bodyFromRequest(url, bodyObj);
     try {
-      const result = await runTranslate(cfg, { text: "hello", targetLanguage: "zh-Hans", sourceLanguage: "auto" });
+      const result = await runTranslate(cfg, {
+        text: (tBody && tBody.text) || "hello",
+        targetLanguage: (tBody && tBody.targetLanguage) || "zh-Hans",
+        sourceLanguage: (tBody && tBody.sourceLanguage) || "auto",
+      });
       log("info", "test ok");
       sendJson(res, 200, { ok: true, translation: result.translation, message: "连接成功" });
     } catch (e) {
@@ -287,6 +427,20 @@ async function handleApi(req, res, url, bodyObj) {
 
   if (p === "/api/v1/config") {
     if (req.method === "GET") {
+      // GET + d 参数:游戏侧 AsyncWebRequest 保存配置(读配置保持无 d)
+      const d = url.searchParams.get("d");
+      if (d) {
+        let saveBody = null;
+        try { saveBody = JSON.parse(d); } catch (e) {}
+        if (saveBody && saveBody.config) {
+          const current = configStore.load();
+          const next = configStore.applyMaskedUpdate(current, saveBody.config || {});
+          configStore.save(next);
+          log("info", "config saved (GET)");
+          sendJson(res, 200, { ok: true, config: configStore.mask(next) });
+          return;
+        }
+      }
       sendJson(res, 200, { ok: true, config: configStore.mask(configStore.load()) });
       return;
     }

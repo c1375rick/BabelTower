@@ -194,6 +194,17 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
   Hantu-Raya/Deadlock-mods-collection(Apache-2.0,提供了原版 chat.xml 反编译与
   Panorama 轮询模式参考)、plainheart/bing-translate-api(公共接口协议参考)
 
+### 贡献者:Thirt927
+
+本项目合并了 [Thirt927](https://github.com/Thirt927) 的 `optimizations` 分支核心功能,包括:
+
+- **多翻译接口支持**:DeepL / Google / OpenAI 兼容接口(可在设置面板切换,支持回退链)
+- **内置词典**:`config/dictionary.builtin.json`(2801 条,JSON 文件无法内联注释,贡献记录于此)
+- **大厅聊天翻译**:HUD 顶栏与大厅聊天记录支持(`hudchat.xml`)
+- **聊天日志**:按比赛 ID 落盘到 `logs/chat/`
+
+上述贡献按 GPL-3.0 §5 要求,在合并文件头部标注 `// Contributor: Thirt927`,保留原始版权声明。
+
 ## AI 辅助开发声明
 
 本项目在开发过程中使用了 AI 编程助手(OpenClaw)辅助完成以下工作:

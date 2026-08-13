@@ -1,80 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0 -->
+
 <!--
-  Babel Tower: Deadlock 聊天布局覆盖
-  本文件以原版 panorama/layout/chat.xml 的反编译重建结构为基础(Valve 素材,
-  保留原结构以保证聊天功能与引擎数据绑定正常),额外加入 LinguaChat 的
-  样式/脚本引用、设置按钮与设置面板。所有原版 ID / class / 属性保持不变。
-  原版结构参考: references/poker_chat.xml(同源重建,Apache-2.0 仓库)
+  Babel Tower: Deadlock 大厅(HUD)聊天布局覆盖
+  基于原版 panorama/layout/hudchat.xml 的反编译重建结构(Valve 素材,保留原结构),
+  额外加入 LinguaChat 的样式/脚本引用、设置按钮与设置面板(与 chat.xml 一致),
+  使大厅聊天同样支持翻译/日志/发送前翻译。
+  原版结构(反编译):CitadelHudChat > FullChatContainer > ChatMainPanel >
+    ChatLinesArea > (ChatLinesContainer > ChatLinesWrapper > ChatLinesPanel) | ChatDisabled | ChatControls
   注意:Panorama 的 Button 不渲染 text 属性,按钮文字必须用内嵌 <Label>。
 -->
 <root>
 	<styles>
 		<include src="s2r://panorama/styles/citadel_base_styles.vcss_c" />
-		<include src="s2r://panorama/styles/chat.vcss_c" />
+		<include src="s2r://panorama/styles/hudchat.vcss_c" />
 		<include src="s2r://panorama/styles/lingua_chat.vcss_c" />
 	</styles>
 	<scripts>
 		<include src="s2r://panorama/scripts/lingua_chat.vjs_c" />
 	</scripts>
-	<snippets>
-		<snippet name="ChatMessageSource">
-			<Panel>
-				<Label class="ChannelName" text="[{s:channel_name}]" />
-				<Label class="SenderName" text="{s:sender_name}" />
-			</Panel>
-		</snippet>
-		<snippet name="ChatMessageContents_Text">
-			<Panel class="Text">
-				<Label text="{s:message_text}" />
-			</Panel>
-		</snippet>
-		<snippet name="ChatMessageContents_Ping">
-			<Panel class="Ping">
-				<Label id="PingLabel" text="{s:ping_text}" />
-			</Panel>
-		</snippet>
-		<snippet name="ChatMessageSender_HeroImage">
-			<Panel class="SenderHeroImage">
-				<CitadelHeroImage id="HeroImage" heroimagestyle="small" />
-			</Panel>
-		</snippet>
-		<snippet name="ChatMessageSender_AvatarImage">
-			<Panel class="SenderAvatarImage">
-				<CitadelAvatarImage id="AvatarImage" />
-			</Panel>
-		</snippet>
-		<snippet name="ChatMessageSender_LocalClient">
-			<Panel class="SenderLocalClient" />
-		</snippet>
-		<snippet name="ChatMessage">
-			<Panel class="ChatMessage Expired">
-				<Panel id="SenderImage" />
-				<Panel class="MessageBody">
-					<Panel id="MessageSource" />
-					<Panel id="MessageContents" />
+	<CitadelHudChat defaultfocus="ChatInput" hittest="false">
+		<Panel id="FullChatContainer" hittest="false">
+			<Panel id="ChatMainPanel" hittest="false">
+				<Panel id="ChatLinesArea" hittest="false">
+					<Panel id="ChatLinesContainer" hittest="false">
+						<Panel id="ChatLinesWrapper" hittest="false">
+							<Panel id="ChatLinesPanel" hittest="false" />
+						</Panel>
+					</Panel>
+					<Panel id="ChatLinesOverlay" hittest="false" />
+				</Panel>
+				<Panel id="ChatDisabled">
+					<Label text="#Citadel_Hud_ChatDisabled" />
+				</Panel>
+				<Panel id="ChatControls">
+					<Label id="ChatTargetLabel" text="#citadel_chat_placeholder" />
+					<TextEntry id="ChatInput" oninputsubmit="LCTOnChatSubmit();" onblur="CitadelChatTextBlur();" placeholder="" maxchars="1024" />
+					<Label id="LCTOutgoingFailTip" class="LCTOutgoingFailTip" text="" />
+					<Panel id="LCTBridgeDot" class="LCTBridgeDot" />
+					<Button id="LCTSettingsButton" class="LCTSettingsButton" onactivate="LCTToggleSettings();">
+						<Label text="译" />
+					</Button>
 				</Panel>
 			</Panel>
-		</snippet>
-	</snippets>
-	<CitadelChat defaultfocus="ChatInput" hittest="false">
-		<Panel id="ChatLinesArea" hittest="false">
-			<Panel class="ChatLinesWrapper" hittest="false">
-				<Panel id="ChatMessages" hittest="false" />
-			</Panel>
-		</Panel>
-		<Label class="ChatDisabledLabel" text="#Citadel_Hud_ChatDisabled" hittest="false" />
-		<Panel id="ChatControls">
-			<Label id="ChatTargetLabel" text="#citadel_chat_placeholder" />
-			<TextEntry id="ChatInput" oninputsubmit="LCTOnChatSubmit();" onblur="CitadelChatInputBlur();" placeholder="" maxchars="1024" />
-			<Label id="LCTOutgoingFailTip" class="LCTOutgoingFailTip" text="" />
-			<Panel id="LCTBridgeDot" class="LCTBridgeDot" />
-			<Button id="LCTSettingsButton" class="LCTSettingsButton" onactivate="LCTToggleSettings();">
-				<Label text="译" />
-			</Button>
 		</Panel>
 		<!-- Babel Tower 设置面板(默认隐藏,居中弹窗;ESC 关闭) -->
-		<Panel id="LCTSettingsPanel" class="LCTSettingsPanel" canfocus="true" oncancel="LCTCloseSettings();">
+		<Panel id="LCTSettingsPanel" class="LCTSettingsPanel" oncancel="LCTCloseSettings();">
 			<Panel class="LCTSettingsHeader">
 				<Label class="LCTPanelTitle" text="Babel Tower 设置" />
 				<Button id="LCTCloseBtn" class="LCTCloseButton" onactivate="LCTCloseSettings();">
@@ -117,19 +88,19 @@
 					</Panel>
 					<Panel class="LCTSettingsRow" id="LCTRowOpenaiBase">
 						<Label class="LCTRowLabel" text="OpenAI 兼容 Base URL" />
-						<TextEntry id="LCTOpenaiBaseUrl" class="LCTInput" text="" maxchars="256" />
+						<TextEntry id="LCTOpenaiBaseUrl" class="LCTInput" text="" maxchars="256" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow" id="LCTRowOpenaiModel">
 						<Label class="LCTRowLabel" text="模型名(如 gpt-4o-mini / llama3)" />
-						<TextEntry id="LCTOpenaiModel" class="LCTInput" text="" maxchars="128" />
+						<TextEntry id="LCTOpenaiModel" class="LCTInput" text="" maxchars="128" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow" id="LCTRowDeeplEndpoint">
 						<Label class="LCTRowLabel" text="DeepL 端点(free/pro)" />
-						<TextEntry id="LCTDeeplEndpoint" class="LCTInput" text="" maxchars="256" />
+						<TextEntry id="LCTDeeplEndpoint" class="LCTInput" text="" maxchars="256" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="服务商失败自动回退(逗号分隔,如 microsoft,openai;仅使用已填 Key 的)" />
-						<TextEntry id="LCTFallback" class="LCTInput" text="" maxchars="256" />
+						<TextEntry id="LCTFallback" class="LCTInput" text="" maxchars="256" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="目标语言(点击选择)" />
@@ -228,5 +199,5 @@
 		</Panel>
 		<!-- Babel Tower 隐藏 HTML 桥面板(必须用 <HTML> 标签在 XML 声明,运行时 CreatePanel 不生效) -->
 		<HTML id="LCTBridgePanel" class="LCTBridgePanel" />
-	</CitadelChat>
+	</CitadelHudChat>
 </root>

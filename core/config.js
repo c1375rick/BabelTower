@@ -1,3 +1,4 @@
+// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
 // Babel Tower - 本地配置管理
 // 配置只存放在本地磁盘 config/config.json(绝不进入 VPK / Git / 日志)。
 // 首次运行会自动从 config.example.json 生成。
@@ -14,6 +15,27 @@ const DEFAULTS = {
     apiKey: "",
     region: "",
     endpoint: "https://api.cognitive.microsofttranslator.com",
+  },
+  openai: {
+    apiKey: "",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+  },
+  deepl: {
+    apiKey: "",
+    endpoint: "https://api-free.deepl.com/v2/translate",
+  },
+  google: {
+    apiKey: "",
+  },
+  // 主服务商失败时的自动回退顺序(可空数组表示不回退)
+  // 例:["bing"] 表示 bing 失败后依次尝试 bing(仅当它是备用时才有意义)
+  // 建议:["microsoft","openai","deepl","google"] (仅尝试已配置 Key 的服务商)
+  fallbackProviders: [],
+  // 聊天日志(按比赛 ID 划分文件)
+  chatLog: {
+    enabled: true,
+    dir: "logs/chat",
   },
   defaults: {
     sourceLanguage: "auto",
@@ -97,6 +119,9 @@ function save(cfg) {
 // 返回给游戏面板的配置(apiKey 打码,绝不回传明文)
 function mask(cfg) {
   const key = (cfg.microsoft && cfg.microsoft.apiKey) || "";
+  const openaiKey = (cfg.openai && cfg.openai.apiKey) || "";
+  const deeplKey = (cfg.deepl && cfg.deepl.apiKey) || "";
+  const googleKey = (cfg.google && cfg.google.apiKey) || "";
   return {
     port: cfg.port,
     provider: cfg.provider,
@@ -106,6 +131,23 @@ function mask(cfg) {
       region: (cfg.microsoft && cfg.microsoft.region) || "",
       endpoint: (cfg.microsoft && cfg.microsoft.endpoint) || DEFAULTS.microsoft.endpoint,
     },
+    openai: {
+      apiKey: openaiKey ? "********" : "",
+      hasApiKey: !!openaiKey,
+      baseUrl: (cfg.openai && cfg.openai.baseUrl) || DEFAULTS.openai.baseUrl,
+      model: (cfg.openai && cfg.openai.model) || DEFAULTS.openai.model,
+    },
+    deepl: {
+      apiKey: deeplKey ? "********" : "",
+      hasApiKey: !!deeplKey,
+      endpoint: (cfg.deepl && cfg.deepl.endpoint) || DEFAULTS.deepl.endpoint,
+    },
+    google: {
+      apiKey: googleKey ? "********" : "",
+      hasApiKey: !!googleKey,
+    },
+    fallbackProviders: Array.isArray(cfg.fallbackProviders) ? cfg.fallbackProviders : [],
+    chatLog: Object.assign({ enabled: true, dir: "logs/chat" }, cfg.chatLog || {}),
     defaults: {
       sourceLanguage: (cfg.defaults && cfg.defaults.sourceLanguage) || "auto",
       targetLanguage: (cfg.defaults && cfg.defaults.targetLanguage) || "zh-Hans",
@@ -133,12 +175,61 @@ function applyMaskedUpdate(current, incoming) {
     if (typeof ms.endpoint === "string" && ms.endpoint) cfg.microsoft.endpoint = ms.endpoint;
   }
 
-  // 扁平式(面板)字段
+  // 扁平式(面板)字段:apiKey 属于“当前选中的服务商”,
+  // 必须按 provider 映射到对应段(DeepSeek 经 OpenAI 兼容填 openai.apiKey,不能固定写 microsoft)
+  const flatKeyTarget = incoming.provider || cfg.provider;
   if (typeof incoming.apiKey === "string") {
-    if (incoming.apiKey && incoming.apiKey !== "********") cfg.microsoft.apiKey = incoming.apiKey;
-    if (incoming.apiKey === "") cfg.microsoft.apiKey = "";
+    const key = incoming.apiKey;
+    // 清空 Key 必须显式传 clearApiKey:true;空字符串不再清空,
+    // 防止面板字段被清空/异步未回填时误删已保存的 Key(见第 16 轮)
+    const clearKey = incoming.clearApiKey === true;
+    const setKey = function (obj) {
+      if (key && key !== "********") obj.apiKey = key;
+      if (key === "" && clearKey) obj.apiKey = "";
+    };
+    if (flatKeyTarget === "openai") setKey(cfg.openai);
+    else if (flatKeyTarget === "deepl") setKey(cfg.deepl);
+    else if (flatKeyTarget === "google") setKey(cfg.google);
+    else setKey(cfg.microsoft);
   }
   if (typeof incoming.region === "string") cfg.microsoft.region = incoming.region;
+
+  if (incoming.openai) {
+    const oa = incoming.openai;
+    if (typeof oa.apiKey === "string") {
+      if (oa.apiKey && oa.apiKey !== "********") cfg.openai.apiKey = oa.apiKey;
+      if (oa.apiKey === "") cfg.openai.apiKey = "";
+    }
+    if (typeof oa.baseUrl === "string" && oa.baseUrl) cfg.openai.baseUrl = oa.baseUrl;
+    if (typeof oa.model === "string" && oa.model) cfg.openai.model = oa.model;
+  }
+  if (incoming.deepl) {
+    const dl = incoming.deepl;
+    if (typeof dl.apiKey === "string") {
+      if (dl.apiKey && dl.apiKey !== "********") cfg.deepl.apiKey = dl.apiKey;
+      if (dl.apiKey === "") cfg.deepl.apiKey = "";
+    }
+    if (typeof dl.endpoint === "string" && dl.endpoint) cfg.deepl.endpoint = dl.endpoint;
+  }
+  if (incoming.google) {
+    const gg = incoming.google;
+    if (typeof gg.apiKey === "string") {
+      if (gg.apiKey && gg.apiKey !== "********") cfg.google.apiKey = gg.apiKey;
+      if (gg.apiKey === "") cfg.google.apiKey = "";
+    }
+  }
+  if (Array.isArray(incoming.fallbackProviders)) {
+    cfg.fallbackProviders = incoming.fallbackProviders.filter((x) => typeof x === "string");
+  }
+  if (incoming.chatLog && typeof incoming.chatLog === "object") {
+    if (typeof incoming.chatLog.enabled === "boolean") cfg.chatLog.enabled = incoming.chatLog.enabled;
+    if (typeof incoming.chatLog.dir === "string" && incoming.chatLog.dir) cfg.chatLog.dir = incoming.chatLog.dir;
+  }
+
+  // 扁平式:面板可能传 openaiBaseUrl/openaiModel/deeplEndpoint 等
+  if (typeof incoming.openaiBaseUrl === "string" && incoming.openaiBaseUrl) cfg.openai.baseUrl = incoming.openaiBaseUrl;
+  if (typeof incoming.openaiModel === "string" && incoming.openaiModel) cfg.openai.model = incoming.openaiModel;
+  if (typeof incoming.deeplEndpoint === "string" && incoming.deeplEndpoint) cfg.deepl.endpoint = incoming.deeplEndpoint;
 
   if (typeof incoming.provider === "string" && incoming.provider) cfg.provider = incoming.provider;
 

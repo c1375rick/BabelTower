@@ -296,8 +296,8 @@ async function test5_pingBubbleKept() {
 }
 
 async function test6_ownMessageSkipped() {
-  console.log("\n[6] own message (IsSelf): not translated, not collapsed");
-  const env = freshEnv(CFG.translationOnly);
+  console.log("\n[6] own message (IsSelf) with translateOwn=false: not translated, not collapsed");
+  const env = freshEnv(Object.assign({}, CFG.translationOnly, { translateOwn: false }));
   const row = env.addRow("text", "Me", "hello team", { own: true });
   await sleep(1500);
   assert("no label", labelsOf(row).length === 0);
@@ -369,11 +369,12 @@ async function test9_hudTopBarTranslation() {
 }
 
 async function test10_hudOwnMessageSkipped() {
-  console.log("\n[10] HUD top bar chat: own message (IsSelf) -> not translated");
-  const env = freshEnv(CFG.translationOnly);
+  console.log("\n[10] HUD top bar chat: own message (IsSelf) with translateOwn=false -> not translated");
+  const env = freshEnv(Object.assign({}, CFG.translationOnly, { translateOwn: false }));
   const row = env.addHudRow("hello team", { own: true });
   await sleep(1500);
   const labels = row.FindChildrenWithClassTraverse("LCTTranslationHud");
+
   assert("no translation label for own HUD message", labels.length === 0, labels.length + " labels");
 }
 

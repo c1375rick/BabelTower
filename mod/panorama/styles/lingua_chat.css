@@ -1,3 +1,4 @@
+/* Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0 */
 /* Babel Tower - 聊天翻译 UI 样式
    仅使用 Source 2 Panorama 支持的 CSS(flow-children / align / visibility 等),
    技术写法参照已发布的同类 mod(如 DLCT)验证过的模式。 */
@@ -62,8 +63,8 @@
 /* ---- 设置面板(默认隐藏,居中弹窗) ---- */
 .LCTSettingsPanel {
   align: center center;
-  width: 640px;
-  height: 560px;
+  width: 660px;
+  height: 600px;
   background-color: gradient( linear, 0% 0%, 0% 100%, from( #141a20 ), color-stop( 0.48, #0e1318 ), to( #0a0d10 ) );
   border: 1px solid rgba(255, 252, 244, 0.08);
   border-radius: 6px;
@@ -345,28 +346,52 @@
   visibility: visible;
 }
 
-/* ---- 译文标签(追加在原文下方,金色醒目) ---- */
+/* 服务商专属配置行(默认隐藏,由脚本按当前服务商显示) */
+#LCTRowRegion, #LCTRowOpenaiBase, #LCTRowOpenaiModel, #LCTRowDeeplEndpoint {
+  visibility: collapse;
+}
+
+/* 桥状态标签(状态栏右侧) */
+.LCTBridgeStatus {
+  vertical-align: center;
+  align: right center;
+  color: #7fd8a8;
+  font-size: 12px;
+  margin-left: auto;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+/* ---- 译文标签(追加在原文下方,蓝色气泡:浅蓝斜体 + 深色半透明底) ---- */
 .LCTTranslation {
-  color: #ffd27f;
-  font-size: 16px;
-  font-weight: bold;
-  letter-spacing: 0.2px;
+  color: #8fd8ff;
+  font-size: 13px;
+  font-style: italic;
+  background-color: rgba(8, 12, 20, 0.85);
+  border: 1px solid rgba(143, 216, 255, 0.35);
+  border-radius: 4px;
+  padding: 2px 7px;
   margin-top: 3px;
   margin-left: 58px;
   max-width: 290px;
+  width: fit-children;
   text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
   white-space: normal;
 }
 
-/* 翻译失败红字胶囊(⚠ + 红色背景,更醒目) */
+
+/* 翻译失败红字(蓝底红字,气泡风格一致) */
 .LCTTranslationError {
   color: #ff9b94;
-  background-color: rgba(180, 40, 40, 0.25);
-  border: 1px solid rgba(255, 120, 110, 0.35);
-  border-radius: 3px;
+
   font-size: 13px;
+  background-color: rgba(40, 10, 12, 0.85);
+  border: 1px solid rgba(255, 120, 110, 0.4);
+  border-radius: 4px;
+  padding: 2px 7px;
   margin-left: 58px;
   margin-top: 3px;
+
   padding: 2px 6px;
   text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
   white-space: normal;
@@ -384,26 +409,26 @@
   padding: 2px 6px;
   vertical-align: middle;
   visibility: collapse;
+
 }
 
 /* ---- HUD 顶栏聊天气泡内译文(citadel_hud_top_bar_chat) ----
    译文挂在 MessageContents 内(ChatBubble 正下方,该容器 flow-children:down 已确认),
-   游戏气泡本身是浅色底(薄荷绿渐变,原文黑字 15px)=> 译文用深色胶囊白字,保证可读;
-   margin-left 对齐气泡左侧(行 padding 10px)。敌方气泡右对齐时用下方规则右对齐。 */
+   蓝色气泡风格与普通行统一(浅蓝斜体 + 深色半透明底)。 */
 .LCTTranslationHud {
-  background-color: rgba(8, 10, 14, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 3px;
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: bold;
+  background-color: rgba(8, 12, 20, 0.92);
+  border: 1px solid rgba(143, 216, 255, 0.4);
+  border-radius: 4px;
+  color: #8fd8ff;
+  font-size: 13px;
+  font-style: italic;
   letter-spacing: 0.2px;
   margin-top: 4px;
   margin-bottom: 4px;
   margin-left: 10px;
   margin-right: 10px;
   max-width: 220px;
-  padding: 3px 8px;
+  padding: 2px 8px;
   white-space: normal;
 }
 
@@ -422,6 +447,34 @@
   color: #ffb4ad;
   margin-left: 10px;
   margin-right: 10px;
+}
+
+/* ---- 大厅(hudchat)聊天行译文 ----
+   行本身 flow-children:right(气泡横排),首次遇到时由脚本包一层 LCTLobbyWrap(横向)
+   并把行改为纵向流,译文标签作为行内第二个子面板显示在原文气泡下方。
+   若运行时不支持 SetParent(极少数),译文退化为内联显示在行尾,仍可见。 */
+.LCTLobbyWrap {
+  flow-children: right;
+  width: 100%;
+  height: fit-children;
+}
+
+.LCTTranslationLobby {
+  background-color: rgba(8, 12, 20, 0.92);
+  border: 1px solid rgba(143, 216, 255, 0.4);
+  border-radius: 4px;
+  color: #8fd8ff;
+  font-size: 13px;
+  font-style: italic;
+  margin-top: 3px;
+  margin-left: 4px;
+  max-width: 380px;
+  padding: 2px 8px;
+  white-space: normal;
+}
+
+.LCTTranslationLobby.LCTTranslationError {
+  color: #ff9b94;
 }
 
 /* ---- HUD 测试译文浮层(!lcttest 专用;挂在顶栏 chat 根面板下,
