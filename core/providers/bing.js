@@ -136,7 +136,12 @@ async function translate(text, opts) {
     const form = new URLSearchParams();
     form.set("fromLang", opts.sourceLanguage && opts.sourceLanguage !== "auto" ? opts.sourceLanguage : "auto-detect");
     form.set("text", String(text));
-    form.set("to", String(opts.targetLanguage || "zh-Hans"));
+    // BUGFIX 2026-08-14:bing 免费接口对裸 "en" 目标的中文短词语言检测失败直接返回原文
+    // (detectedLanguage:null,实测:你好/在吗/收到/打团/上单/撤退→en 均返回原文),
+    // 映射为区域代码 en-GB 后稳定正常(你好→Hello/早上好→Good morning 等)。
+    // en-US 实测被拒(400),故不用 en-US。
+    const TO_TARGET_OVERRIDES = { "en": "en-GB" };
+    form.set("to", TO_TARGET_OVERRIDES[String(opts.targetLanguage || "zh-Hans")] || String(opts.targetLanguage || "zh-Hans"));
     form.set("token", c.token);
     form.set("key", c.key);
     form.set("tryFetchingGenderDebiasedTranslations", "true");

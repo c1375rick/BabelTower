@@ -27,6 +27,8 @@
   const CHAT_TARGET_LABEL_ID = "ChatTargetLabel";
   const SENDER_NAME_CLASS = "SenderName";
   const CHANNEL_NAME_CLASS = "ChannelName";
+  // 自己的消息标记:引擎渲染本地玩家消息时,行内会放一个 class="SenderLocalClient" 的面板
+  // (原版 snippet ChatMessageSender_LocalClient;注意是 class 不是 id,必须用 findClass 匹配)
   const LOCAL_CLIENT_ID = "SenderLocalClient";
 
   // ---- HUD 顶栏聊天结构(citadel_hud_top_bar_chat.vxml,与 QoL 类 HUD mod 兼容:不改布局只扫描)----
@@ -101,6 +103,8 @@
     lobbyScanned: 0, // 大厅容器已扫描行数
     hudLogged: false,
     bootLogged: false,
+    cfgSynced: false, // 启动时是否已从桥同步过配置(healthCheck 补触发用)
+    cfgSyncing: false, // 配置同步是否进行中(防 healthCheck 重复触发叠加)
     seen: new Set(), // 消息签名去重
     cache: new Map(), // 签名 -> { translation }
     queue: [], // 待翻译任务
@@ -692,7 +696,7 @@
       if (!text) return null;
       const sender = safeText(findClass(row, LOBBY_PERSONA_CLASS)) || UNKNOWN_NAME;
       const prefix = safeText(findClass(row, LOBBY_PREFIX_CLASS));
-      const isOwn = hasClass(row, "IsSelf") || !!findChild(row, LOCAL_CLIENT_ID);
+      const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
       return {
         sender: sender,
         channel: prefix || "lobby",
@@ -710,7 +714,7 @@
       const textLabel = findChild(row, HUD_TEXT_ID);
       const text = safeText(textLabel) || collectText(row);
       if (!text) return null;
-      const isOwn = hasClass(row, "IsSelf") || !!findChild(row, LOCAL_CLIENT_ID);
+      const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
       return { sender: UNKNOWN_NAME, channel: "hud", text: text, isOwn: isOwn, hud: true };
     }
     const source = findChild(row, MESSAGE_SOURCE_ID);
@@ -724,7 +728,7 @@
       safeText(findClass(row, CHANNEL_NAME_CLASS));
     const text = collectText(contents);
     if (!text) return null;
-    const isOwn = hasClass(row, "IsSelf") || !!findChild(row, LOCAL_CLIENT_ID);
+    const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
     return {
       sender: sender,
       channel: channel,
@@ -1846,6 +1850,14 @@ function injectTranslation(row, sig, text) {
         State.bridgeUp = true;
         State.bridgeOfflineSince = 0;
         setBridgeStatus("桥在线 · 服务商 " + (res.provider || State.cfg.provider || "bing"));
+        // BUGFIX:启动时若配置尚未同步成功(boot 时桥可能还没起),
+        // 健康检查通过后补一次同步,确保 translateOwn/chatLog 等开关从桥回填。
+        if (!State.cfgSynced && !State.cfgSyncing) {
+          State.cfgSyncing = true;
+          syncBridgeConfig(function () {
+            State.cfgSyncing = false;
+          });
+        }
       } else {
         State.bridgeUp = false;
         if (!State.bridgeOfflineSince) {
@@ -2355,6 +2367,10 @@ function injectTranslation(row, sig, text) {
           State.cfg.chatLog = c.chatLog.enabled;
           setToggleText("LCTChatLog", State.cfg.chatLog);
         }
+        if (typeof c.translateOwn === "boolean") {
+          State.cfg.translateOwn = c.translateOwn;
+          setToggleText("LCTTranslateOwn", State.cfg.translateOwn);
+        }
       }
     });
     // 聚焦面板本身(与 DLCT 一致:优先控件,失败则面板;面板持焦后 Tab/Enter 可用)
@@ -2769,30 +2785,42 @@ function injectTranslation(row, sig, text) {
   function syncBridgeConfig(callback) {
     // BUGFIX 0.1.3:boot 时主动从桥拉取已保存配置,同步进 State.cfg,
     // 否则游戏重启后 outgoing 等偏好回落到 UI_DEFAULTS(发送前翻译默认关)。
-    // boot 时 UI 树可能尚未构建,面板找不到会立即失败 -> 延迟重试,10s 内最多 5 次。
+    // boot 时 UI 树可能尚未构建,面板找不到会立即失败 -> 延迟重试。
+    // BUGFIX 0.1.3 (again):不能依赖 State.bridgeUp 决定是否重试——
+    // bridgeUp 为 true 时一次拉取失败会静默放弃,translateOwn 永远不同步。
+    // 改为:只要没同步成功就持续重试(最多 30 次/60 秒),成功后置 State.cfgSynced。
     let attempts = 0;
-    const MAX_SYNC_ATTEMPTS = 5;
+    const MAX_SYNC_ATTEMPTS = 30;
     const trySync = function () {
       attempts += 1;
       bridgePost("config", {}, function (res) {
-        if (res && res.ok && res.config && res.config.ui) {
-          const c = res.config.ui;
+        if (res && res.ok && res.config) {
+          const c = res.config;
           let changed = false;
-          if (typeof c.displayMode === "string") { State.cfg.displayMode = c.displayMode; changed = true; }
-          if (typeof c.outgoing === "string") { State.cfg.outgoing = c.outgoing; changed = true; }
-          if (typeof c.outgoingTarget === "string") { State.cfg.outgoingTarget = c.outgoingTarget; changed = true; }
-          if (typeof c.targetLanguage === "string") { State.cfg.targetLanguage = c.targetLanguage; changed = true; }
-          if (typeof c.enabled === "boolean") { State.cfg.enabled = c.enabled; changed = true; }
-          if (typeof c.force === "boolean") { State.cfg.force = c.force; changed = true; }
-          if (typeof c.provider === "string") { State.cfg.provider = c.provider; changed = true; }
-          if (typeof c.timeoutMs === "number") { State.cfg.timeoutMs = c.timeoutMs; changed = true; }
+          // ui 子对象(面板偏好)
+          const ui = c.ui || {};
+          if (typeof ui.displayMode === "string") { State.cfg.displayMode = ui.displayMode; changed = true; }
+          if (typeof ui.outgoing === "string") { State.cfg.outgoing = ui.outgoing; changed = true; }
+          if (typeof ui.outgoingTarget === "string") { State.cfg.outgoingTarget = ui.outgoingTarget; changed = true; }
+          if (typeof ui.targetLanguage === "string") { State.cfg.targetLanguage = ui.targetLanguage; changed = true; }
+          if (typeof ui.enabled === "boolean") { State.cfg.enabled = ui.enabled; changed = true; }
+          if (typeof ui.force === "boolean") { State.cfg.force = ui.force; changed = true; }
+          if (typeof ui.provider === "string") { State.cfg.provider = ui.provider; changed = true; }
+          if (typeof ui.timeoutMs === "number") { State.cfg.timeoutMs = ui.timeoutMs; changed = true; }
+          // 顶层开关(chatLog/translateOwn 不在 ui 子对象里,BUGFIX:游戏重启后
+          // 若不回填,State.cfg 回落到 DEFAULTS(translateOwn:true),导致"关掉还翻译")
+          if (typeof c.translateOwn === "boolean") { State.cfg.translateOwn = c.translateOwn; changed = true; }
+          if (c.chatLog && typeof c.chatLog === "object") {
+            if (typeof c.chatLog.enabled === "boolean") { State.cfg.chatLog = c.chatLog.enabled; changed = true; }
+          }
           if (changed) {
             saveUiConfig();
-            log("boot: config synced from bridge (outgoing=" + State.cfg.outgoing + ")");
+            log("boot: config synced from bridge (outgoing=" + State.cfg.outgoing + ", translateOwn=" + State.cfg.translateOwn + ")");
           }
+          State.cfgSynced = true;
           if (callback) callback();
-        } else if (attempts < MAX_SYNC_ATTEMPTS && !State.bridgeUp) {
-          // 面板未就绪/桥未探测到:延迟重试
+        } else if (attempts < MAX_SYNC_ATTEMPTS) {
+          // 拉取失败(桥未就绪/网络抖动/面板未构建):无条件重试,不再依赖 bridgeUp
           $.Schedule(2.0, trySync);
         } else {
           if (callback) callback();

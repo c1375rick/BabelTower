@@ -394,7 +394,7 @@ async function handleApi(req, res, url, bodyObj) {
           result.detectedLanguage
         );
       }
-      log("info", "translate ok: " + String(bodyObj.text || "").slice(0, 60).replace(/\s+/g, " "));
+      log("info", "translate ok: " + String(bodyObj.text || "").slice(0, 60).replace(/\s+/g, " ") + " [target=" + (bodyObj.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans") + "]");
       sendJson(res, 200, {
         ok: true,
         translation: result.translation,
@@ -437,11 +437,14 @@ async function handleApi(req, res, url, bodyObj) {
           const next = configStore.applyMaskedUpdate(current, saveBody.config || {});
           configStore.save(next);
           log("info", "config saved (GET)");
-          sendJson(res, 200, { ok: true, config: configStore.mask(next) });
+          // 保存响应最小化:游戏侧只读 res.ok;但保持带精简 config 以兼容加载分支
+          sendJson(res, 200, { ok: true, config: configStore.maskCompact(next) });
           return;
         }
       }
-      sendJson(res, 200, { ok: true, config: configStore.mask(configStore.load()) });
+      // 读取用精简 mask:完整 mask 约 700 字符会超出 title 通道(约 512)上限,
+      // 导致游戏侧 JSON 解析失败(2026-08-14 保存失效根因)
+      sendJson(res, 200, { ok: true, config: configStore.maskCompact(configStore.load()) });
       return;
     }
     if (req.method === "POST") {
@@ -449,8 +452,10 @@ async function handleApi(req, res, url, bodyObj) {
       const current = configStore.load();
       const next = configStore.applyMaskedUpdate(current, bodyObj.config || {});
       configStore.save(next);
-      log("info", "config saved");
-      sendJson(res, 200, { ok: true, config: configStore.mask(next) });
+      // body 带 config = 保存;不带 = 加载(面板通道下两者都走 POST)。
+      // 统一回精简 config(约 366 字符,远低于 title 通道 ~512 上限;2026-08-14 保存失效根因)
+      if (bodyObj.config) log("info", "config saved");
+      sendJson(res, 200, { ok: true, config: configStore.maskCompact(next) });
       return;
     }
   }

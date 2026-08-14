@@ -37,6 +37,8 @@ const DEFAULTS = {
     enabled: true,
     dir: "logs/chat",
   },
+  // 自己的发言也翻译(面板开关,经桥持久化)
+  translateOwn: true,
   defaults: {
     sourceLanguage: "auto",
     targetLanguage: "zh-Hans",
@@ -157,6 +159,28 @@ function mask(cfg) {
   };
 }
 
+// 精简版 mask:只返回游戏侧实际读取的字段,
+// 把响应体积压到 document.title 通道(约 512 字符)限制以内(见 2026-08-14 保存失效根因)。
+function maskCompact(cfg) {
+  const c = normalize(cfg);
+  const out = {
+    provider: c.provider,
+    fallbackProviders: Array.isArray(c.fallbackProviders) ? c.fallbackProviders : [],
+    ui: Object.assign({}, DEFAULTS.ui, c.ui || {}),
+  };
+  out.microsoft = { hasApiKey: !!(c.microsoft && c.microsoft.apiKey) };
+  out.openai = { hasApiKey: !!(c.openai && c.openai.apiKey) };
+  // baseUrl/model/endpoint 仅在非默认值时输出(游戏侧 if 存在才回填,省略=用默认,省体积)
+  if (c.openai && c.openai.baseUrl && c.openai.baseUrl !== DEFAULTS.openai.baseUrl) out.openai.baseUrl = c.openai.baseUrl;
+  if (c.openai && c.openai.model && c.openai.model !== DEFAULTS.openai.model) out.openai.model = c.openai.model;
+  out.deepl = { hasApiKey: !!(c.deepl && c.deepl.apiKey) };
+  if (c.deepl && c.deepl.endpoint && c.deepl.endpoint !== DEFAULTS.deepl.endpoint) out.deepl.endpoint = c.deepl.endpoint;
+  out.google = { hasApiKey: !!(c.google && c.google.apiKey) };
+  out.translateOwn = c.translateOwn !== false;
+  if (c.chatLog) out.chatLog = { enabled: c.chatLog.enabled !== false };
+  return out;
+}
+
 // 保存配置时处理打码回传:apiKey 为 "********" 表示保留原值;空串表示清除
 // 同时兼容两种输入形态:
 //   嵌套式(直接调 API):  { microsoft:{apiKey,region,endpoint}, defaults:{...}, provider, timeoutMs }
@@ -225,6 +249,10 @@ function applyMaskedUpdate(current, incoming) {
     if (typeof incoming.chatLog.enabled === "boolean") cfg.chatLog.enabled = incoming.chatLog.enabled;
     if (typeof incoming.chatLog.dir === "string" && incoming.chatLog.dir) cfg.chatLog.dir = incoming.chatLog.dir;
   }
+  // 面板传布尔形态的 chatLog(collectPanelConfig 返回 chatLog: bool)
+  if (typeof incoming.chatLog === "boolean") cfg.chatLog.enabled = incoming.chatLog;
+  // 翻译自己的消息开关(面板传布尔)
+  if (typeof incoming.translateOwn === "boolean") cfg.translateOwn = incoming.translateOwn;
 
   // 扁平式:面板可能传 openaiBaseUrl/openaiModel/deeplEndpoint 等
   if (typeof incoming.openaiBaseUrl === "string" && incoming.openaiBaseUrl) cfg.openai.baseUrl = incoming.openaiBaseUrl;
@@ -267,4 +295,4 @@ function applyMaskedUpdate(current, incoming) {
   return cfg;
 }
 
-module.exports = { load, save, mask, applyMaskedUpdate, configPath, examplePath, DEFAULTS };
+module.exports = { load, save, mask, maskCompact, applyMaskedUpdate, configPath, examplePath, DEFAULTS };
