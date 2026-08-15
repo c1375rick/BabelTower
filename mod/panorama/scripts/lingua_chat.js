@@ -844,29 +844,9 @@
     return findClass(row, HUD_BUBBLE_CLASS) || row;
   }
 
-  function applyTransLabelStyle(label, isError) {
-    try {
-      const st = label.style || {};
-      if (isError) {
-        st.color = "#ff9b94";
-        st.backgroundColor = "rgba(40, 10, 12, 0.85)";
-        st.border = "1px solid rgba(255, 120, 110, 0.4)";
-      } else {
-        st.color = "#8fd8ff";
-        st.backgroundColor = "rgba(8, 12, 20, 0.85)";
-        st.border = "1px solid rgba(143, 216, 255, 0.35)";
-      }
-      st.borderRadius = "4px";
-      st.padding = "2px 7px";
-      st.fontSize = "13px";
-      st.marginTop = "3px";
-      st.marginLeft = "58px";
-      st.maxWidth = "290px";
-      st.fontStyle = "italic";
-      st.textShadow = "0px 1px 2px rgba(0, 0, 0, 0.9)";
-      st.whiteSpace = "normal";
-    } catch (e) {}
-  }
+  // 译文样式全部由 CSS 类控制(普通行 .LCTTranslation / HUD .LCTTranslationHud / 大厅 .LCTTranslationLobby,
+  // 错误态 .LCTTranslationError 叠加)。不再用内联样式覆盖——内联优先级高于类,
+  // 会把 HUD(10px/220px/右对齐)和大厅(4px/380px)的差异化样式冲掉(2026-08-15 移除)。
 
 function injectTranslation(row, sig, text) {
     if (!isValid(row)) return;
@@ -890,7 +870,6 @@ function injectTranslation(row, sig, text) {
     try {
       label.text = String(text);
     } catch (e) {}
-    applyTransLabelStyle(label, false);
     // 只显示译文模式:隐藏原文(快捷对话/Ping 行保留气泡,避免消息"消失")
     // HUD 顶栏行/大厅行不折叠:气泡本身短暂显示,折叠会连译文一起隐藏
     if (!hud && !lobby && State.cfg.displayMode === "translation_only") {
@@ -926,7 +905,6 @@ function injectTranslation(row, sig, text) {
     try {
       label.AddClass(TRANS_ERROR_CLASS);
       label.text = "⚠ 翻译失败: " + String(message || "未知错误").slice(0, 120);
-      applyTransLabelStyle(label, true);
     } catch (e) {}
     // 翻译失败游戏内可见:桥状态圆点闪烁黄色,提醒玩家当前翻译不工作
     flashBridgeFail();

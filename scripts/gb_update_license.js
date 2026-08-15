@@ -83,16 +83,37 @@ async function isLoggedIn(page) {
     }
   }
 
-  await page.goto(EDIT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+  try {
+    await page.goto(EDIT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+  } catch (e) { console.log("goto edit err:", e.message.slice(0, 80)); }
   await sleep(8000);
   console.log("EDIT URL:", page.url());
 
-  // 等待描述 textarea 出现(真实窗口下 Cloudflare 挑战可能耗时,最多等 90s)
+  // 等待描述 textarea 出现(真实窗口下 Cloudflare 挑战可能耗时,最多等 3 分钟)
+  // 未登录时 edit 页会跳转登录页 -> 导航会销毁执行上下文,必须容错重试,
+  // 并打印提示等待用户在窗口里手动登录(会话过期时)
   let ta = null;
-  for (let i = 0; i < 30; i++) {
-    ta = await page.$(`textarea[id="${DESC_TEXTAREA}"]`);
+  let loginNoticed = false;
+  for (let i = 0; i < 60; i++) {
+    try {
+      ta = await page.$(`textarea[id="${DESC_TEXTAREA}"]`);
+    } catch (e) {
+      // 导航中(登录跳转/Cloudflare),上下文销毁是预期内的,重试即可
+      console.log("  nav in progress...", e.message.slice(0, 50));
+      await sleep(3000);
+      continue;
+    }
     if (ta) break;
-    console.log("  waiting for textarea...", (i + 1) * 3, "s");
+    // 检测是否落在登录页:若是,提示用户手动登录(窗口可见,最多等 10 分钟)
+    try {
+      const u = page.url();
+      const onLogin = /login|signin|account/i.test(u);
+      if (onLogin && !loginNoticed) {
+        loginNoticed = true;
+        console.log("ON_LOGIN_PAGE: 会话过期,请在窗口里登录 GameBanana(chehehe1579),脚本会自动继续...");
+      }
+    } catch (e) { /* ignore */ }
+    console.log("  waiting for textarea...", Math.round((i + 1) * 3), "s");
     await sleep(3000);
   }
   if (!ta) { console.log("TEXTAREA NOT FOUND"); await browser.close(); process.exit(1); }
