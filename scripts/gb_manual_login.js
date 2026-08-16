@@ -18,7 +18,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     executablePath: EDGE,
     userDataDir: PROFILE,
     headless: false, // 可见窗口, 用户手动输入
-    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled", "--ignore-certificate-errors"],
+    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled", "--ignore-certificate-errors", "--no-proxy-server"],
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");

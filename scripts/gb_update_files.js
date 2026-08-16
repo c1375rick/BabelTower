@@ -46,7 +46,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 (async () => {
   const browser = await puppeteer.launch({
     executablePath: EDGE, userDataDir: PROFILE, headless: false, // 可见窗口, 过 Cloudflare 更稳
-    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled", "--ignore-certificate-errors"],
+    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled", "--ignore-certificate-errors", "--no-proxy-server"],
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
@@ -58,18 +58,34 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await sleep(5000);
   console.log("EDIT TITLE:", await page.title());
 
-  // 等待 Files 区出现(可能被 Cloudflare/JS 延迟),最多等 60s
+  // 等待 Files 区出现(可能被 Cloudflare/JS 延迟/登录跳转导航,最多等 60s+)
   let fileInput = null;
-  for (let i = 0; i < 12; i++) {
-    fileInput = await page.evaluate(() => {
-      const fs = document.getElementById("Files");
-      if (!fs) return null;
-      const inp = fs.querySelector("input[type=file]");
-      return inp ? { id: inp.id, name: inp.name } : null;
-    });
+  let loginNoticed = false;
+  for (let i = 0; i < 16; i++) {
+    try {
+      fileInput = await page.evaluate(() => {
+        const fs = document.getElementById("Files");
+        if (!fs) return null;
+        const inp = fs.querySelector("input[type=file]");
+        return inp ? { id: inp.id, name: inp.name } : null;
+      });
+    } catch (e) {
+      // 导航中(登录跳转/Cloudflare 挑战),execution context 销毁是预期内的,重试即可
+      console.log("  nav in progress...", e.message.slice(0, 50));
+      await sleep(3000);
+      continue;
+    }
     if (fileInput) break;
-    const bodyText = await page.evaluate(() => (document.body.innerText || "").slice(0, 200).replace(/\s+/g, " "));
-    console.log(`  [${(i + 1) * 5}s] waiting Files... body:`, bodyText.slice(0, 120));
+    try {
+      const u = page.url();
+      const onLogin = /login|signin|account/i.test(u);
+      if (onLogin && !loginNoticed) {
+        loginNoticed = true;
+        console.log("ON_LOGIN_PAGE: 会话过期,请在窗口里登录 GameBanana(chehehe1579),脚本会自动继续...");
+      }
+      const bodyText = await page.evaluate(() => (document.body.innerText || "").slice(0, 200).replace(/\s+/g, " "));
+      console.log(`  [${(i + 1) * 5}s] waiting Files... body:`, bodyText.slice(0, 120));
+    } catch (e) { /* 导航中忽略 */ }
     await sleep(5000);
   }
   console.log("FILES INPUT:", JSON.stringify(fileInput));
