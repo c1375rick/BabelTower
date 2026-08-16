@@ -42,6 +42,8 @@ Copy-Item (Join-Path $Root "core\providers\*.js") (Join-Path $Stage "core\provid
 Write-Host "==> 复制配置示例与脚本..."
 Copy-Item (Join-Path $Root "config\config.example.json") (Join-Path $Stage "config\")
 Copy-Item (Join-Path $Root "config\dictionary.json") (Join-Path $Stage "config\")
+# 内置词典(Thirt927 特性, core/dictionary.js 运行时读取, 必须随包发布)
+Copy-Item (Join-Path $Root "config\dictionary.builtin.json") (Join-Path $Stage "config\")
 Copy-Item (Join-Path $Root "scripts\autostart.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "StartDeadlock.bat") (Join-Path $Stage "StartDeadlock.bat")
 # 双击即用的自启安装/卸载包装(内部自动处理路径)
