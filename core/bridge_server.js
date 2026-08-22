@@ -38,12 +38,13 @@ const MAX_TEXT_CHARS = 4000; // 单条聊天文本长度上限
 
 // ---------- 翻译结果缓存(同文本二次秒回,避免重复走 Bing) ----------
 // 聊天场景重复度高(gg/glhf/thanks 等高频短语),缓存命中直接返回,零网络开销。
-const TRANS_CACHE_LIMIT = 500;
-const TRANS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 分钟,覆盖整局对局
+const TRANS_CACHE_LIMIT = 1000;
+const TRANS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 分钟,覆盖多局短时间内的重复聊天
 const transCache = new Map(); // key: text + target -> { translation, detectedLanguage, ts }
 
 function cacheKey(text, target) {
-  return String(text).toLowerCase().slice(0, 200) + "\x00" + String(target || "").toLowerCase();
+  const normalizedText = String(text || "").trim().replace(/\s+/g, " ").toLowerCase();
+  return normalizedText.slice(0, 200) + "\x00" + String(target || "").toLowerCase();
 }
 
 function transCacheGet(text, target) {

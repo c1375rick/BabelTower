@@ -52,6 +52,18 @@ function normalizeKey(s) {
   return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// 游戏聊天常带句末问号/感叹号。先保留精确匹配，再用去掉首尾标点的
+// 候选匹配短词，避免 "wtf?"、"lol!" 这类消息无意义地调用在线接口。
+function lookupKeys(text) {
+  const exact = normalizeKey(text);
+  const stripped = exact
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/[^\p{L}\p{N}]+$/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return stripped && stripped !== exact ? [exact, stripped] : [exact];
+}
+
 // 空文件结构(首次运行生成,用户可编辑 user 区)
 function emptyFile() {
   return {
@@ -230,18 +242,23 @@ function lookup(text, targetLanguage) {
   if (!dict.enabled) return null;
   const prefix = langPrefix(targetLanguage);
   if (!prefix) return null;
-  const key = normalizeKey(text);
-  if (!key || key.length > 40) return null;
+  const keys = lookupKeys(text);
+  if (!keys[0] || keys[0].length > 40) return null;
 
   let hit = null;
-  if (dict.user[prefix] && typeof dict.user[prefix] === "object") {
-    hit = dict.user[prefix][key];
-  }
-  if (!hit && dict.builtin[prefix] && typeof dict.builtin[prefix] === "object") {
-    hit = dict.builtin[prefix][key];
-  }
-  if (!hit && dict.learned[prefix] && typeof dict.learned[prefix] === "object") {
-    hit = dict.learned[prefix][key];
+  for (const key of keys) {
+    if (dict.user[prefix] && typeof dict.user[prefix] === "object") {
+      hit = dict.user[prefix][key];
+    }
+    if (!hit && dict.builtin[prefix] && typeof dict.builtin[prefix] === "object") {
+      hit = dict.builtin[prefix][key];
+    }
+    if (!hit && dict.learned[prefix] && typeof dict.learned[prefix] === "object") {
+      hit = dict.learned[prefix][key];
+    }
+    if (hit) {
+      break;
+    }
   }
   if (!hit) return lookupComposed(text, prefix, dict);
   return { translation: String(hit), detectedLanguage: "en", viaDictionary: true };
