@@ -414,40 +414,26 @@
 
 /* ---- HUD 顶栏聊天气泡内译文(citadel_hud_top_bar_chat) ----
    译文挂在 MessageContents 内(ChatBubble 正下方,该容器 flow-children:down 已确认),
-   蓝色气泡风格与普通行统一(浅蓝斜体 + 深色半透明底)。 */
+   复用普通行样式(.LCTTranslation),不再单独定义。 */
 .LCTTranslationHud {
-  background-color: rgba(8, 12, 20, 0.92);
-  border: 1px solid rgba(143, 216, 255, 0.4);
-  border-radius: 4px;
   color: #8fd8ff;
   font-size: 13px;
   font-style: italic;
-  letter-spacing: 0.2px;
-  margin-top: 4px;
-  margin-bottom: 4px;
-  margin-left: 10px;
-  margin-right: 10px;
-  max-width: 220px;
-  padding: 2px 8px;
+  background-color: rgba(8, 12, 20, 0.85);
+  border: 1px solid rgba(143, 216, 255, 0.35);
+  border-radius: 4px;
+  padding: 2px 7px;
+  margin-top: 3px;
+  margin-left: 58px;
+  max-width: 290px;
+  width: fit-children;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
   white-space: normal;
 }
 
-/* 敌方 HUD 气泡右对齐 -> 译文也跟着右对齐 */
-.enemy .ChatMessage .LCTTranslationHud,
-.team2 .ChatMessage .LCTTranslationHud {
-  horizontal-align: right;
-  margin-left: 0px;
-  margin-right: 20px;
-}
 
-/* HUD 译文失败提示:保持深色胶囊,文字用浅红(覆盖普通行错误样式的 58px 左偏移) */
-.LCTTranslationHud.LCTTranslationError {
-  background-color: rgba(180, 40, 40, 0.45);
-  border: 1px solid rgba(255, 120, 110, 0.5);
-  color: #ffb4ad;
-  margin-left: 10px;
-  margin-right: 10px;
-}
+/* HUD 译文失败提示:复用普通行错误样式 */
+.LCTTranslationHud.LCTTranslationError {}
 
 /* ---- 大厅(hudchat)聊天行译文 ----
    行本身 flow-children:right(气泡横排),首次遇到时由脚本包一层 LCTLobbyWrap(横向)

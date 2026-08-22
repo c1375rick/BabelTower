@@ -87,6 +87,98 @@
   const OUTGOING_FAIL_TIP_ID = "LCTOutgoingFailTip";
   const DMM_HINT = "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat";
 
+  // ---- 英雄/物品名保护(翻译前占位,翻译后还原) ----
+  // 按长度降序排列,避免短名误匹配长名的子串(如 "geist" 误匹配 "lady geist")
+  const PROTECT_NAMES = [
+    // 多词物品(长优先)
+    "spirit shredder bullets", "bullet resist shredder", "armor piercing rounds",
+    "ballistic enchantment", "escalating resilience", "intensifying magazine",
+    "mystic vulnerability", "radiant regeneration", "mystic regeneration",
+    "high-velocity rounds", "enchanter's emblem", "restorative locket",
+    "weakening headshot", "superior cooldown", "superior duration",
+    "duration extender", "boundless spirit", "spiritual overflow",
+    "cursed relic", "fury trance", "monster rounds", "improved spirit",
+    "metal skin", "close quarters", "rapid recharge", "glass cannon",
+    "divine barrier", "diviner's kevlar", "swift striker", "vampiric burst",
+    "bullet lifesteal", "spirit lifesteal", "spirit resilience",
+    "spirit shielding", "spirit shredder", "spirit snatch", "spirit strike",
+    "spirit burn", "spirit rend", "spirit sap", "torment pulse",
+    "reactive barrier", "tesla bullets", "kinetic dash", "bullet resilience",
+    "rapid rounds", "burst fire", "extra spirit", "sharpshooter",
+    // 英雄名(多词优先)
+    "lady geist", "mo krill",
+    // 单词英雄 + 单词物品
+    "abrams", "bebop", "calico", "dynamo", "geist", "haze",
+    "inferno", "paradox", "pocket", "shiv", "viscous", "warden",
+    "wraith", "yamato", "seven", "ricochet",
+  ];
+  const PROTECT_RE = new RegExp(
+    "\\b(?:" + PROTECT_NAMES.map(n => n.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')).join("|") + ")\\b",
+    "gi"
+  );  const PROTECT_TO_ZH = {
+    "abrams": "亚伯兰", "bebop": "比波普", "calico": "卡厉可",
+    "dynamo": "奇能", "geist": "盖斯特夫人", "haze": "岚梦",
+    "inferno": "炽焱", "lady geist": "盖斯特夫人", "mo krill": "莫克双雄",
+    "paradox": "悖论", "pocket": "口袋", "seven": "柒",
+    "shiv": "希弗", "viscous": "魔液", "warden": "沃督",
+    "wraith": "灵魅", "yamato": "大和",
+    "divine barrier": "神圣屏障", "diviner's kevlar": "金刚宝衫",
+    "bullet resilience": "子弹坚甲", "bullet lifesteal": "子弹回复",
+    "bullet resist shredder": "粉碎护甲", "kinetic dash": "动能冲刺",
+    "tesla bullets": "特斯拉弹", "ricochet": "跳弹射击",
+    "torment pulse": "痛苦脉冲", "reactive barrier": "应急屏障",
+    "swift striker": "迅捷突击", "vampiric burst": "疗愈爆发",
+    "spirit burn": "元灵燃烧", "spirit lifesteal": "元灵吸收",
+    "spirit resilience": "元灵护体", "spirit rend": "元灵撕裂",
+    "spirit sap": "元灵衰竭", "spirit shielding": "元灵防护",
+    "spirit shredder bullets": "碎灵子弹", "spirit snatch": "元灵收割",
+    "spirit strike": "大伤元气", "spiritual overflow": "元灵漫溢",
+    "cursed relic": "天谴圣物", "fury trance": "怒意之潮",
+    "monster rounds": "猎怪弹", "improved spirit": "灵力高涨",
+    "metal skin": "铜皮铁骨", "close quarters": "近身决斗",
+    "rapid recharge": "火速充能", "glass cannon": "脆皮输出",
+    "sharpshooter": "弹无虚发", "armor piercing rounds": "穿甲弹",
+    "ballistic enchantment": "弹道附魔", "escalating resilience": "层层防御",
+    "intensifying magazine": "火力渐升", "mystic vulnerability": "秘术脆弱",
+    "radiant regeneration": "容光焕发", "high-velocity rounds": "高速弹",
+    "mystic regeneration": "秘术愈疗", "cooldown reduction": "冷却缩减",
+    "crippling headshot": "头弹破防", "enchanter's emblem": "附魔师纹章",
+    "hexsealed knuckles": "咒印铁拳", "quicksilver reload": "魔力装填",
+    "restorative locket": "疗愈护符", "weakening headshot": "头弹弱防",
+    "superior cooldown": "超速冷却", "superior duration": "余威久久",
+    "extra spirit": "灵力扩增", "duration extender": "余威回荡",
+    "rapid rounds": "快手连发", "burst fire": "健步疾射",
+    "boundless spirit": "灵力无边", "spirit shredder": "碎灵子弹",
+  };
+  /** 占位替换:lookup = {匹配文本 -> 目标译名};返回 { text, nameMap } */
+  function replaceGameNames(text, lookup) {
+    if (!text || typeof text !== "string") return { text: text, nameMap: null };
+    try {
+      const nameMap = [];
+      const replaced = text.replace(PROTECT_RE, function (match) {
+        const idx = nameMap.length;
+        nameMap.push(lookup ? (lookup[match.toLowerCase()] || match) : match);
+        return "{{GAME_" + idx + "}}";
+      });
+      return nameMap.length > 0 ? { text: replaced, nameMap: nameMap } : { text: text, nameMap: null };
+    } catch (e) {
+      log("replaceGameNames error: " + (e && e.message ? e.message : String(e)));
+      return { text: text, nameMap: null };
+    }
+  }
+  /** 还原占位符(兼容API可能插入的空格/大小写变化) */
+  function restoreGameNames(text, nameMap) {
+    if (!text || !nameMap) return text;
+    for (let i = 0; i < nameMap.length; i++) {
+      // 精确匹配优先
+      text = text.replace("{{GAME_" + i + "}}", nameMap[i]);
+      // 兜底:API可能加空格(如 "{{ GAME_0 }}")或变小写
+      const fallback = new RegExp("\\{\\{\\s*GAME_" + i + "\\s*\\}\\}", "gi");
+      text = text.replace(fallback, nameMap[i]);
+    }
+    return text;
+  }
+
   // ---- 语言启发式 ----
   const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff]/;
 
@@ -621,35 +713,117 @@
     timeoutMs: 15000,
     chatLog: true, // 聊天日志开关(按比赛 ID 存本地)
     translateOwn: true, // 自己的发言也翻译(默认开)
+    uiLang: "zh", // 界面语言:zh=中文, en=English
   };
+
+  // ---- 多语言支持 ----
+  const STRINGS = {
+    panelTitle: { zh: "Babel Tower 设置", en: "Babel Tower Settings" },
+    rowBridgeStatus: { zh: "本地桥状态", en: "Bridge Status" },
+    rowEnabled: { zh: "启用翻译", en: "Translation" },
+    rowProvider: { zh: "服务商(点击选择)", en: "Provider (click to select)" },
+    rowApiKey: { zh: "API Key", en: "API Key" },
+    rowRegion: { zh: "区域(可选,Microsoft)", en: "Region (optional, Microsoft)" },
+    rowOpenaiBase: { zh: "OpenAI 兼容 Base URL", en: "OpenAI-compatible Base URL" },
+    rowOpenaiModel: { zh: "模型名(如 gpt-4o-mini / llama3)", en: "Model (e.g. gpt-4o-mini / llama3)" },
+    rowDeeplEndpoint: { zh: "DeepL 端点(free/pro)", en: "DeepL endpoint (free/pro)" },
+    rowFallback: { zh: "服务商失败自动回退(逗号分隔,如 microsoft,openai;仅使用已填 Key 的)", en: "Auto-fallback on failure (comma-separated, e.g. microsoft,openai)" },
+    rowTargetLang: { zh: "目标语言(点击选择)", en: "Target Language (click to select)" },
+    rowDisplayMode: { zh: "显示模式(点击选择)", en: "Display Mode (click to select)" },
+    rowOutgoing: { zh: "发送前翻译(点击选择)", en: "Outgoing Translation (click to select)" },
+    rowOutgoingTarget: { zh: "发送目标语言(点击选择)", en: "Outgoing Target Language (click to select)" },
+    rowTimeout: { zh: "超时(ms)", en: "Timeout (ms)" },
+    rowForce: { zh: "强制翻译(跳过语言判断)", en: "Force translate (skip language detection)" },
+    rowTranslateOwn: { zh: "翻译自己的消息", en: "Translate own messages" },
+    rowChatLog: { zh: "聊天日志(按比赛 ID 保存到 logs/chat)", en: "Chat log (save by match ID to logs/chat)" },
+    rowUILang: { zh: "界面语言", en: "UI Language" },
+    optBing: { zh: "bing(免 Key)", en: "bing (free, no key)" },
+    optMicrosoft: { zh: "microsoft(Azure Key)", en: "microsoft (Azure Key)" },
+    optOpenai: { zh: "OpenAI 兼容(自定义)", en: "OpenAI-compatible (custom)" },
+    optDeepl: { zh: "DeepL(需 Key)", en: "DeepL (key required)" },
+    optGoogle: { zh: "Google Cloud(需 Key)", en: "Google Cloud (key required)" },
+    optLangZhHans: { zh: "简体中文 (zh-Hans)", en: "简体中文 (zh-Hans)" },
+    optLangZhHant: { zh: "繁體中文 (zh-Hant)", en: "繁體中文 (zh-Hant)" },
+    optLangEn: { zh: "English 英语 (en)", en: "English (en)" },
+    optLangJa: { zh: "日本語 日语 (ja)", en: "日本語 (ja)" },
+    optLangKo: { zh: "한국어 韩语 (ko)", en: "한국어 (ko)" },
+    optLangFr: { zh: "Français 法语 (fr)", en: "Français (fr)" },
+    optLangDe: { zh: "Deutsch 德语 (de)", en: "Deutsch (de)" },
+    optLangEs: { zh: "Español 西语 (es)", en: "Español (es)" },
+    optLangCustom: { zh: "自定义(手输语言代码)", en: "Custom (enter language code)" },
+    optBilingual: { zh: "双语(原文+译文)", en: "Bilingual (original + translation)" },
+    optTranslationOnly: { zh: "仅译文", en: "Translation only" },
+    optOutOff: { zh: "关(发原文)", en: "Off (send original)" },
+    optOutTranslation: { zh: "仅译文", en: "Translation only" },
+    optOutBilingual: { zh: "双语(原文 | 译文)", en: "Bilingual (original | translation)" },
+    optUILangZh: { zh: "中文", en: "中文 (Chinese)" },
+    optUILangEn: { zh: "English(英语)", en: "English" },
+    btnSave: { zh: "保存", en: "Save" },
+    btnTest: { zh: "测试", en: "Test" },
+    btnHint: { zh: "选项点击选择 · 改完点保存 · ESC 关闭", en: "Click to select \u00b7 Save when done \u00b7 ESC to close" },
+    bridgeUp: { zh: "运行中", en: "Running" },
+    bridgeDown: { zh: "未运行", en: "Not running" },
+    bridgePort: { zh: "端口", en: "port" },
+    bridgeStatusPrefix: { zh: "桥状态: ", en: "Bridge: " },
+    bridgeOnline: { zh: "桥在线", en: "Bridge online" },
+    bridgeOffline: { zh: "桥离线,翻译不可用", en: "Bridge offline, translation unavailable" },
+    bridgeDmmHint: { zh: "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat", en: "Installed via DMM? You need the full bridge: download from GitHub and run StartDeadlock.bat" },
+    hintBing: { zh: "免 Key 公共接口,可能有隐形限流;失败可配置自动回退", en: "Free public API, may have hidden rate limits; configure auto-fallback on failure" },
+    hintMicrosoft: { zh: "Azure Translator Key(可留空则跳过该服务商)", en: "Azure Translator Key (leave empty to skip)" },
+    hintOpenai: { zh: "OpenAI 兼容端点:DeepSeek 填 https://api.deepseek.com + deepseek-chat;Ollama/LM Studio/OneAPI 亦可", en: "OpenAI-compatible endpoint: for DeepSeek use https://api.deepseek.com + deepseek-chat; also Ollama/LM Studio/OneAPI" },
+    hintDeepl: { zh: "DeepL API Key(free/pro 端点可选)", en: "DeepL API Key (free/pro endpoint available)" },
+    hintGoogle: { zh: "Google Cloud Translation API Key", en: "Google Cloud Translation API Key" },
+    msgSaveOk: { zh: "已保存", en: "Saved" },
+    msgSaveFail: { zh: "保存失败", en: "Save failed" },
+    msgTesting: { zh: "测试中...最长约 ", en: "Testing... up to ~" },
+    msgTestSec: { zh: " 秒,请稍候", en: " seconds, please wait" },
+    msgTestOk: { zh: "测试成功: ", en: "Test passed: " },
+    msgTestFail: { zh: "测试失败", en: "Test failed" },
+    msgSavedWith: { zh: "已保存(服务商 ", en: "Saved (provider: " },
+    msgLogOn: { zh: "聊天日志已开启(按比赛 ID 存 logs/chat)", en: "Chat log enabled (saves by match ID)" },
+    msgLogOff: { zh: "聊天日志已关闭", en: "Chat log disabled" },
+    msgTranslateOwnOn: { zh: "翻译自己的消息已开启", en: "Translate own messages enabled" },
+    msgTranslateOwnOff: { zh: "翻译自己的消息已关闭", en: "Translate own messages disabled" },
+  };
+
+  function t(key) {
+    const lang = (State.cfg && State.cfg.uiLang) || "zh";
+    const entry = STRINGS[key];
+    if (!entry) return key;
+    return entry[lang] || entry.zh || key;
+  }
 
   // 选项表(驱动选择控件)
   const PROVIDER_OPTIONS = [
-    { value: "bing", label: "bing(免 Key)" },
-    { value: "microsoft", label: "microsoft(Azure Key)" },
-    { value: "openai", label: "OpenAI 兼容(自定义)" },
-    { value: "deepl", label: "DeepL(需 Key)" },
-    { value: "google", label: "Google Cloud(需 Key)" },
+    { value: "bing", key: "optBing" },
+    { value: "microsoft", key: "optMicrosoft" },
+    { value: "openai", key: "optOpenai" },
+    { value: "deepl", key: "optDeepl" },
+    { value: "google", key: "optGoogle" },
   ];
   const LANGUAGE_OPTIONS = [
-    { value: "zh-Hans", label: "简体中文 (zh-Hans)" },
-    { value: "zh-Hant", label: "繁體中文 (zh-Hant)" },
-    { value: "en", label: "English 英语 (en)" },
-    { value: "ja", label: "日本語 日语 (ja)" },
-    { value: "ko", label: "한국어 韩语 (ko)" },
-    { value: "fr", label: "Français 法语 (fr)" },
-    { value: "de", label: "Deutsch 德语 (de)" },
-    { value: "es", label: "Español 西语 (es)" },
-    { value: "custom", label: "自定义(手输语言代码)" },
+    { value: "zh-Hans", key: "optLangZhHans" },
+    { value: "zh-Hant", key: "optLangZhHant" },
+    { value: "en", key: "optLangEn" },
+    { value: "ja", key: "optLangJa" },
+    { value: "ko", key: "optLangKo" },
+    { value: "fr", key: "optLangFr" },
+    { value: "de", key: "optLangDe" },
+    { value: "es", key: "optLangEs" },
+    { value: "custom", key: "optLangCustom" },
   ];
   const DISPLAY_MODES = [
-    { value: "bilingual", label: "双语(原文+译文)" },
-    { value: "translation_only", label: "仅译文" },
+    { value: "bilingual", key: "optBilingual" },
+    { value: "translation_only", key: "optTranslationOnly" },
   ];
   const OUTGOING_MODES = [
-    { value: "off", label: "关(发原文)" },
-    { value: "translation", label: "仅译文" },
-    { value: "bilingual", label: "双语(原文 | 译文)" },
+    { value: "off", key: "optOutOff" },
+    { value: "translation", key: "optOutTranslation" },
+    { value: "bilingual", key: "optOutBilingual" },
+  ];
+  const UI_LANG_OPTIONS = [
+    { value: "zh", key: "optUILangZh" },
+    { value: "en", key: "optUILangEn" },
   ];
 
   const UI_CONVAR = "lct_ui";
@@ -940,7 +1114,7 @@ function injectTranslation(row, sig, text) {
   }
 
   function enqueue(row, sig, record) {
-    State.queue.push({ kind: "chat", row: row, sig: sig, record: record, attempts: 0 });
+    State.queue.push({ kind: "chat", row: row, sig: sig, record: record, attempts: 0, nameMap: record._nameMap || null });
     pumpQueue();
   }
 
@@ -955,7 +1129,10 @@ function injectTranslation(row, sig, text) {
       settled = true;
       done(translated, detected);
     };
-    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: text }, attempts: 0, done: once, enqueuedAt: nowMs() });
+    // 翻译前占位替换:保护英雄/物品名不被翻译API意译
+    const _ng = replaceGameNames(text, null); // outgoing:保留英文原名不翻译
+    const sendText = _ng.nameMap ? _ng.text : text;
+    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: sendText }, attempts: 0, done: once, enqueuedAt: nowMs(), nameMap: _ng.nameMap || null, originalText: text });
     pumpQueue();
   }
 
@@ -1123,7 +1300,9 @@ function injectTranslation(row, sig, text) {
       if (job._timedOut) return;
       if (job._timeout) { try { clearTimeout(job._timeout); } catch (e) {} job._timeout = null; }
       if (payload && payload.ok && payload.translation) {
-        job.done(payload.translation, payload.detectedLanguage || null);
+        // 还原占位符(英雄/物品名)
+        const translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
+        job.done(translation, payload.detectedLanguage || null);
         finishJob();
       } else {
         job.attempts += 1;
@@ -1480,11 +1659,11 @@ function injectTranslation(row, sig, text) {
     if (!label) return;
     try {
       if (State.bridgeUp) {
-        label.text = "运行中 (端口 8791)";
+        label.text = t("bridgeUp") + " (" + t("bridgePort") + " 8791)";
         label.RemoveClass("LCTBridgeDown");
         label.AddClass("LCTBridgeUp");
       } else {
-        label.text = "未运行";
+        label.text = t("bridgeDown");
         label.RemoveClass("LCTBridgeUp");
         label.AddClass("LCTBridgeDown");
       }
@@ -1492,7 +1671,7 @@ function injectTranslation(row, sig, text) {
     const hint = root ? findChild(root, BRIDGE_HINT_LABEL_ID) : null;
     if (hint) {
       try {
-        hint.text = State.bridgeUp ? "" : DMM_HINT;
+        hint.text = State.bridgeUp ? "" : t("bridgeDmmHint");
       } catch (e) {}
     }
   }
@@ -1581,24 +1760,26 @@ function injectTranslation(row, sig, text) {
     if (State.panelWarned) return;
     State.panelWarned = true;
     log("bridge offline: 请先启动 core/bridge_server.js(或 StartDeadlock.bat)");
-    setStatus("本地桥未运行:请运行 StartDeadlock.bat 启动桥;DMM 安装仅含面板,需完整包(GitHub)");
+    setStatus(t("bridgeOffline"));
     updateBridgeStatusUI();
     updateBridgeDot();
   }
 
   function handleResult(job, payload) {
     if (payload.ok && payload.translation) {
-      State.cache.set(job.sig, { translation: payload.translation });
+      // 还原占位符(英雄/物品名)
+      const translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
+      State.cache.set(job.sig, { translation: translation });
       trimCache();
       // 行可能已被回收复用:只有行仍持有同一条消息时才注入,避免旧译文贴到新消息
       if (isValid(job.row) && job.row.__lctSig === job.sig) {
-        injectTranslation(job.row, job.sig, payload.translation);
-        log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + payload.translation.slice(0, 60));
+        injectTranslation(job.row, job.sig, translation);
+        log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + translation.slice(0, 60));
       } else {
         // 诊断:翻译成功但行已失效(游戏可能在 2 秒内清理了顶栏消息行)
         log("translated skipped: row=" + (isValid(job.row) ? "valid" : "GONE") + " sig=" + ((job.row && job.row.__lctSig === job.sig) ? "match" : "MISMATCH") + " text=" + String(job.record.text || "").slice(0, 30));
         // HUD 测试行被游戏清理后,重建一条译文显示行(验证通路;真实消息行生命周期更长不受影响)
-        tryRecreateHudTranslation(job, payload.translation);
+        tryRecreateHudTranslation(job, translation);
       }
       finishJob();
     } else {
@@ -1827,7 +2008,7 @@ function injectTranslation(row, sig, text) {
         if (!State.bridgeUp) log("bridge online (health)");
         State.bridgeUp = true;
         State.bridgeOfflineSince = 0;
-        setBridgeStatus("桥在线 · 服务商 " + (res.provider || State.cfg.provider || "bing"));
+        setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (res.provider || State.cfg.provider || "bing"));
         // BUGFIX:启动时若配置尚未同步成功(boot 时桥可能还没起),
         // 健康检查通过后补一次同步,确保 translateOwn/chatLog 等开关从桥回填。
         if (!State.cfgSynced && !State.cfgSyncing) {
@@ -1841,9 +2022,9 @@ function injectTranslation(row, sig, text) {
         if (!State.bridgeOfflineSince) {
           State.bridgeOfflineSince = nowMs();
           log("bridge offline (health)");
-          setStatus("本地桥未连接,翻译不可用");
+          setStatus(t("bridgeOffline"));
         }
-        setBridgeStatus("桥离线,翻译不可用");
+        setBridgeStatus(t("bridgeOffline"));
       }
     });
   }
@@ -1852,7 +2033,7 @@ function injectTranslation(row, sig, text) {
     const label = findChild(getRoot(), "LCTBridgeStatus");
     if (label) {
       try {
-        label.text = "桥状态: " + String(text || "");
+        label.text = t("bridgeStatusPrefix") + String(text || "");
       } catch (e) {}
     }
   }
@@ -1915,6 +2096,9 @@ function injectTranslation(row, sig, text) {
     if (!isValid(row)) return false;
     const record = readMessageRow(row);
     if (!record) return false;
+    // 翻译前占位替换:保护英雄/物品名不被翻译API意译
+    const _ng = replaceGameNames(record.text, PROTECT_TO_ZH);
+    if (_ng.nameMap) { record.text = _ng.text; record._nameMap = _ng.nameMap; }
     const sig = makeSignature(record);
 
     // 已处理过的行:若签名变化说明被回收复用,重置处理状态
@@ -1963,7 +2147,11 @@ function injectTranslation(row, sig, text) {
   function processRange(messages, start, end) {
     let touched = false;
     for (let i = Math.max(0, start); i < end; i += 1) {
-      if (processRow(childAt(messages, i))) touched = true;
+      try {
+        if (processRow(childAt(messages, i))) touched = true;
+      } catch (e) {
+        log("processRow error: " + (e && e.message ? e.message : String(e)));
+      }
     }
     return touched;
   }
@@ -2271,8 +2459,11 @@ function injectTranslation(row, sig, text) {
   }
 
   function translateOutgoing(text, done) {
-    const panel = ensurePanel();
-    if (!panel) {
+    // 直连通道(canHttp)可用时不需要 HTML 面板;即便面板不可用也应走直连翻译。
+    // 仅当直连不可用且面板也不可用时,才按原文发送。
+    const canHttp = detectAsyncWebRequest();
+    const panel = canHttp ? null : ensurePanel();
+    if (!canHttp && !panel) {
       setStatus("桥未连接,已按原文发送");
       done(null, null);
       return;
@@ -2449,6 +2640,7 @@ function injectTranslation(row, sig, text) {
     setSelectText("LCTDisplayModeSelect", labelFor(DISPLAY_MODES, State.cfg.displayMode || "bilingual"));
     setSelectText("LCTOutgoingSelect", labelFor(OUTGOING_MODES, State.cfg.outgoing || "off"));
     setSelectText("LCTOutgoingTargetSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.outgoingTarget || "en"));
+    setSelectText("LCTUILangSelect", labelFor(UI_LANG_OPTIONS, State.cfg.uiLang || "zh"));
     setToggleText("LCTEnabled", !!State.cfg.enabled);
     setToggleText("LCTForce", !!State.cfg.force);
     setToggleText("LCTTranslateOwn", State.cfg.translateOwn !== false);
@@ -2472,7 +2664,7 @@ function injectTranslation(row, sig, text) {
 
   function labelFor(options, value) {
     for (let i = 0; i < options.length; i += 1) {
-      if (options[i].value === value) return options[i].label;
+      if (options[i].value === value) return t(options[i].key);
     }
     return String(value || "");
   }
@@ -2490,6 +2682,7 @@ function injectTranslation(row, sig, text) {
     "LCTDisplayModeMenu",
     "LCTOutgoingMenu",
     "LCTOutgoingTargetMenu",
+    "LCTUILangMenu",
   ];
 
   function closeSelectMenus() {
@@ -2529,10 +2722,10 @@ function injectTranslation(row, sig, text) {
     const panel = findChild(getRoot(), SETTINGS_PANEL_ID);
     const toggle = panel ? findChild(panel, id) : null;
     if (!toggle) return;
-    // Button 自身不渲染 text,必须更新内嵌 Label(命名约定:<按钮id>Label)
     const label = findChild(toggle, id + "Label") || toggle;
     try {
-      label.text = on ? "是" : "否";
+      const lang = (State.cfg && State.cfg.uiLang) || "zh";
+      label.text = on ? (lang === "en" ? "ON" : "\u662f") : (lang === "en" ? "OFF" : "\u5426");
     } catch (e) {}
   }
 
@@ -2546,11 +2739,11 @@ function injectTranslation(row, sig, text) {
     } else if (which === "chatLog") {
       State.cfg.chatLog = State.cfg.chatLog === false;
       setToggleText("LCTChatLog", State.cfg.chatLog);
-      setStatus("聊天日志" + (State.cfg.chatLog ? "已开启(按比赛 ID 存 logs/chat)" : "已关闭"));
+      setStatus(State.cfg.chatLog ? t("msgLogOn") : t("msgLogOff"));
     } else if (which === "translateOwn") {
       State.cfg.translateOwn = State.cfg.translateOwn === false;
       setToggleText("LCTTranslateOwn", State.cfg.translateOwn);
-      setStatus("翻译自己的消息" + (State.cfg.translateOwn ? "已开启" : "已关闭"));
+      setStatus(State.cfg.translateOwn ? t("msgTranslateOwnOn") : t("msgTranslateOwnOff"));
     }
     saveUiConfig();
     log("toggle: " + which);
@@ -2573,11 +2766,11 @@ function injectTranslation(row, sig, text) {
     setRow("LCTRowOpenaiModel", p === "openai");
     setRow("LCTRowDeeplEndpoint", p === "deepl");
     let hint = "";
-    if (p === "bing") hint = "免 Key 公共接口,可能有隐形限流;失败可配置自动回退";
-    else if (p === "microsoft") hint = "Azure Translator Key(可留空则跳过该服务商)";
-    else if (p === "openai") hint = "OpenAI 兼容端点:DeepSeek 填 https://api.deepseek.com + deepseek-chat/deepseek-reasoner;OpenAI/Ollama/LM Studio/OneAPI 亦可";
-    else if (p === "deepl") hint = "DeepL API Key(free/pro 端点可选)";
-    else if (p === "google") hint = "Google Cloud Translation API Key";
+    if (p === "bing") hint = t("hintBing");
+    else if (p === "microsoft") hint = t("hintMicrosoft");
+    else if (p === "openai") hint = t("hintOpenai");
+    else if (p === "deepl") hint = t("hintDeepl");
+    else if (p === "google") hint = t("hintGoogle");
     setStatus(hint);
   }
 
@@ -2608,6 +2801,7 @@ function injectTranslation(row, sig, text) {
   // 下拉菜单开关(目标语言/发送目标语言)
   function LCTToggleMenu(field) {
     const menuId =
+      field === "uiLang" ? "LCTUILangMenu" :
       field === "targetLanguage" ? "LCTTargetLangMenu" :
       field === "outgoingTarget" ? "LCTOutgoingTargetMenu" :
       field === "provider" ? "LCTProviderMenu" :
@@ -2741,21 +2935,92 @@ function injectTranslation(row, sig, text) {
         }
         syncProviderRows();
         saveUiConfig();
-        setStatus("已保存(服务商 " + (p.provider || "bing") + ")");
+        setStatus(t("msgSavedWith") + (p.provider || "bing") + ")");
         log("settings saved");
       } else {
-        setStatus("保存失败: " + ((res && res.error) || "unknown"));
+        setStatus(t("msgSaveFail") + ": " + ((res && res.error) || "unknown"));
       }
     });
   }
 
   function LCTTest() {
     log("test clicked");
-    setStatus("测试中...最长约 " + Math.round((State.cfg.timeoutMs || 15000) / 1000) + " 秒,请稍候");
+    setStatus(t("msgTesting") + Math.round((State.cfg.timeoutMs || 15000) / 1000) + t("msgTestSec"));
     bridgePost("test", {}, function (res) {
-      if (res && res.ok) setStatus("测试成功: " + (res.translation || ""));
-      else setStatus("测试失败: " + ((res && res.error) || "unknown") + " (检查桥/Key/网络,或配置回退)");
+      if (res && res.ok) setStatus(t("msgTestOk") + (res.translation || ""));
+      else setStatus(t("msgTestFail") + ": " + ((res && res.error) || "unknown") + " (bridge/Key/network)");
     });
+  }
+
+  // ---- 多语言:应用当前 UI 语言到面板所有静态文本 ----
+  function applyUILang() {
+    const root = getRoot();
+    if (!root) return;
+    const panel = findChild(root, SETTINGS_PANEL_ID);
+    const find = function (id) { return panel ? findChild(panel, id) : findChild(root, id); };
+    // 面板标题
+    var lbl = find("LCTPanelTitle"); if (lbl) try { lbl.text = t("panelTitle"); } catch (e) {}
+    // 设置行标签
+    var ROW_MAP = {
+      "LCTRowLabelBridgeStatus": "rowBridgeStatus", "LCTRowLabelEnabled": "rowEnabled",
+      "LCTRowLabelProvider": "rowProvider", "LCTRowLabelApiKey": "rowApiKey",
+      "LCTRowLabelRegion": "rowRegion", "LCTRowLabelOpenaiBase": "rowOpenaiBase",
+      "LCTRowLabelOpenaiModel": "rowOpenaiModel", "LCTRowLabelDeeplEndpoint": "rowDeeplEndpoint",
+      "LCTRowLabelFallback": "rowFallback", "LCTRowLabelTargetLang": "rowTargetLang",
+      "LCTRowLabelDisplayMode": "rowDisplayMode", "LCTRowLabelOutgoing": "rowOutgoing",
+      "LCTRowLabelOutgoingTarget": "rowOutgoingTarget", "LCTRowLabelTimeout": "rowTimeout",
+      "LCTRowLabelForce": "rowForce", "LCTRowLabelTranslateOwn": "rowTranslateOwn",
+      "LCTRowLabelChatLog": "rowChatLog", "LCTRowLabelUILang": "rowUILang",
+    };
+    for (var id in ROW_MAP) { lbl = find(id); if (lbl) try { lbl.text = t(ROW_MAP[id]); } catch (e) {}
+    }
+    // 菜单选项文本
+    var MENU_MAP = {
+      "LCTMenuBing": "optBing", "LCTMenuMicrosoft": "optMicrosoft",
+      "LCTMenuOpenai": "optOpenai", "LCTMenuDeepl": "optDeepl", "LCTMenuGoogle": "optGoogle",
+      "LCTMenuLangZhHans": "optLangZhHans", "LCTMenuLangZhHant": "optLangZhHant",
+      "LCTMenuLangEn": "optLangEn", "LCTMenuLangJa": "optLangJa",
+      "LCTMenuLangKo": "optLangKo", "LCTMenuLangFr": "optLangFr",
+      "LCTMenuLangDe": "optLangDe", "LCTMenuLangEs": "optLangEs",
+      "LCTMenuLangCustom": "optLangCustom",
+      "LCTMenuOutLangZhHans": "optLangZhHans", "LCTMenuOutLangZhHant": "optLangZhHant",
+      "LCTMenuOutLangEn": "optLangEn", "LCTMenuOutLangJa": "optLangJa",
+      "LCTMenuOutLangKo": "optLangKo", "LCTMenuOutLangFr": "optLangFr",
+      "LCTMenuOutLangDe": "optLangDe", "LCTMenuOutLangEs": "optLangEs",
+      "LCTMenuOutLangCustom": "optLangCustom",
+      "LCTMenuBilingual": "optBilingual", "LCTMenuTranslationOnly": "optTranslationOnly",
+      "LCTMenuOutOff": "optOutOff", "LCTMenuOutTranslation": "optOutTranslation",
+      "LCTMenuOutBilingual": "optOutBilingual",
+      "LCTMenuUILangZh": "optUILangZh", "LCTMenuUILangEn": "optUILangEn",
+    };
+    for (var mid in MENU_MAP) { lbl = find(mid); if (lbl) try { lbl.text = t(MENU_MAP[mid]); } catch (e) {}
+    }
+    // 按钮文本
+    lbl = find("LCTSaveBtnLabel"); if (lbl) try { lbl.text = t("btnSave"); } catch (e) {}
+    lbl = find("LCTTestBtnLabel"); if (lbl) try { lbl.text = t("btnTest"); } catch (e) {}
+    lbl = find("LCTKeyHint"); if (lbl) try { lbl.text = t("btnHint"); } catch (e) {}
+    // 同步选择控件当前值的显示文本
+    setSelectText("LCTProviderSelect", labelFor(PROVIDER_OPTIONS, State.cfg.provider || "bing"));
+    setSelectText("LCTTargetLangSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.targetLanguage || "zh-Hans"));
+    setSelectText("LCTDisplayModeSelect", labelFor(DISPLAY_MODES, State.cfg.displayMode || "bilingual"));
+    setSelectText("LCTOutgoingSelect", labelFor(OUTGOING_MODES, State.cfg.outgoing || "off"));
+    setSelectText("LCTOutgoingTargetSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.outgoingTarget || "en"));
+    setSelectText("LCTUILangSelect", labelFor(UI_LANG_OPTIONS, State.cfg.uiLang || "zh"));
+    // 同步开关文本
+    setToggleText("LCTEnabled", !!State.cfg.enabled);
+    setToggleText("LCTForce", !!State.cfg.force);
+    setToggleText("LCTTranslateOwn", State.cfg.translateOwn !== false);
+    setToggleText("LCTChatLog", State.cfg.chatLog !== false);
+    // 同步桥状态
+    updateBridgeStatusUI();
+  }
+
+  function LCTPickUILang(value) {
+    State.cfg.uiLang = value;
+    saveUiConfig();
+    applyUILang();
+    closeSelectMenus();
+    log("pickUILang: " + value);
   }
 
   // ================= 启动 =================
@@ -2810,8 +3075,10 @@ function injectTranslation(row, sig, text) {
 
   function boot() {
     State.cfg = loadUiConfig();
+    applyUILang(); // 初始化界面语言
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
     syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
+    applyUILang(); // 初始化界面语言(配置同步后应用)
     updateBridgeDot(); // 初始状态:桥未上线前显示红点
     // DMM 用户引导:启动后 12s 桥仍未在线 => 面板显示未运行 + 安装指引
     $.Schedule(12.0, checkBridgeMissing);
@@ -2850,6 +3117,7 @@ function injectTranslation(row, sig, text) {
   exportGlobal("LCTToggleMenu", LCTToggleMenu);
   exportGlobal("LCTPickLang", LCTPickLang);
   exportGlobal("LCTPickProvider", LCTPickProvider);
+  exportGlobal("LCTPickUILang", LCTPickUILang);
   exportGlobal("LCTPickOption", LCTPickOption);
   exportGlobal("LCTSave", LCTSave);
   exportGlobal("LCTTest", LCTTest);
