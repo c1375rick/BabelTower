@@ -34,6 +34,38 @@ $ToolsDir = Join-Path $ProjectRoot "tools"
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Fail($msg) { Write-Host "[build] 错误: $msg" -ForegroundColor Red; exit 1 }
 
+# ---------- 构建前护栏:扫描源码非法控制字符 ----------
+# 防止类似 "注释里混入 0x00/0x07 导致 resourcecompiler 编译出截断的 vjs_c,
+# 游戏加载时整个脚本 SyntaxError 不执行" 的静默损坏。
+# 允许的控制字符: Tab(0x09) / LF(0x0A) / CR(0x0D)。其余 <0x20 一律视为脏数据。
+function Test-SourceClean {
+  $badFiles = @()
+  $scan = Get-ChildItem $ModDir -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+    $_.Extension -in @(".js", ".css", ".xml", ".txt", ".json", ".md")
+  }
+  foreach ($f in $scan) {
+    try {
+      $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
+    } catch {
+      continue
+    }
+    $hits = @()
+    for ($i = 0; $i -lt $bytes.Length; $i++) {
+      $b = $bytes[$i]
+      if ($b -lt 0x20 -and $b -ne 0x09 -and $b -ne 0x0A -and $b -ne 0x0D) {
+        $hits += "0x$($b.ToString('x2'))@$($i+1)"
+        if ($hits.Count -ge 10) { break }
+      }
+    }
+    if ($hits.Count -gt 0) {
+      $badFiles += "$($f.FullName): $($hits -join ', ')"
+    }
+  }
+  if ($badFiles.Count -gt 0) {
+    Fail "源码含非法控制字符(会导致编译产物损坏):`n" + ($badFiles -join "`n")
+  }
+}
+
 # ---------- 工具探测 ----------
 function Find-ResourceCompiler {
   if (-not $Csdk12Root -or -not (Test-Path $Csdk12Root)) { return "" }
@@ -98,6 +130,10 @@ if (-not $compiler) {
   Fail "找不到 resourcecompiler.exe,请用 -Csdk12Root 指定 Reduced CSDK 12 根目录"
 }
 Write-Step "resourcecompiler: $compiler"
+
+# 0. 构建前护栏:源码非法控制字符扫描(必须在编译前)
+Test-SourceClean
+Write-Step "源码扫描通过(无非法控制字符)"
 
 $contentAddon = Join-Path $Csdk12Root "content\citadel_addons\$AddonName"
 $gameAddon = Join-Path $Csdk12Root "game\citadel_addons\$AddonName"

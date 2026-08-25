@@ -1,4 +1,4 @@
-// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
+﻿// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
 // Babel Tower - Deadlock 聊天翻译 Panorama 脚本
 // ------------------------------------------------------------------
 // 独立实现(不复制任何现有 mod 代码),技术路线与 DLCT 一致:
@@ -63,7 +63,10 @@
   const BOOTSTRAP_TAIL_SCAN_LIMIT = 24; // 首次只扫末尾,避免翻历史
   const LOW_LATENCY_TAIL_SCAN_LIMIT = 6; // 每次额外扫末尾,保证低延迟
   const TITLE_POLL_SECONDS = 0.1;
-  const BRIDGE_ALIVE_SECONDS = 1.5; // 桥页面存活标记的等待上限
+  const BRIDGE_ALIVE_SECONDS = 1.5;
+  // ���P:health ��1%��d�pM�e�(MS�nb� DOM ��糧�)
+  const BRIDGE_OFFLINE_GRACE_SECONDS = 25; // 桥页面存活标记的等待上限
+  // 离线宽限:health 连续失败超过此秒数才把桥标红(避免打开设置面板时 DOM 抖动误报离线)
   const RETRY_LIMIT = 2; // 每条消息最多尝试次数(含首次)
   const RETRY_DELAY_SECONDS = 0.4;
   const OUTGOING_TIMEOUT_MS = 20000; // 出站翻译超时:超过则按原文发送,避免卡住重复按键。8s 覆盖 DeepSeek 等 API 服务商正常延迟(1-6s)及 Bing 冷启动;计时从任务开始处理算起(见 dispatchJob)
@@ -77,7 +80,7 @@
   const UNKNOWN_NAME = "<unknown>";
 
   // ---- 本地桥 ----
-  const BRIDGE_HOST = "127.0.0.1";
+  const BRIDGE_HOST = "localhost"; // 用 localhost 而非 127.0.0.1:当前 Deadlock 版本 HTML 面板(SetURL)对 http://127.0.0.1 本地回环拦截,仅放行 localhost
   const BRIDGE_PORT = 8791; // 与 core/config.json 保持一致
   const TITLE_PREFIX = "LCT";
   const TITLE_ALIVE = "lct-alive";
@@ -158,7 +161,7 @@
       const replaced = text.replace(PROTECT_RE, function (match) {
         const idx = nameMap.length;
         nameMap.push(lookup ? (lookup[match.toLowerCase()] || match) : match);
-        return "{{GAME_" + idx + "}}";
+        return "LCTPH" + idx;
       });
       return nameMap.length > 0 ? { text: replaced, nameMap: nameMap } : { text: text, nameMap: null };
     } catch (e) {
@@ -166,14 +169,14 @@
       return { text: text, nameMap: null };
     }
   }
-  /** 还原占位符(兼容API可能插入的空格/大小写变化) */
+  /** 还原占位符([[G_i]] 格式,兼容 API 可能插入的空格/大小写变化) */
   function restoreGameNames(text, nameMap) {
     if (!text || !nameMap) return text;
     for (let i = 0; i < nameMap.length; i++) {
       // 精确匹配优先
-      text = text.replace("{{GAME_" + i + "}}", nameMap[i]);
-      // 兜底:API可能加空格(如 "{{ GAME_0 }}")或变小写
-      const fallback = new RegExp("\\{\\{\\s*GAME_" + i + "\\s*\\}\\}", "gi");
+      text = text.replace("LCTPH" + i, nameMap[i]);
+      // 兜底:API可能加空格(如 "[[ G0 ]]")
+      const fallback = new RegExp("\\[\\[\\s*G" + i + "\\s*\\]\\]", "gi");
       text = text.replace(fallback, nameMap[i]);
     }
     return text;
@@ -1050,6 +1053,51 @@
   // 错误态 .LCTTranslationError 叠加)。不再用内联样式覆盖——内联优先级高于类,
   // 会把 HUD(10px/220px/右对齐)和大厅(4px/380px)的差异化样式冲掉(2026-08-15 移除)。
 
+// HUD 顶栏聊天是 Valve 内置布局(citadel_hud_top_bar_chat),不会 include lingua_chat.vcss_c,
+// 注入的译文 label 即使套 .LCTTranslationHud 类也取不到深蓝底 -> 运行时退化成透明底白字。
+// 兜底:对 HUD 译文直接写内联样式(深蓝底白字),不受 CSS 作用域限制。
+// 普通行/大厅仍用 class,这里只对 hud 行内联,不破坏它们的差异化样式。
+function applyHudInlineStyle(label) {
+  try {
+    // 与 .LCTTranslation(普通对话框行内译文)逐属性一致,统一 HUD 顶栏气泡外观
+    label.style.backgroundColor = "rgba(20, 52, 96, 0.95)";
+    label.style.color = "#ffffff";
+    label.style.fontSize = "17px";
+    label.style.fontStyle = "normal";
+    label.style.fontWeight = "600";
+    label.style.border = "1px solid rgba(120, 180, 255, 0.55)";
+    label.style.borderRadius = "4px";
+    label.style.padding = "3px 8px";
+    label.style.marginTop = "3px";
+    label.style.marginLeft = "58px";
+    label.style.maxWidth = "290px";
+    label.style.whiteSpace = "normal";
+    label.style.width = "fit-children";
+    label.style.textShadow = "0px 1px 2px rgba(0, 0, 0, 0.6)";
+  } catch (e) {}
+}
+
+// 通用内联样式(= .LCTTranslation 普通聊天译文),供测试浮层等需要"和普通聊天栏完全一致"的场合使用。
+// 与 applyHudInlineStyle 区别:这里不假设 HUD 小气泡容器,max-width/margin 与普通聊天一致。
+function applyUniversalInlineStyle(label) {
+  try {
+    label.style.backgroundColor = "rgba(20, 52, 96, 0.95)";
+    label.style.color = "#ffffff";
+    label.style.fontSize = "17px";
+    label.style.fontStyle = "normal";
+    label.style.fontWeight = "600";
+    label.style.border = "1px solid rgba(120, 180, 255, 0.55)";
+    label.style.borderRadius = "4px";
+    label.style.padding = "3px 8px";
+    label.style.marginTop = "3px";
+    label.style.marginLeft = "58px";
+    label.style.maxWidth = "290px";
+    label.style.width = "fit-children";
+    label.style.textShadow = "0px 1px 2px rgba(0, 0, 0, 0.6)";
+    label.style.whiteSpace = "normal";
+  } catch (e) {}
+}
+
 function injectTranslation(row, sig, text) {
     if (!isValid(row)) return;
     const hud = isHudRow(row);
@@ -1061,6 +1109,7 @@ function injectTranslation(row, sig, text) {
       try {
         label = $.CreatePanel("Label", body, transLabelId(sig));
         label.AddClass(hud ? TRANS_LABEL_HUD_CLASS : (lobby ? TRANS_LABEL_LOBBY_CLASS : TRANS_LABEL_CLASS));
+        if (hud) applyHudInlineStyle(label);
       } catch (e) {
         return;
       }
@@ -1100,6 +1149,7 @@ function injectTranslation(row, sig, text) {
       try {
         label = $.CreatePanel("Label", body, transLabelId(sig));
         label.AddClass(hud ? TRANS_LABEL_HUD_CLASS : (lobby ? TRANS_LABEL_LOBBY_CLASS : TRANS_LABEL_CLASS));
+        if (hud) applyHudInlineStyle(label);
       } catch (e) {
         return;
       }
@@ -1445,8 +1495,8 @@ function injectTranslation(row, sig, text) {
   }
 
   function dispatchJob(job) {
-    const panel = ensurePanel();
     const canHttp = detectAsyncWebRequest();
+    const panel = canHttp ? null : ensurePanel();
     if (!panel && !canHttp) {
       // 出站/桥任务不重试:通道不可用立即回传失败(出站则发原文),避免拖延用户发消息
       if (job.kind === "outgoing") {
@@ -1830,7 +1880,10 @@ function injectTranslation(row, sig, text) {
       const overlay = $.CreatePanel("Panel", parent, "LCTOverlay" + nowMs());
       overlay.AddClass("LCTTransOverlay");
       const label = $.CreatePanel("Label", overlay, "");
-      label.AddClass("LCTTransOverlayText");
+      // 测试浮层用与普通聊天译文完全一致的样式(便于肉眼核对样式是否生效),
+      // 不再套 HUD 专属内联(避免 '蓝底但和普通聊天栏不一样' 的差异)。
+      label.AddClass(TRANS_LABEL_CLASS);
+      applyUniversalInlineStyle(label);
       label.text = String(translation || "");
       log("HUD test: recreated translation overlay (original row was cleaned up)");
       // 5 秒后自删(译文浮层仅用于测试验证通路,不长期占用)
@@ -2029,33 +2082,38 @@ function injectTranslation(row, sig, text) {
 
   // ---- 桥健康探测(定时 ping,断线后状态栏提示 + 恢复后自动清错) ----
   // 注意:health 与翻译共用串行队列;队列忙时跳过本次 ping,避免 health 阻塞发消息/测试
-  function healthCheck() {
+    function healthCheck() {
     if (State.queue.length > 0 || State.pending) return;
+    // long offline + panel-only channel -> reset to re-probe direct (works if game supports AsyncWebRequest)
+    if (State.bridgeOfflineSince && (nowMs() - State.bridgeOfflineSince) > BRIDGE_OFFLINE_GRACE_SECONDS * 1000 && State.canHttp === false) {
+      State.canHttp = null;
+      log("bridge channel: reset to re-probe direct (was panel-only)");
+    }
     bridgePost("health", {}, function (res) {
       if (res && res.ok) {
         if (!State.bridgeUp) log("bridge online (health)");
         State.bridgeUp = true;
         State.bridgeOfflineSince = 0;
         setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (res.provider || State.cfg.provider || "bing"));
-        // BUGFIX:启动时若配置尚未同步成功(boot 时桥可能还没起),
-        // 健康检查通过后补一次同步,确保 translateOwn/chatLog 等开关从桥回填。
         if (!State.cfgSynced && !State.cfgSyncing) {
           State.cfgSyncing = true;
-          syncBridgeConfig(function () {
-            State.cfgSyncing = false;
-          });
+          syncBridgeConfig(function () { State.cfgSyncing = false; });
         }
       } else {
-        State.bridgeUp = false;
+        // offline grace: only mark red after BRIDGE_OFFLINE_GRACE_SECONDS of continuous failure,
+        // absorbing the few-second LCTBridgePanel-unreachable blip when opening settings / switching UI
         if (!State.bridgeOfflineSince) {
           State.bridgeOfflineSince = nowMs();
-          log("bridge offline (health)");
+          log("bridge offline (health): grace started");
+        } else if (nowMs() - State.bridgeOfflineSince > BRIDGE_OFFLINE_GRACE_SECONDS * 1000) {
+          State.bridgeUp = false;
           setStatus(t("bridgeOffline"));
+          setBridgeStatus(t("bridgeOffline"));
         }
-        setBridgeStatus(t("bridgeOffline"));
       }
     });
   }
+
 
   function setBridgeStatus(text) {
     const label = findChild(getRoot(), "LCTBridgeStatus");
