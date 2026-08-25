@@ -1,4 +1,4 @@
-// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
+﻿// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
 // Babel Tower - 本地翻译桥服务器
 //
 // 职责(只做翻译相关的事,不做通用代理):
@@ -29,9 +29,12 @@ const { execFile } = require("child_process");
 const configStore = require("./config");
 const providerRegistry = require("./providers/registry");
 const dictionary = require("./dictionary");
+const nameProtect = require("./name_protect");
 // 首次运行生成词典文件;桥启动后自动落盘高频词(自适应学习)
 dictionary.ensureFile();
 dictionary.startAutoFlush();
+nameProtect.load();
+nameProtect.watchLocalization();
 
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TEXT_CHARS = 4000; // 单条聊天文本长度上限
@@ -223,12 +226,22 @@ async function runTranslate(cfg, payload) {
   const dictHit = dictionary.lookup(text, payload.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans");
   if (dictHit) return dictHit;
 
+  // 英雄/物品名占位符保护:翻译前把游戏专有名词换成 {{GAME_i}},翻译后还原为目标语言译名,
+  // 避免被 API 意译/乱译(holliday 等不在客户端硬编码名单里的英雄也能被覆盖)。
+  // 数据来自游戏本地化(285 条全量),由 name_protect 监听游戏更新自动刷新。
+  const alreadyProtected = /LCTPH\d/.test(text);
+  const protected0 = alreadyProtected ? { text: text, nameMap: null } : nameProtect.protect(text);
+  const nameMap = protected0.nameMap;
+  const textForTranslate = protected0.text;
+  const toZh = (payload.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans").toLowerCase().startsWith("zh");
+  const restoreBack = (translation) => nameMap ? nameProtect.restore(translation, nameMap, toZh) : translation;
+
   // 缓存命中:同文本直接返回上次结果(词典未覆盖的长句/短语重复出现时,零网络延迟)
   const targetLang = payload.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans";
-  const cached = transCacheGet(text, targetLang);
+  const cached = transCacheGet(textForTranslate, targetLang);
   if (cached) {
-    log("info", "cache hit: " + String(text).slice(0, 60).replace(/\s+/g, " "));
-    return { translation: cached.translation, detectedLanguage: cached.detectedLanguage, viaCache: true };
+    log("info", "cache hit: " + String(textForTranslate).slice(0, 60).replace(/\s+/g, " "));
+    return { translation: restoreBack(cached.translation), detectedLanguage: cached.detectedLanguage, viaCache: true };
   }
 
   const providerCfg = (cfg[provider.id] || {});
@@ -239,14 +252,14 @@ async function runTranslate(cfg, payload) {
   };
   const errors = [];
   try {
-    const result = await provider.translate(text, Object.assign({}, baseOpts, {
+    const result = await provider.translate(textForTranslate, Object.assign({}, baseOpts, {
       apiKey: providerCfg.apiKey,
       region: providerCfg.region,
       endpoint: providerCfg.endpoint,
       baseUrl: providerCfg.baseUrl,
       model: providerCfg.model,
     }));
-    return Object.assign(result, { provider: provider.id });
+    return Object.assign(result, { provider: provider.id, translation: restoreBack(result.translation), _protectedText: textForTranslate });
   } catch (e) {
     errors.push(provider.id + ": " + (e && e.message ? e.message : String(e)));
   }
@@ -269,7 +282,7 @@ async function runTranslate(cfg, payload) {
         model: fc.model,
       }));
       log("info", "fallback -> " + pid + " (primary " + provider.id + " failed: " + (errors[0] || "").slice(0, 80) + ")");
-      return Object.assign(fbResult, { provider: pid, viaFallback: true });
+      return Object.assign(fbResult, { provider: pid, viaFallback: true, translation: restoreBack(fbResult.translation), _protectedText: textForTranslate });
     } catch (e2) {
       errors.push(pid + ": " + (e2 && e2.message ? e2.message : String(e2)));
     }
@@ -379,7 +392,7 @@ async function handleApi(req, res, url, bodyObj) {
       // 缓存非词典命中结果(词典结果本身零延迟,无需缓存;缓存命中已直接返回)
       if (result && !result.viaDictionary && !result.viaCache) {
         transCacheSet(
-          String(bodyObj.text || "").trim(),
+          result._protectedText || String(bodyObj.text || "").trim(),
           bodyObj.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans",
           result.translation,
           result.detectedLanguage
@@ -464,8 +477,12 @@ async function handleApi(req, res, url, bodyObj) {
   sendJson(res, 404, { ok: false, error: "not_found" });
 }
 
-// ---------- 服务器 ----------
-const server = http.createServer((req, res) => {
+// ---------- 服务器(双回环监听) ----------
+// 同一个请求处理器创建两个 http.Server:一个绑 IPv4 回环(127.0.0.1),一个绑 IPv6 回环(::1)。
+// 原因:游戏客户端用 BRIDGE_HOST="localhost",而 Windows 上 localhost 优先解析为 IPv6 回环 ::1;
+// 若只绑 127.0.0.1,游戏连 localhost 会落到 ::1 被拒 => bridgeUp 永远 false => 面板显示"未运行"。
+// 双回环后无论 localhost 解析到哪个都连得上,且两者均不暴露到局域网。
+const requestHandler = (req, res) => {
   let url;
   try {
     url = new URL(req.url, "http://127.0.0.1");
@@ -498,25 +515,39 @@ const server = http.createServer((req, res) => {
 
   res.statusCode = 404;
   res.end("not found");
-});
+};
 
 const cfg = configStore.load();
 activeConfig = cfg;
 const PORT = Number(cfg.port) || 8791;
-const HOST = "127.0.0.1";
+const HOST_V4 = "127.0.0.1";
+const HOST_V6 = "::1";
 
 startGameWatch();
 
-// 端口被占用 = 已有实例在运行,静默退出(与启动器/开机自启场景兼容)
-server.on("error", (e) => {
+// 端口被占用 = 已有实例在运行,静默退出(与启动器/开机自启场景兼容)。
+// 两台 server 都 EADDRINUSE 才说明确有实例在跑;单台绑定失败(如该回环未启用)忽略。
+let listenErrors = 0;
+function onServerError(e) {
   if (e && e.code === "EADDRINUSE") {
-    process.exit(0);
+    listenErrors += 1;
+    if (listenErrors >= 2) process.exit(0);
+    return;
   }
   log("error", "server error: " + ((e && e.message) || String(e)));
   process.exit(1);
-});
+}
 
-server.listen(PORT, HOST, () => {
-  log("info", "Babel Tower bridge listening on http://" + HOST + ":" + PORT);
-  log("info", "provider: " + cfg.provider + ", target: " + cfg.defaults.targetLanguage + " (key set: " + (!!(cfg.microsoft && cfg.microsoft.apiKey)) + ")");
-});
+function makeServer(host) {
+  const s = http.createServer(requestHandler);
+  s.on("error", onServerError);
+  s.listen(PORT, host, () => {
+    log("info", "Babel Tower bridge listening on http://" + host + ":" + PORT);
+    log("info", "provider: " + cfg.provider + ", target: " + cfg.defaults.targetLanguage + " (key set: " + (!!(cfg.microsoft && cfg.microsoft.apiKey)) + ")");
+  });
+  return s;
+}
+
+// 先绑 IPv4,再绑 IPv6(任一成功即可服务;两者都成功则双栈可达)
+makeServer(HOST_V4);
+makeServer(HOST_V6);

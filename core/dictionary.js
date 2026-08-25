@@ -203,10 +203,31 @@ function startAutoFlush() {
 
 
 // 内置词典(随发行附带,中文常用短句/游戏术语;查表顺序 user > builtin > learned)
+// 返回对象按目标语言分组:{ zh: {英文->中文}, en: {中文->英文}, ... }
+//
+// 双向字典:内置文件只维护 zh 段(英文->中文)。为让"发送前翻译"(中文->英文)
+// 也能享受同一批短语的直译,这里自动把 zh 段反转为 en 段(中文->英文)。
+// 好处:只维护一份(zh),两个方向自动同步,无需手写/维护第二份。
+// 注意:若内置文件已显式带 en 段,以文件为准(不覆盖手动维护的 en)。
 function loadBuiltin() {
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "config", "dictionary.builtin.json"), "utf8"));
-    if (raw && raw.user && typeof raw.user === "object") return raw.user;
+    if (raw && raw.user && typeof raw.user === "object") {
+      const builtin = raw.user;
+      // 自动生成双向 en 段(zh 段反转),仅当文件未自带 en 段时
+      if (builtin.zh && typeof builtin.zh === "object" && !builtin.en) {
+        const enSeg = {};
+        for (const enKey of Object.keys(builtin.zh)) {
+          const zhVal = builtin.zh[enKey];
+          if (!zhVal) continue;
+          // 反转:中文短语(原译文) -> 英文短语(原原文)
+          // 多条英文映射到同一中文时,后者覆盖前者(可接受;常用短词几乎无此冲突)
+          enSeg[String(zhVal)] = enKey;
+        }
+        if (Object.keys(enSeg).length) builtin.en = enSeg;
+      }
+      return builtin;
+    }
   } catch (e) {}
   return {};
 }
