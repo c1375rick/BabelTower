@@ -2582,7 +2582,10 @@ function injectTranslation(row, sig, text) {
     } catch (e) {}
     syncPanelFromConfig();
     // 立即用上次已知的 Key 状态回填占位符(避免每次打开先闪空;异步拉取后会再确认)
-    if ((State.cfg._providerKeys || {})[State.cfg.provider || "bing"]) setFieldText("LCTApiKey", "********");
+    if ((State.cfg._providerKeys || {})[State.cfg.provider || "bing"]) {
+      setFieldText("LCTApiKey", "********");
+      credFieldSnap.apiKey = "********";
+    }
     // 从桥拉取已保存配置:回填 UI 偏好(游戏重启后恢复) + apiKey 占位符
     bridgePost("config", {}, function (res) {
       if (res && res.ok && res.config) {
@@ -2610,15 +2613,22 @@ function injectTranslation(row, sig, text) {
           google: !!(c.google && c.google.hasApiKey),
         };
         // apiKey 占位符必须在 syncPanelFromConfig 之后设置(否则会被其清空)
-        if (c.microsoft && c.microsoft.hasApiKey) setFieldText("LCTApiKey", "********");
-        if (c.openai && c.openai.hasApiKey) setFieldText("LCTApiKey", "********");
-        if (c.deepl && c.deepl.hasApiKey) setFieldText("LCTApiKey", "********");
-        if (c.google && c.google.hasApiKey) setFieldText("LCTApiKey", "********");
+        if (c.microsoft && c.microsoft.hasApiKey) { setFieldText("LCTApiKey", "********"); credFieldSnap.apiKey = "********"; }
+        if (c.openai && c.openai.hasApiKey) { setFieldText("LCTApiKey", "********"); credFieldSnap.apiKey = "********"; }
+        if (c.deepl && c.deepl.hasApiKey) { setFieldText("LCTApiKey", "********"); credFieldSnap.apiKey = "********"; }
+        if (c.google && c.google.hasApiKey) { setFieldText("LCTApiKey", "********"); credFieldSnap.apiKey = "********"; }
+        // 回填已保存的 Microsoft 区域(region 非机密,直接明文回显),否则每次打开都是空
+        if (c.microsoft && c.microsoft.region) {
+          setFieldText("LCTRegion", String(c.microsoft.region));
+          credFieldSnap.region = String(c.microsoft.region);
+        }
         if (c.openai && c.openai.baseUrl) setFieldText("LCTOpenaiBaseUrl", c.openai.baseUrl);
         if (c.openai && c.openai.model) setFieldText("LCTOpenaiModel", c.openai.model);
         if (c.deepl && c.deepl.endpoint) setFieldText("LCTDeeplEndpoint", c.deepl.endpoint);
         if (Array.isArray(c.fallbackProviders)) {
-          setFieldText("LCTFallback", c.fallbackProviders.join(","));
+          const fbStr = c.fallbackProviders.join(",");
+          setFieldText("LCTFallback", fbStr);
+          credFieldSnap.fallback = fbStr;
         }
         if (c.chatLog && typeof c.chatLog.enabled === "boolean") {
           State.cfg.chatLog = c.chatLog.enabled;
@@ -2712,13 +2722,16 @@ function injectTranslation(row, sig, text) {
     }
   }
 
+  // 凭据字段快照:记录面板当前展示的 apiKey/region 文本。
+  // 保存时对比快照判断“用户真的改过”还是“字段只是被清空/占位”,避免误传空值覆盖已存配置。
+  let credFieldSnap = { apiKey: "", region: "", fallback: "" };
+
   function syncPanelFromConfig() {
     setFieldText("LCTApiKey", "");
     setFieldText("LCTRegion", "");
     setFieldText("LCTOpenaiBaseUrl", "");
     setFieldText("LCTOpenaiModel", "");
     setFieldText("LCTDeeplEndpoint", "");
-    setFieldText("LCTFallback", "");
     setFieldText("LCTTargetLangCustom", "");
     setFieldText("LCTOutgoingTargetCustom", "");
     setFieldText("LCTTimeout", String(State.cfg.timeoutMs || 15000));
@@ -2736,6 +2749,12 @@ function injectTranslation(row, sig, text) {
     syncCustomInputs();
     closeSelectMenus();
     setStatus("");
+    credFieldSnap = { apiKey: "", region: "", fallback: fieldValue("LCTFallback") }; // 字段被重置/保留,同步快照
+    // 已知该服务商有 Key 时立即恢复占位符,避免中途切选项把占位符抹成空白
+    if ((State.cfg._providerKeys || {})[State.cfg.provider || "bing"]) {
+      setFieldText("LCTApiKey", "********");
+      credFieldSnap.apiKey = "********";
+    }
     updateBridgeStatusUI(); // 打开设置面板时刷新桥状态行
   }
 
@@ -2956,10 +2975,17 @@ function injectTranslation(row, sig, text) {
     const apiKeyField = fieldValue("LCTApiKey");
     // 面板字段为空但该服务商已有 Key:发保留标记,避免误清空(修复 /tr 重复打开后 Key 丢失)
     const apiKeyValue = (!apiKeyField && (State.cfg._providerKeys || {})[prov]) ? "********" : apiKeyField;
-    return {
+    // 仅当用户真的改动了回退列表输入时才回传;未动过/异步回填前 = 不带该字段,桥端保留原值
+    const fbField = String(fieldValue("LCTFallback") || "");
+    if (fbField !== credFieldSnap.fallback) {
+      out.fallbackProviders = fbField.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    }
+    // region 只有在用户真的改动了输入时才回传(对比快照);
+    // 清空输入 = 显式请求清除(clearRegion),未动过 = 完全不带该字段,桥端保留原值
+    const regionField = fieldValue("LCTRegion");
+    const out = {
       provider: prov,
       apiKey: apiKeyValue,
-      region: fieldValue("LCTRegion"),
       openaiBaseUrl: fieldValue("LCTOpenaiBaseUrl"),
       openaiModel: fieldValue("LCTOpenaiModel"),
       deeplEndpoint: fieldValue("LCTDeeplEndpoint"),
@@ -2971,8 +2997,6 @@ function injectTranslation(row, sig, text) {
       enabled: !!State.cfg.enabled,
       force: !!State.cfg.force,
       timeoutMs: Number(fieldValue("LCTTimeout")) || 15000,
-      fallbackProviders: String(fieldValue("LCTFallback") || "")
-        .split(",").map(function (x) { return x.trim(); }).filter(Boolean),
       chatLog: State.cfg.chatLog !== false,
       translateOwn: State.cfg.translateOwn !== false,
       ui: {
@@ -2986,6 +3010,12 @@ function injectTranslation(row, sig, text) {
         timeoutMs: Number(fieldValue("LCTTimeout")) || 15000,
       },
     };
+    // 仅当用户真的改动了区域输入时才回传;清空输入 = 显式清除
+    if (regionField !== credFieldSnap.region) {
+      if (regionField === "") out.clearRegion = true;
+      else out.region = regionField;
+    }
+    return out;
   }
 
   function bridgePost(op, payload, done) {

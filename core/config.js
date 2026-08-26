@@ -169,6 +169,8 @@ function maskCompact(cfg) {
     ui: Object.assign({}, DEFAULTS.ui, c.ui || {}),
   };
   out.microsoft = { hasApiKey: !!(c.microsoft && c.microsoft.apiKey) };
+  // region 非机密,回传给游戏面板做回填(否则每次打开都是空,用户误以为没保存)
+  if (c.microsoft && c.microsoft.region) out.microsoft.region = c.microsoft.region;
   out.openai = { hasApiKey: !!(c.openai && c.openai.apiKey) };
   // baseUrl/model/endpoint 仅在非默认值时输出(游戏侧 if 存在才回填,省略=用默认,省体积)
   if (c.openai && c.openai.baseUrl && c.openai.baseUrl !== DEFAULTS.openai.baseUrl) out.openai.baseUrl = c.openai.baseUrl;
@@ -195,7 +197,8 @@ function applyMaskedUpdate(current, incoming) {
       if (ms.apiKey && ms.apiKey !== "********") cfg.microsoft.apiKey = ms.apiKey;
       if (ms.apiKey === "") cfg.microsoft.apiKey = "";
     }
-    if (typeof ms.region === "string") cfg.microsoft.region = ms.region;
+    if (typeof ms.region === "string" && ms.region) cfg.microsoft.region = ms.region;
+    if (ms.clearRegion === true) cfg.microsoft.region = "";
     if (typeof ms.endpoint === "string" && ms.endpoint) cfg.microsoft.endpoint = ms.endpoint;
   }
 
@@ -216,7 +219,10 @@ function applyMaskedUpdate(current, incoming) {
     else if (flatKeyTarget === "google") setKey(cfg.google);
     else setKey(cfg.microsoft);
   }
-  if (typeof incoming.region === "string") cfg.microsoft.region = incoming.region;
+  // 空 region 不再清空(面板打开时字段为空是正常态,不能当成“用户想清空”);
+  // 显式 clearRegion:true 才清空 —— 修复 /tr 反复打开后 Region 被抹掉导致 Microsoft 鉴权失败。
+  if (typeof incoming.region === "string" && incoming.region) cfg.microsoft.region = incoming.region;
+  if (incoming.clearRegion === true) cfg.microsoft.region = "";
 
   if (incoming.openai) {
     const oa = incoming.openai;

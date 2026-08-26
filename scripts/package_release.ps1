@@ -39,6 +39,9 @@ Copy-Item (Join-Path $Root "core\config.js") (Join-Path $Stage "core\")
 Copy-Item (Join-Path $Root "core\dictionary.js") (Join-Path $Stage "core\")
 # hero_names 由 dictionary.js require, 漏掉会导致桥启动崩溃(离线) —— 2026-08-16 用户反馈修复
 Copy-Item (Join-Path $Root "core\hero_names.js") (Join-Path $Stage "core\")
+# game_names 由 name_protect.js require, 漏掉会导致桥启动崩溃(2026-08-25 名称保护重构后新增)
+Copy-Item (Join-Path $Root "core\game_names.js") (Join-Path $Stage "core\")
+Copy-Item (Join-Path $Root "core\name_protect.js") (Join-Path $Stage "core\")
 Copy-Item (Join-Path $Root "core\providers\*.js") (Join-Path $Stage "core\providers\")
 
 Write-Host "==> 复制配置示例与脚本..."
@@ -46,6 +49,8 @@ Copy-Item (Join-Path $Root "config\config.example.json") (Join-Path $Stage "conf
 Copy-Item (Join-Path $Root "config\dictionary.json") (Join-Path $Stage "config\")
 # 内置词典(Thirt927 特性, core/dictionary.js 运行时读取, 必须随包发布)
 Copy-Item (Join-Path $Root "config\dictionary.builtin.json") (Join-Path $Stage "config\")
+# 游戏专有名词映射(名称保护运行时读取, 由 core/game_names.js 生成)
+Copy-Item (Join-Path $Root "config\gamenames.json") (Join-Path $Stage "config\")
 Copy-Item (Join-Path $Root "scripts\autostart.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "StartDeadlock.bat") (Join-Path $Stage "StartDeadlock.bat")
 # 双击即用的自启安装/卸载包装(内部自动处理路径)
