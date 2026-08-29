@@ -59,13 +59,13 @@ if (vf && tag && !tag.includes(vf) && !/beta/i.test(tag)) {
 if (vf && zip && !zip.includes(vf) && !/beta/i.test(zip)) {
   problems.push(`dist 最新 zip(${zip}) 与 VERSION 文件(${vf}) 不匹配`);
 }
-// 核心检查: 最新 zip 的版本号(含 beta 主版本) 必须等于 代码内 VERSION 常量
+// 核心检查: 最新 zip 的完整版本号(含 -beta.N) 必须等于 代码内 VERSION 常量
 if (zip && cv) {
-  const m = zip.match(/BabelTower-(\d+\.\d+\.\d+)(?:-beta\.\d+)?-win64\.zip/);
+  const m = zip.match(/BabelTower-(\d+\.\d+\.\d+(?:-beta\.\d+)?)-win64\.zip/);
   if (m) {
-    const zipMain = m[1];
-    if (zipMain !== cv) {
-      problems.push(`最新包 ${zip} 的主版本(${zipMain}) ≠ 代码内 VERSION(${cv}) —— 装包后游戏内会显示 v${cv}, 版本自述与包名不符`);
+    const zipVer = m[1];
+    if (zipVer !== cv) {
+      problems.push(`最新包 ${zip} 的版本(${zipVer}) ≠ 代码内 VERSION(${cv}) —— 装包后游戏内会显示 v${cv}, 版本自述与包名不符`);
     }
   }
 }

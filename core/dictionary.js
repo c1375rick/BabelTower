@@ -25,6 +25,7 @@ const heroNames = require("./hero_names");
 const LEARN_MIN_HITS = 3;        // 同一译文出现次数达到该值才固化
 const LEARN_MAX_CHARS = 30;      // 超过该长度的文本不学习(避免整句固化)
 const LEARN_MAX_TOKENS = 5;      // 超过该词数的文本不学习
+const LEARN_MAX_ENTRIES = 5000;  // learned 段单语言前缀最大词条数,超过则淘汰最低频
 const FLUSH_INTERVAL_MS = 60 * 1000; // 落盘间隔
 
 let cache = null; // { user: {...}, learned: {...}, enabled, loadedAt }
@@ -158,7 +159,34 @@ function record(text, targetLanguage, translation, detectedLanguage) {
     dict.learned[prefix][key] = best;
     learnStats.delete(statsKey);
     save();
+    enforceLearnCap();
   }
+}
+
+// learned 段超过上限时,按频率(该词命中次数)保留高频词,淘汰最低频
+// 频率数据来自 learnStats 仍在累积的条目;已固化但不再出现的词按 0 处理,优先被淘汰
+function enforceLearnCap() {
+  const dict = load();
+  if (!dict.enabled) return;
+  for (const prefix of Object.keys(dict.learned)) {
+    const seg = dict.learned[prefix];
+    if (!seg || typeof seg !== "object") continue;
+    const keys = Object.keys(seg);
+    if (keys.length <= LEARN_MAX_ENTRIES) continue;
+    // 统计每个已固化词在当前 learnStats 的活跃次数(无则 0)
+    const freq = {};
+    for (const k of keys) {
+      const sk = prefix + "\x00" + k;
+      const e = learnStats.get(sk);
+      const counts = e ? Object.values(e.counts) : [];
+      freq[k] = counts.length ? Math.max.apply(null, counts) : 0;
+    }
+    // 按频率升序排序,淘汰最低频的直到回到上限内
+    const toEvict = keys.slice().sort((a, b) => freq[a] - freq[b])
+      .slice(0, keys.length - LEARN_MAX_ENTRIES);
+    for (const k of toEvict) delete seg[k];
+  }
+  save();
 }
 
 // 固化:达到阈值的条目写入 learned 表并清统计
@@ -190,7 +218,7 @@ function flushLearned() {
     changed = true;
     learnStats.delete(key);
   }
-  if (changed) save();
+  if (changed) { save(); enforceLearnCap(); }
 }
 
 function startAutoFlush() {

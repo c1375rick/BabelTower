@@ -182,6 +182,66 @@ function sendJson(res, status, obj) {
 }
 
 // ---------- 聊天日志(按比赛 ID 划分) ----------
+// ---------- 聊天日志轮转与清理 ----------
+// 单文件写入上限: 超过则把当前 .jsonl 整体重命名为带时间戳的备份,
+// 后续写入落到全新文件(标准日志滚动思路, 不丢任何已写内容)。
+const CHAT_LOG_MAX_BYTES = 5 * 1024 * 1024;        // 5MB
+const CHAT_LOG_ROTATE_KEEP_DAYS = 7;              // 轮转备份(*.jsonl.rotated)保留 7 天
+const CHAT_LOG_CLEANUP_DAYS = 30;                // 启动时清理: 活动日志(*.jsonl)超 30 天删除
+const CHAT_LOG_ROTATED_SUFFIX = ".jsonl.rotated"; // 轮转备份后缀(前面再拼时间戳)
+
+// 轮转: 若当前 <matchId>.jsonl 超过 CHAT_LOG_MAX_BYTES, 整体重命名为
+// <matchId>.<时间戳>.jsonl.rotated, 后续 appendFileSync 会重新创建空的 .jsonl。
+// 已写入的内容全部保留在备份里, 不影响 API 返回值(written=本次写入行数)。
+function rotateChatLogIfNeeded(dir, matchId) {
+  const file = path.join(dir, matchId + ".jsonl");
+  let stat;
+  try { stat = fs.statSync(file); } catch (e) { return; } // 文件不存在则无需轮转
+  if (!stat.isFile() || stat.size <= CHAT_LOG_MAX_BYTES) return;
+  // 时间戳精确到秒并替换文件系统非法字符(: .), 避免同秒多次轮转互相覆盖
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const rotated = path.join(dir, matchId + "." + stamp + CHAT_LOG_ROTATED_SUFFIX);
+  try {
+    fs.renameSync(file, rotated);
+    log("info", "chat log rotated: " + path.basename(file) + " (" + stat.size + " bytes) -> " + path.basename(rotated));
+  } catch (e) {
+    // 轮转失败不致命: 下次写入仍会触发, 不影响本次日志记录
+    log("warn", "chat log rotate failed: " + (e && e.message ? e.message : String(e)));
+  }
+}
+
+// 启动清理: 扫描日志目录, 删除超龄文件(只处理聊天日志相关文件, 不碰其他)。
+//   活动日志 (*.jsonl)            超 CHAT_LOG_CLEANUP_DAYS   (30) 天 -> 删除
+//   轮转备份 (*.jsonl.rotated)    超 CHAT_LOG_ROTATE_KEEP_DAYS (7) 天 -> 删除
+function cleanupOldChatLogs(dir) {
+  let entries;
+  try { entries = fs.readdirSync(dir); } catch (e) { return; }
+  const now = Date.now();
+  for (const name of entries) {
+    const full = path.join(dir, name);
+    let stat;
+    try { stat = fs.statSync(full); } catch (e) { continue; }
+    if (!stat.isFile()) continue;
+    let maxAgeDays = 0;
+    if (name.endsWith(CHAT_LOG_ROTATED_SUFFIX)) {
+      maxAgeDays = CHAT_LOG_ROTATE_KEEP_DAYS;
+    } else if (name.endsWith(".jsonl")) {
+      maxAgeDays = CHAT_LOG_CLEANUP_DAYS;
+    } else {
+      continue; // 不碰无关文件
+    }
+    const ageMs = now - stat.mtimeMs;
+    if (ageMs > maxAgeDays * 24 * 60 * 60 * 1000) {
+      try {
+        fs.unlinkSync(full);
+        log("info", "chat log cleaned (>" + maxAgeDays + "d): " + name);
+      } catch (e) {
+        log("warn", "chat log cleanup failed: " + name + " " + (e && e.message ? e.message : String(e)));
+      }
+    }
+  }
+}
+
 function safeMatchId(id) {
   // 只保留字母数字与 - _ . 防止路径穿越
   return String(id || "unknown").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64) || "unknown";
@@ -209,6 +269,8 @@ function appendChatLog(cfg, body) {
     }));
   }
   fs.appendFileSync(file, out.join("\n") + "\n", "utf8");
+  // 写入后检查单文件大小, 超 5MB 则滚动(重命名旧文件为带时间戳备份)
+  rotateChatLogIfNeeded(dir, matchId);
   return out.length;
 }
 
@@ -374,7 +436,7 @@ async function handleApi(req, res, url, bodyObj) {
     sendJson(res, 200, {
       ok: true,
       name: "Babel Tower Bridge",
-      version: "0.1.3",
+      version: "1.0.0-beta.2",
       provider: cfgH.provider,
       providers: providerRegistry.listProviders(),
       fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],
@@ -522,6 +584,12 @@ activeConfig = cfg;
 const PORT = Number(cfg.port) || 8791;
 const HOST_V4 = "127.0.0.1";
 const HOST_V6 = "::1";
+
+// 启动清理: 删除 logs/chat 中超 30 天的活动日志 / 超 7 天的轮转备份
+(() => {
+  const dir = path.resolve(__dirname, "..", String((cfg.chatLog && cfg.chatLog.dir) || "logs/chat"));
+  cleanupOldChatLogs(dir);
+})();
 
 startGameWatch();
 
