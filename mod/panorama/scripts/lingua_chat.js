@@ -62,6 +62,7 @@
   const SLOW_POLL_SECONDS = 0.8;
   const BOOTSTRAP_TAIL_SCAN_LIMIT = 24; // 首次只扫末尾,避免翻历史
   const LOW_LATENCY_TAIL_SCAN_LIMIT = 6; // 每次额外扫末尾,保证低延迟
+  const HUD_OVERLAY_LIMIT = 10; // HUD 译文浮层上限(超过则清理最旧,防内存泄漏)
   const TITLE_POLL_SECONDS = 0.1;
   const BRIDGE_ALIVE_SECONDS = 1.5;
   // ���P:health ��1%��d�pM�e�(MS�nb� DOM ��糧�)
@@ -91,8 +92,11 @@
   const DMM_HINT = "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat";
 
   // ---- 英雄/物品名保护(翻译前占位,翻译后还原) ----
+  // 默认用下面硬编码的兜底名单;启动 healthCheck 成功后会从桥 /api/v1/gamenames
+  // 拉取全量名单(285 条,随游戏更新自动刷新)覆盖这里的兜底值,消除双源漂移。
+  // 注意:兜底名单全小写;桥侧 gamenames.json key 是原始大小写,匹配时 case-insensitive。
   // 按长度降序排列,避免短名误匹配长名的子串(如 "geist" 误匹配 "lady geist")
-  const PROTECT_NAMES = [
+  let PROTECT_NAMES = [
     // 多词物品(长优先)
     "spirit shredder bullets", "bullet resist shredder", "armor piercing rounds",
     "ballistic enchantment", "escalating resilience", "intensifying magazine",
@@ -118,7 +122,7 @@
   const PROTECT_RE = new RegExp(
     "\\b(?:" + PROTECT_NAMES.map(n => n.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')).join("|") + ")\\b",
     "gi"
-  );  const PROTECT_TO_ZH = {
+  );  let PROTECT_TO_ZH = {
     "abrams": "亚伯兰", "bebop": "比波普", "calico": "卡厉可",
     "dynamo": "奇能", "geist": "盖斯特夫人", "haze": "岚梦",
     "inferno": "炽焱", "lady geist": "盖斯特夫人", "mo krill": "莫克双雄",
@@ -153,6 +157,39 @@
     "rapid rounds": "快手连发", "burst fire": "健步疾射",
     "boundless spirit": "灵力无边", "spirit shredder": "碎灵子弹",
   };
+  // 兜底副本:获取桥名单失败时用它们回退(见 rebuildGameNames)
+  const PROTECT_TO_ZH_FALLBACK = PROTECT_TO_ZH;
+  const PROTECT_NAMES_FALLBACK = PROTECT_NAMES;
+
+  // 由英文名数组(原始大小写)重建占位正则:按长度降序,避免子串误匹配
+  function buildProtectRe(names) {
+    const sorted = names.slice().sort((a, b) => b.length - a.length);
+    const escaped = sorted.map(n => String(n).replace(/[.*+?^${}()|[\]\]/g, '\$&'));
+    return new RegExp("\\b(?:" + escaped.join("|") + ")\\b", "gi");
+  }
+  let PROTECT_RE = buildProtectRe(PROTECT_NAMES);
+
+  /** 用桥侧 gamenames.json({ 英文原名->中文译名 })重建保护名单与映射;
+   *  case-insensitive 匹配(桥 key 原始大小写,兜底名单全小写)。*/
+  function rebuildGameNames(map) {
+    if (!map || typeof map !== "object") return false;
+    const names = [];
+    const toZh = {};
+    for (const en of Object.keys(map)) {
+      const zh = map[en];
+      if (!en || !zh) continue;
+      const key = String(en).toLowerCase();
+      names.push(en);
+      toZh[key] = zh;
+    }
+    if (names.length === 0) return false;
+    PROTECT_NAMES = names;
+    PROTECT_TO_ZH = toZh;
+    PROTECT_RE = buildProtectRe(PROTECT_NAMES);
+    log("game names synced from bridge: " + names.length + " entries");
+    return true;
+  }
+
   /** 占位替换:lookup = {匹配文本 -> 目标译名};返回 { text, nameMap } */
   function replaceGameNames(text, lookup) {
     if (!text || typeof text !== "string") return { text: text, nameMap: null };
@@ -194,12 +231,16 @@
     scannedCount: 0,
     hudMessages: [], // HUD 顶栏聊天 Messages 容器列表(Team1Chat/Team2Chat)
     hudScanned: [], // 每个 HUD 容器已扫描的行数
+    hudOverlayCount: 0, // 活跃 HUD 译文浮层数量(防内存泄漏跟踪)
+    hudOverlays: [], // HUD 译文浮层面板列表(按创建顺序,用于清理最旧)
     lobbyMessages: null, // 大厅聊天容器(ChatLinesPanel,hudchat)
     lobbyScanned: 0, // 大厅容器已扫描行数
     hudLogged: false,
     bootLogged: false,
     cfgSynced: false, // 启动时是否已从桥同步过配置(healthCheck 补触发用)
     cfgSyncing: false, // 配置同步是否进行中(防 healthCheck 重复触发叠加)
+    gamenamesLoaded: false, // 启动后是否已从桥拉取过游戏名保护名单(healthCheck 补触发用)
+    gamenamesLoading: false, // 名单拉取是否进行中(防 healthCheck 重复触发叠加)
     seen: new Set(), // 消息签名去重
     cache: new Map(), // 签名 -> { translation }
     queue: [], // 待翻译任务
@@ -1881,20 +1922,49 @@ function injectTranslation(row, sig, text) {
       if (!isValid(container)) return;
       // 浮层挂在 Messages 的父级(CitadelHudTopBarChat 根)下,而非 Messages 内
       const parent = container.GetParent ? container.GetParent() : null;
+      // 防护:parent 面板可能也被游戏清理,创建前必须校验有效性,否则 CreatePanel 会闪退
       if (!isValid(parent)) return;
-      const overlay = $.CreatePanel("Panel", parent, "LCTOverlay" + nowMs());
+      // 防护:避免同一条译文重复创建多个浮层(相同 sig 已存在则跳过)
+      const existing = findChild(parent, "LCTOverlay-" + job.sig);
+      if (isValid(existing)) {
+        // 已存在:仅刷新文本,不重复创建
+        const lbl = findClass(existing, TRANS_LABEL_CLASS);
+        try { if (isValid(lbl)) lbl.text = String(translation || ""); } catch (e) {}
+        log("HUD test: overlay already exists for sig, refreshed text");
+        return;
+      }
+      const overlayId = "LCTOverlay-" + job.sig;
+      const overlay = $.CreatePanel("Panel", parent, overlayId);
       overlay.AddClass("LCTTransOverlay");
+      overlay.__lctSig = job.sig;
+      overlay.__lctBorn = nowMs();
       const label = $.CreatePanel("Label", overlay, "");
       // 测试浮层用与普通聊天译文完全一致的样式(便于肉眼核对样式是否生效),
       // 不再套 HUD 专属内联(避免 '蓝底但和普通聊天栏不一样' 的差异)。
       label.AddClass(TRANS_LABEL_CLASS);
       applyUniversalInlineStyle(label);
       label.text = String(translation || "");
+      // 记录到活跃浮层列表(按创建顺序),用于计数与清理最旧
+      State.hudOverlays.push(overlay);
+      State.hudOverlayCount = State.hudOverlays.length;
       log("HUD test: recreated translation overlay (original row was cleaned up)");
+      // 超过上限:先清理最旧的浮层(防内存泄漏)
+      while (State.hudOverlays.length > HUD_OVERLAY_LIMIT) {
+        const old = State.hudOverlays.shift();
+        try { if (isValid(old)) old.DeleteAsync(100); } catch (e) {}
+      }
+      State.hudOverlayCount = State.hudOverlays.length;
       // 5 秒后自删(译文浮层仅用于测试验证通路,不长期占用)
+      // 用 DeleteAsync(100) 而非 DeleteAsync(0):给一帧缓冲,避免某些时序下立即删除导致闪退
       $.Schedule(5.0, function () {
         try {
-          if (isValid(overlay)) overlay.DeleteAsync(0);
+          if (isValid(overlay)) overlay.DeleteAsync(100);
+        } catch (e) {}
+        // 从活跃列表移除(若仍在)
+        try {
+          const idx = State.hudOverlays.indexOf(overlay);
+          if (idx >= 0) State.hudOverlays.splice(idx, 1);
+          State.hudOverlayCount = State.hudOverlays.length;
         } catch (e) {}
       });
     } catch (e) {
@@ -2111,6 +2181,11 @@ function injectTranslation(row, sig, text) {
         if (!State.cfgSynced && !State.cfgSyncing) {
           State.cfgSyncing = true;
           syncBridgeConfig(function () { State.cfgSyncing = false; });
+        }
+        // 首次上线:从桥拉取游戏名保护名单(全量,消除硬编码兜底名单漂移)
+        if (!State.gamenamesLoaded && !State.gamenamesLoading) {
+          State.gamenamesLoading = true;
+          syncGameNames(function () { State.gamenamesLoading = false; });
         }
       } else {
         // offline grace: only mark red after BRIDGE_OFFLINE_GRACE_SECONDS of continuous failure,
@@ -2359,15 +2434,20 @@ function injectTranslation(row, sig, text) {
     resolveHudMessages();
     let touched = false;
     for (let i = 0; i < State.hudMessages.length; i += 1) {
-      const messages = State.hudMessages[i];
-      if (!isValid(messages)) continue;
-      const count = childCount(messages);
-      if (count < State.hudScanned[i]) State.hudScanned[i] = 0;
-      const start = State.hudScanned[i];
-      touched = processRange(messages, start, count) || touched;
-      // 低延迟:每次额外扫末尾几条
-      touched = processRange(messages, Math.max(0, count - LOW_LATENCY_TAIL_SCAN_LIMIT), count) || touched;
-      State.hudScanned[i] = count;
+      try {
+        const messages = State.hudMessages[i];
+        if (!isValid(messages)) continue;
+        const count = childCount(messages);
+        if (count < State.hudScanned[i]) State.hudScanned[i] = 0;
+        const start = State.hudScanned[i];
+        touched = processRange(messages, start, count) || touched;
+        // 低延迟:每次额外扫末尾几条
+        touched = processRange(messages, Math.max(0, count - LOW_LATENCY_TAIL_SCAN_LIMIT), count) || touched;
+        State.hudScanned[i] = count;
+      } catch (e) {
+        // 单行/单容器扫描异常不应中断整个 HUD 扫描(防止个别面板异常导致顶栏翻译全部停摆)
+        log("scanHudTopBarOnce: container " + i + " error: " + (e && e.message ? e.message : String(e)));
+      }
     }
     return touched;
   }
@@ -3200,6 +3280,40 @@ function injectTranslation(row, sig, text) {
           if (callback) callback();
         }
       });
+    };
+    trySync();
+  }
+
+  // 从桥拉取游戏名保护名单(/api/v1/gamenames)。
+  // 成功则用全量名单(原始大小写)覆盖硬编码兜底 PROTECT_NAMES / PROTECT_TO_ZH 并重建正则;
+  // 失败则保留现有兜底名单(不覆盖),并有限重试。
+  function syncGameNames(callback) {
+    let attempts = 0;
+    const MAX_ATTEMPTS = 10;
+    const trySync = function () {
+      attempts += 1;
+      const url = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/api/v1/gamenames";
+      httpGetJson(url, function (res) {
+        if (res && res.ok && res.names && typeof res.names === "object" && Object.keys(res.names).length > 0) {
+          // 桥名单含一个 "english" -> "schinese" 元字段,过滤掉(非游戏名)
+          const map = {};
+          for (const en of Object.keys(res.names)) {
+            if (en === "english" || en === "schinese") continue;
+            map[en] = res.names[en];
+          }
+          if (rebuildGameNames(map)) {
+            State.gamenamesLoaded = true;
+            if (callback) callback();
+            return;
+          }
+        }
+        // 失败/名单为空:未成功则不覆盖兜底;有限重试
+        if (!State.gamenamesLoaded && attempts < MAX_ATTEMPTS) {
+          $.Schedule(3.0, trySync);
+        } else {
+          if (callback) callback();
+        }
+      }, 10000);
     };
     trySync();
   }

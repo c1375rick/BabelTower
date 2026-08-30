@@ -590,6 +590,21 @@ async function handleApi(req, res, url, bodyObj) {
     return;
   }
 
+  if (p === "/api/v1/gamenames") {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+    const gamenamesPath = path.join(__dirname, "..", "config", "gamenames.json");
+    try {
+      const data = JSON.parse(fs.readFileSync(gamenamesPath, "utf8"));
+      sendJson(res, 200, { ok: true, count: Object.keys(data).length, names: data });
+    } catch (e) {
+      sendJson(res, 200, { ok: false, error: "gamenames_not_found" });
+    }
+    return;
+  }
+
   if (p === "/api/v1/translate" && (req.method === "POST" || req.method === "GET")) {
     bodyObj = bodyFromRequest(url, bodyObj);
     if (!bodyObj || !String(bodyObj.text || "").trim()) return sendJson(res, 400, { ok: false, error: "bad_json" });
