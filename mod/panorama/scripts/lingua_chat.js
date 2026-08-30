@@ -790,7 +790,7 @@
     msgTranslateOwnOn: { zh: "翻译自己的消息已开启", en: "Translate own messages enabled" },
     msgTranslateOwnOff: { zh: "翻译自己的消息已关闭", en: "Translate own messages disabled" },
     updateAvailable: { zh: "  BabelTower 有新版本 ", en: "  BabelTower update available: " },
-    updateClickHere: { zh: "点击下载", en: "Click to download" },
+    updateHint: { zh: "请到 GitHub 或 GameBanana 更新", en: "Please update via GitHub or GameBanana" },
   };
 
   function t(key) {
@@ -1733,18 +1733,20 @@ function injectTranslation(row, sig, text) {
     flashBridgeFail();
   }
 
-  // 设置面板本地桥状态行:运行中/未运行 + DMM 用户引导
+  // 设置面板本地桥状态行:运行中/未运行 + DMM 用户引导 + 更新提示
   function updateBridgeStatusUI() {
     const root = getRoot();
     const label = root ? findChild(root, BRIDGE_STATUS_LABEL_ID) : null;
     if (!label) return;
     try {
+      var statusText = State.bridgeUp ? (t("bridgeUp") + " (" + t("bridgePort") + " 8791)") : t("bridgeDown");
+      // 有更新提示时追加到状态文本
+      if (State.updateMsg) statusText += "\n" + State.updateMsg;
+      label.text = statusText;
       if (State.bridgeUp) {
-        label.text = t("bridgeUp") + " (" + t("bridgePort") + " 8791)";
         label.RemoveClass("LCTBridgeDown");
         label.AddClass("LCTBridgeUp");
       } else {
-        label.text = t("bridgeDown");
         label.RemoveClass("LCTBridgeUp");
         label.AddClass("LCTBridgeDown");
       }
@@ -2102,9 +2104,9 @@ function injectTranslation(row, sig, text) {
         if (res.updateInfo && res.updateInfo.hasUpdate && !State.updateNotified) {
           State.updateNotified = true;
           const info = res.updateInfo;
-          const msg = t("updateAvailable") + info.latestVersion + " \u00b7 " + t("updateClickHere");
-          setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (res.provider || State.cfg.provider || "bing") + "\n" + msg);
+          State.updateMsg = t("updateAvailable") + info.latestVersion + " \u00b7 " + t("updateHint");
           log("info", "update available: " + info.currentVersion + " -> " + info.latestVersion + " (" + info.releaseUrl + ")");
+          updateBridgeStatusUI();
         }
         if (!State.cfgSynced && !State.cfgSyncing) {
           State.cfgSyncing = true;
