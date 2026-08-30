@@ -149,6 +149,28 @@ const GITHUB_API_URL = "https://api.github.com/repos/c1375rick/BabelTower/releas
 const GITHUB_REPO_URL = "https://github.com/c1375rick/BabelTower";
 const VERSION_CHECK_TIMEOUT_MS = 5000;
 
+// 语义化版本比较:返回 -1(a<b) / 0(相等) / 1(a>b)
+// 处理 v 前缀、beta 后缀(1.0.0-beta.2 > 1.0.0-beta > 1.0.0)
+function compareVersions(a, b) {
+  const strip = (s) => String(s || "").replace(/^v/i, "");
+  const pa = strip(a).split(".");
+  const pb = strip(b).split(".");
+  const maxLen = Math.max(pa.length, pb.length);
+  for (let i = 0; i < maxLen; i++) {
+    const na = pa[i] || "0";
+    const nb = pb[i] || "0";
+    const da = parseInt(na, 10);
+    const db = parseInt(nb, 10);
+    if (!isNaN(da) && !isNaN(db)) {
+      if (da !== db) return da < db ? -1 : 1;
+    } else {
+      const cmp = na.localeCompare(nb, undefined, { numeric: true, sensitivity: "base" });
+      if (cmp !== 0) return cmp < 0 ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 function readLocalVersion() {
   try {
     return fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim();
@@ -226,7 +248,7 @@ async function doVersionCheck() {
     ok: true,
     currentVersion: currentVersion,
     latestVersion: latest,
-    hasUpdate: !!currentVersion && currentVersion !== latest,
+    hasUpdate: !!currentVersion && !!latest && compareVersions(latest, currentVersion) > 0,
     releaseUrl: gh.releaseUrl,
   };
 }
