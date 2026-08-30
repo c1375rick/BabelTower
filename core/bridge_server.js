@@ -253,16 +253,26 @@ async function doVersionCheck() {
   };
 }
 
-// 启动时不阻塞:异步检测一次,有新版本仅在日志输出一条 info
-function startVersionCheckOnBoot() {
+// 缓存版本检测结果:health 端点直接返回,不每次查 GitHub
+let cachedVersionInfo = null;
+const VERSION_CHECK_REFRESH_MS = 30 * 60 * 1000; // 30 分钟刷新一次
+
+function refreshVersionCache() {
   doVersionCheck()
     .then((r) => {
+      cachedVersionInfo = r;
       if (r && r.ok && r.hasUpdate) {
         log("info", "发现新版本: " + r.currentVersion + " -> " + r.latestVersion +
           " (" + (r.releaseUrl || GITHUB_REPO_URL + "/releases") + ")");
       }
     })
     .catch(() => {});
+}
+
+// 启动时检测一次,之后每 30 分钟刷新
+function startVersionCheckOnBoot() {
+  refreshVersionCache();
+  setInterval(refreshVersionCache, VERSION_CHECK_REFRESH_MS);
 }
 
 // ---------- 请求体解析 ----------
@@ -558,7 +568,7 @@ async function handleApi(req, res, url, bodyObj) {
 
   if (p === "/api/v1/health") {
     const cfgH = configStore.load();
-    sendJson(res, 200, {
+    const healthResp = {
       ok: true,
       name: "Babel Tower Bridge",
       version: "1.0.0-beta.2",
@@ -566,7 +576,17 @@ async function handleApi(req, res, url, bodyObj) {
       providers: providerRegistry.listProviders(),
       fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],
       chatLog: Object.assign({ enabled: true, dir: "logs/chat" }, cfgH.chatLog || {}),
-    });
+    };
+    // 有缓存的版本检测结果时附带更新信息(游戏面板据此显示更新提示)
+    if (cachedVersionInfo && cachedVersionInfo.ok && cachedVersionInfo.hasUpdate) {
+      healthResp.updateInfo = {
+        hasUpdate: true,
+        currentVersion: cachedVersionInfo.currentVersion,
+        latestVersion: cachedVersionInfo.latestVersion,
+        releaseUrl: cachedVersionInfo.releaseUrl || GITHUB_REPO_URL + "/releases",
+      };
+    }
+    sendJson(res, 200, healthResp);
     return;
   }
 

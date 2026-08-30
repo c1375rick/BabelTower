@@ -224,6 +224,7 @@
     recentLogs: new Map(), // 最近完整日志文本(去重 HUD 重复/未填充条目)
     recentQuickTexts: new Map(), // 快捷短语/Ping 文本 -> 过期时间,用于跳过 HUD 顶栏的重复气泡
     pendingLogs: {}, // 挂起的未填充完整日志:文本\x00isOwn -> { entry, t }
+    updateNotified: false, // 版本更新提示是否已显示(只显示一次)
   };
 
   // ================= 工具函数 =================
@@ -788,6 +789,8 @@
     msgLogOff: { zh: "聊天日志已关闭", en: "Chat log disabled" },
     msgTranslateOwnOn: { zh: "翻译自己的消息已开启", en: "Translate own messages enabled" },
     msgTranslateOwnOff: { zh: "翻译自己的消息已关闭", en: "Translate own messages disabled" },
+    updateAvailable: { zh: "  BabelTower 有新版本 ", en: "  BabelTower update available: " },
+    updateClickHere: { zh: "点击下载", en: "Click to download" },
   };
 
   function t(key) {
@@ -2095,6 +2098,14 @@ function injectTranslation(row, sig, text) {
         State.bridgeUp = true;
         State.bridgeOfflineSince = 0;
         setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (res.provider || State.cfg.provider || "bing"));
+        // 版本更新提示:health 响应带 updateInfo 时在状态栏显示一次
+        if (res.updateInfo && res.updateInfo.hasUpdate && !State.updateNotified) {
+          State.updateNotified = true;
+          const info = res.updateInfo;
+          const msg = t("updateAvailable") + info.latestVersion + " \u00b7 " + t("updateClickHere");
+          setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (res.provider || State.cfg.provider || "bing") + "\n" + msg);
+          log("info", "update available: " + info.currentVersion + " -> " + info.latestVersion + " (" + info.releaseUrl + ")");
+        }
         if (!State.cfgSynced && !State.cfgSyncing) {
           State.cfgSyncing = true;
           syncBridgeConfig(function () { State.cfgSyncing = false; });
