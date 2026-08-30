@@ -22,6 +22,7 @@
 "use strict";
 
 const http = require("http");
+const https = require("https");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
@@ -138,6 +139,108 @@ function startGameWatch() {
   if (process.argv.indexOf("--no-watch") !== -1) return;
   if (activeConfig && activeConfig.watchGame === false) return;
   checkGameProcess();
+}
+
+// ---------- GitHub 新版本检测 ----------
+// 启动时不阻塞、异步请求 GitHub releases/latest,与本地 VERSION 比较。
+// 仅使用 Node 内置 https 模块;任何失败都降级为"无更新"而非抛错。
+// GitHub 对未带 User-Agent 的请求返回 403,故必须设置。
+const GITHUB_API_URL = "https://api.github.com/repos/c1375rick/BabelTower/releases/latest";
+const GITHUB_REPO_URL = "https://github.com/c1375rick/BabelTower";
+const VERSION_CHECK_TIMEOUT_MS = 5000;
+
+function readLocalVersion() {
+  try {
+    return fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim();
+  } catch (e) {
+    return null;
+  }
+}
+
+// 请求 GitHub releases/latest;成功返回 { ok:true, latestVersion, releaseUrl },失败返回 { ok:false, error }
+function fetchGitHubRelease() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (r) => { if (!settled) { settled = true; resolve(r); } };
+    let req;
+    try {
+      req = https.get(
+        GITHUB_API_URL,
+        {
+          headers: {
+            "User-Agent": "BabelTower/1.0",
+            "Accept": "application/vnd.github+json",
+          },
+          timeout: VERSION_CHECK_TIMEOUT_MS,
+        },
+        (resp) => {
+          let data = "";
+          resp.setEncoding("utf8");
+          resp.on("data", (c) => { data += c; });
+          resp.on("end", () => {
+            try {
+              if (resp.statusCode !== 200) {
+                finish({ ok: false, error: "github_api_status_" + resp.statusCode });
+                return;
+              }
+              const json = JSON.parse(data);
+              const tag = json.tag_name;
+              if (!tag) {
+                finish({ ok: false, error: "no_tag_in_response" });
+                return;
+              }
+              finish({
+                ok: true,
+                latestVersion: String(tag).replace(/^v/i, ""),
+                releaseUrl: json.html_url || (GITHUB_REPO_URL + "/releases/" + tag),
+              });
+            } catch (e) {
+              finish({ ok: false, error: "parse_error: " + (e && e.message ? e.message : String(e)) });
+            }
+          });
+        }
+      );
+    } catch (e) {
+      finish({ ok: false, error: (e && e.message ? e.message : String(e)) });
+      return;
+    }
+    req.on("timeout", () => {
+      try { req.destroy(new Error("timeout")); } catch (e) {}
+      finish({ ok: false, error: "request_timeout" });
+    });
+    req.on("error", (e) => {
+      finish({ ok: false, error: (e && e.message ? e.message : String(e)) });
+    });
+  });
+}
+
+// 汇总:返回 version-check 端点与启动检测共用的结果对象
+async function doVersionCheck() {
+  const currentVersion = readLocalVersion();
+  const gh = await fetchGitHubRelease();
+  if (!gh.ok) {
+    return { ok: true, currentVersion: currentVersion, hasUpdate: false, error: gh.error };
+  }
+  const latest = gh.latestVersion;
+  return {
+    ok: true,
+    currentVersion: currentVersion,
+    latestVersion: latest,
+    hasUpdate: !!currentVersion && currentVersion !== latest,
+    releaseUrl: gh.releaseUrl,
+  };
+}
+
+// 启动时不阻塞:异步检测一次,有新版本仅在日志输出一条 info
+function startVersionCheckOnBoot() {
+  doVersionCheck()
+    .then((r) => {
+      if (r && r.ok && r.hasUpdate) {
+        log("info", "发现新版本: " + r.currentVersion + " -> " + r.latestVersion +
+          " (" + (r.releaseUrl || GITHUB_REPO_URL + "/releases") + ")");
+      }
+    })
+    .catch(() => {});
 }
 
 // ---------- 请求体解析 ----------
@@ -536,6 +639,22 @@ async function handleApi(req, res, url, bodyObj) {
     }
   }
 
+  if (p === "/api/v1/version-check") {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+    doVersionCheck()
+      .then((r) => sendJson(res, 200, r))
+      .catch((e) => sendJson(res, 200, {
+        ok: true,
+        currentVersion: readLocalVersion(),
+        hasUpdate: false,
+        error: (e && e.message ? e.message : String(e)),
+      }));
+    return;
+  }
+
   sendJson(res, 404, { ok: false, error: "not_found" });
 }
 
@@ -592,6 +711,7 @@ const HOST_V6 = "::1";
 })();
 
 startGameWatch();
+startVersionCheckOnBoot();
 
 // 端口被占用 = 已有实例在运行,静默退出(与启动器/开机自启场景兼容)。
 // 两台 server 都 EADDRINUSE 才说明确有实例在跑;单台绑定失败(如该回环未启用)忽略。

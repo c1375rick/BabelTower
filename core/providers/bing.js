@@ -30,6 +30,17 @@ function match1(text, re) {
   return m ? m[1] : "";
 }
 
+// 退避等待:用 Promise + setTimeout(不要用同步 sleep 阻塞事件循环)
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// 轻量 info 日志(各 provider 独立,不依赖外部日志模块)
+function logInfo(msg) {
+  // eslint-disable-next-line no-console
+  console.log("[bing] [info] " + msg);
+}
+
 function request(url, { method = "GET", headers = {}, body = null, timeoutMs = 15000, redirects = 0 } = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, { method: method, headers: headers, agent: agent }, (res) => {
@@ -158,11 +169,21 @@ async function translate(text, opts) {
   };
 
   let res = await attempt(cfg);
-  // token/参数异常时刷新页面配置重试一次
+  // token/参数异常时刷新页面配置重试一次(保持原逻辑不变)
   if (res.status === 400 || res.status === 401) {
     pageConfig = null;
     cfg = await fetchPageConfig(opts.timeoutMs);
     res = await attempt(cfg);
+  }
+
+  // 429 限流:指数退避重试(初始 1s,每次翻倍,最多 3 次:1s→2s→4s,总等待 ≤ 8s)
+  let retry = 0;
+  while (res.status === 429 && retry < 3) {
+    const waitMs = 1000 * Math.pow(2, retry); // 1000, 2000, 4000
+    logInfo("bing 429 限流,等待 " + waitMs + "ms 后重试...");
+    await sleep(waitMs);
+    res = await attempt(cfg);
+    retry++;
   }
 
   if (res.status !== 200) {

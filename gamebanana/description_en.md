@@ -28,6 +28,16 @@ Real-time chat translation for Deadlock. Foreign messages are translated instant
 
 > No Node.js installation needed - a portable runtime is bundled.
 
+## ⚠️ Note for DMM Users
+
+**Deadlock Mod Manager (DMM)** can automatically install and manage in-game mods, but BabelTower's **local bridge** must be installed and run separately:
+
+- DMM only installs the in-game mod (`pak01_dir.vpk`); it **does not auto-start the local bridge**
+- The local bridge is the core translation component - **without it, the mod does not work**
+- After installing the mod via DMM, you still need to follow **step 3** above to set up the bridge to auto-start at login, or start the bridge manually before each session
+
+> In short: DMM installs the in-game mod for you, but the bridge (the translation engine) must be run separately on its own.
+
 ## Settings
 
 | Setting | Options |
