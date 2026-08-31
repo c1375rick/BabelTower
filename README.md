@@ -4,12 +4,12 @@
 也支持"发送前把要说的话翻译成目标语言"(仅译文 / 原文|译文 双语模式)。
 
 - 架构:全景(游戏内 Panorama 界面)+ 本地翻译桥(Node.js 本地服务)+ 翻译服务商
-- 默认服务商:**Bing Translator(公共免费接口,免 Key,国内直连可用)**;可选 Microsoft Translator(Azure Key)
+- 默认服务商:**Bing Translator(公共免费接口,免 Key,国内直连可用)**;可选 Microsoft / DeepL / OpenAI 兼容
 - 原理:聊天行扫描 → 去重/缓存 → 隐藏 HTML 面板桥接本地服务 → 译文追加显示
+- 名称保护:启动时从桥动态同步全量 285 条英雄/物品名(桥离线降级到 60 条兜底)
 - 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
-> 状态:核心(本地桥)与游戏内界面均已实测可用;游戏内部分依赖 Valve 反编译结构与
-> 已验证的 API 模式,详见 [docs/development.md](docs/development.md)。
+> 版本:1.0.0 (2026-08-31)
 
 ---
 
@@ -148,13 +148,17 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 
 ## 更新规划(Roadmap)
 
-> 以下为计划中的方向,尚未实现,具体以发布为准。
+> ✅ = 已实现,planned = 计划中。
 
-- **更多翻译接口**:Google / DeepL / OpenAI 兼容接口,主服务商失败时自动回退
-- **翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默
-- **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
-- **游戏术语表**:预置 Deadlock 常用术语翻译(push/ult/lane 等),其他语言自动学习积累
-- **Linux 移植**:支持 Steam Deck / Proton 环境
+- ✅ **更多翻译接口**:DeepL / Google / OpenAI 兼容接口,主服务商失败时自动回退(Thirt927 贡献)
+- ✅ **游戏术语表**:内置词典 2801 条 + 自适应学习(上限 5000/语言)
+- ✅ **名称保护动态同步**:启动时从桥拉取全量 285 条英雄/物品名
+- ✅ **HUD 翻译浮层**:顶栏消息被游戏清理后自动接管显示
+- ✅ **聊天日志轮转**:单文件 5MB 自动归档,30 天清理
+- ✅ **Bing 指数退避**:限流时自动退避重试
+- planned **翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默
+- planned **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
+- planned **Linux 移植**:支持 Steam Deck / Proton 环境
 
 ## 从源码构建 VPK
 

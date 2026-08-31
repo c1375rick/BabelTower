@@ -7,12 +7,17 @@ Real-time chat translation for Deadlock. Foreign messages are translated instant
 ## Features
 
 - Real-time translation of incoming chat, golden text shown below each message
+- HUD top-bar translation: overlay takes over when the game clears the top-bar row (hides after 5s)
 - Outgoing translation: Off / Translation-only / Bilingual (original | translation)
 - Settings panel: press Enter, type `/tr`, or click the "译" button next to the chat input
 - All settings are click-to-select (provider, target language, display mode, etc.)
 - Local bridge auto-starts with Windows and auto-exits when the game closes
 - Smart skips: own messages, commands (/), pure numbers/symbols, and text already in the target language
+- Name protection: dynamically synced from bridge (285 hero/item names), prevents machine translation of game terms
 - Translation cache survives chat scroll recycling
+- Chat logs per match, auto-rotate at 5MB, auto-cleanup after 30 days
+- Adaptive dictionary: learns high-frequency phrases automatically (capped at 5000/language, frequency-based pruning)
+- Bing exponential backoff on rate-limit
 
 ## Installation (3 steps)
 

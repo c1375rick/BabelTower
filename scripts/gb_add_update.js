@@ -11,20 +11,21 @@ const UPDATES_URL = "https://gamebanana.com/mods/updates/700107";
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const TITLE = "0.1.3 正式版：内置词典 2766 条 + Thirt927 优化分支合入";
-const VERSION = "0.1.3";
+const TITLE = "1.0.0 首个稳定版：名称保护统一 / HUD 浮层 / 日志轮转";
+const VERSION = "1.0.0";
 
 // Changelog 条目: [Type, 文案]  (Type 为下拉选项)
 const CHANGELOG = [
-  ["Feature", "合并 Thirt927 优化分支：多翻译商失败回退链、内置词典离线直查、大厅聊天翻译、聊天记录日志"],
-  ["Bugfix", "内置词典修缮：清除 36 条废弃/占位符道具条目（官方数据库+商店页三重验证），新增 High-Velocity Rounds→高速弹，现 2766 条与当前 156 件商店道具完全对齐"],
-  ["Bugfix", "修复发布包漏带内置词典（此前 zip 缺 dictionary.builtin.json，安装后内置词典实际为空）"],
-  ["Bugfix", "桥常驻修复：关游戏→再开游戏桥不再消失；新增 restart_bridge 一键重启+健康自检"],
-  ["Bugfix", "发送前翻译与保存链路修复（设置选项经桥持久化）；输入框鼠标/键盘冻结修复（TextEntry V1-V5）；翻译标签改 CSS 类控制"],
-  ["Improvement", "自启脚本清除 StartupApproved 禁用标记；GameBanana 更新脚本导航容错+登录页检测"],
+  ["Bugfix", "修复 buildProtectRe() 正则转义：resourcecompiler 对单反斜杠处理有 bug，导致编译产物语法错误，脚本加载失败"],
+  ["Bugfix", "修复 PROTECT_RE 重复声明（const → let），消除 SyntaxError"],
+  ["Bugfix", "修复 HUD 浮层不消失：DeleteAsync 在部分 Panorama 版本不可靠，改用 visible=false"],
+  ["Improvement", "名称保护动态同步：启动时从桥拉取全量 285 条游戏名，桥离线降级到 60 条兜底"],
+  ["Improvement", "HUD 翻译浮层：顶栏消息被游戏清理后自动接管显示译文，5 秒后隐藏"],
+  ["Improvement", "聊天日志轮转：单文件 5MB 自动归档，启动时清理 30 天以上旧日志"],
+  ["Improvement", "词典 learned 条目上限 5000/语言，按频率淘汰低频词"],
 ];
 
-const BLURB = "请下载新的 babeltower-013-win64.zip（旧文件已自动归档）。\n0.1.3 正式版：内置词典修缮至 2766 条（清除 36 条废弃道具，新增高速弹，与当前游戏道具对齐）；合并 Thirt927 优化分支（多翻译商失败回退、内置词典、大厅聊天、聊天日志）；修复桥常驻、发送前翻译链路、输入框冻结、翻译标签样式等。注意：含桥/脚本改动，请下载完整 zip 包，DMM 只装 vpk 会丢本地桥。";
+const BLURB = "请下载新的 BabelTower-1.0.0-win64.zip（旧文件已自动归档）。1.0.0 首个稳定版：修复 resourcecompiler 正则转义导致脚本加载失败的严重 bug；名称保护从桥动态同步全量 285 条；HUD 顶栏译文浮层；聊天日志自动轮转；词典学习条目上限。注意：含桥/脚本改动，请下载完整 zip 包。";
 
 async function loadCookies(page) {
   if (!fs.existsSync(COOKIES_FILE)) { console.log("NO COOKIES FILE"); return; }
