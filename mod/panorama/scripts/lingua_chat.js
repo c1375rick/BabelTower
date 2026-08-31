@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.0.0-beta.2";
+  const VERSION = "1.0.0";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -119,7 +119,7 @@
     "inferno", "paradox", "pocket", "shiv", "viscous", "warden",
     "wraith", "yamato", "seven", "ricochet",
   ];
-  const PROTECT_RE = new RegExp(
+  let PROTECT_RE = new RegExp(
     "\\b(?:" + PROTECT_NAMES.map(n => n.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')).join("|") + ")\\b",
     "gi"
   );  let PROTECT_TO_ZH = {
@@ -164,10 +164,10 @@
   // 由英文名数组(原始大小写)重建占位正则:按长度降序,避免子串误匹配
   function buildProtectRe(names) {
     const sorted = names.slice().sort((a, b) => b.length - a.length);
-    const escaped = sorted.map(n => String(n).replace(/[.*+?^${}()|[\]\]/g, '\$&'));
+    const escaped = sorted.map(n => String(n).replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'));
     return new RegExp("\\b(?:" + escaped.join("|") + ")\\b", "gi");
   }
-  let PROTECT_RE = buildProtectRe(PROTECT_NAMES);
+  PROTECT_RE = buildProtectRe(PROTECT_NAMES);
 
   /** 用桥侧 gamenames.json({ 英文原名->中文译名 })重建保护名单与映射;
    *  case-insensitive 匹配(桥 key 原始大小写,兜底名单全小写)。*/
@@ -1951,14 +1951,21 @@ function injectTranslation(row, sig, text) {
       // 超过上限:先清理最旧的浮层(防内存泄漏)
       while (State.hudOverlays.length > HUD_OVERLAY_LIMIT) {
         const old = State.hudOverlays.shift();
-        try { if (isValid(old)) old.DeleteAsync(100); } catch (e) {}
+        try {
+          if (isValid(old)) {
+            old.visible = false;
+            old.style.visibility = "collapse";
+          }
+        } catch (e) {}
       }
       State.hudOverlayCount = State.hudOverlays.length;
-      // 5 秒后自删(译文浮层仅用于测试验证通路,不长期占用)
-      // 用 DeleteAsync(100) 而非 DeleteAsync(0):给一帧缓冲,避免某些时序下立即删除导致闪退
+      // 5 秒后隐藏并移除(DeleteAsync 在某些 Panorama 版本不可靠,改用 visible=false)
       $.Schedule(5.0, function () {
         try {
-          if (isValid(overlay)) overlay.DeleteAsync(100);
+          if (isValid(overlay)) {
+            overlay.visible = false;
+            overlay.style.visibility = "collapse";
+          }
         } catch (e) {}
         // 从活跃列表移除(若仍在)
         try {
