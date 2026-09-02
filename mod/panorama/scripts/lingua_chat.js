@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -58,12 +58,12 @@
   const BRIDGE_PANEL_CLASS = "LCTBridgePanel";
 
   // ---- 轮询节奏 ----
-  const FAST_POLL_SECONDS = 0.2;
-  const SLOW_POLL_SECONDS = 0.8;
+  const FAST_POLL_SECONDS = 0.4;
+  const SLOW_POLL_SECONDS = 1.0;
   const BOOTSTRAP_TAIL_SCAN_LIMIT = 24; // 首次只扫末尾,避免翻历史
-  const LOW_LATENCY_TAIL_SCAN_LIMIT = 6; // 每次额外扫末尾,保证低延迟
+  const LOW_LATENCY_TAIL_SCAN_LIMIT = 3; // 每次额外扫末尾,保证低延迟
   const HUD_OVERLAY_LIMIT = 10; // HUD 译文浮层上限(超过则清理最旧,防内存泄漏)
-  const TITLE_POLL_SECONDS = 0.1;
+  const TITLE_POLL_SECONDS = 0.3;
   const BRIDGE_ALIVE_SECONDS = 1.5;
   // ���P:health ��1%��d�pM�e�(MS�nb� DOM ��糧�)
   const BRIDGE_OFFLINE_GRACE_SECONDS = 25; // 桥页面存活标记的等待上限
@@ -160,6 +160,45 @@
   // 兜底副本:获取桥名单失败时用它们回退(见 rebuildGameNames)
   const PROTECT_TO_ZH_FALLBACK = PROTECT_TO_ZH;
   const PROTECT_NAMES_FALLBACK = PROTECT_NAMES;
+  
+  // ---- 中文游戏名保护(双向翻译:中文名→英文占位→翻译→还原) ----
+  // 从 PROTECT_TO_ZH 反转构建 { 中文译名 -> 英文原名 }
+  let ZH_TO_EN = {};
+  let ZH_PROTECT_RE = null;
+  
+  function buildZhProtectRe(zhNames) {
+    if (!zhNames || zhNames.length === 0) return null;
+    // 按长度降序,避免短名误匹配长名子串
+    const sorted = zhNames.slice().sort((a, b) => b.length - a.length);
+    const escaped = sorted.map(n => n.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+    return new RegExp("(?:" + escaped.join("|") + ")", "g");
+  }
+  
+  /** 占位替换中文游戏名:lookup = {中文名 -> 英文原名};返回 { text, zhNameMap } */
+  function replaceChineseGameNames(text, lookup) {
+    if (!text || typeof text !== "string" || !ZH_PROTECT_RE) return { text: text, zhNameMap: null };
+    try {
+      const zhNameMap = [];
+      const replaced = text.replace(ZH_PROTECT_RE, function (match) {
+        const idx = zhNameMap.length;
+        zhNameMap.push(lookup ? (lookup[match] || match) : match);
+        return "LCTZHPH" + idx;
+      });
+      return zhNameMap.length > 0 ? { text: replaced, zhNameMap: zhNameMap } : { text: text, zhNameMap: null };
+    } catch (e) {
+      log("replaceChineseGameNames error: " + (e && e.message ? e.message : String(e)));
+      return { text: text, zhNameMap: null };
+    }
+  }
+  
+  /** 还原中文名占位符 */
+  function restoreChineseGameNames(text, zhNameMap) {
+    if (!text || !zhNameMap) return text;
+    for (let i = 0; i < zhNameMap.length; i++) {
+      text = text.split("LCTZHPH" + i).join(zhNameMap[i]);
+    }
+    return text;
+  }
 
   // 由英文名数组(原始大小写)重建占位正则:按长度降序,避免子串误匹配
   function buildProtectRe(names) {
@@ -186,6 +225,13 @@
     PROTECT_NAMES = names;
     PROTECT_TO_ZH = toZh;
     PROTECT_RE = buildProtectRe(PROTECT_NAMES);
+    // 重建中文名反向表
+    ZH_TO_EN = {};
+    for (const en of Object.keys(toZh)) {
+      const zh = toZh[en];
+      if (zh) ZH_TO_EN[zh] = en;
+    }
+    ZH_PROTECT_RE = buildZhProtectRe(Object.keys(ZH_TO_EN));
     log("game names synced from bridge: " + names.length + " entries");
     return true;
   }
@@ -335,12 +381,8 @@
         }
       } catch (e) {}
     }
+    // fallback: 仅检查 root 自身(不递归子树,避免性能陷阱)
     if (hasClass(root, className)) return root;
-    const count = childCount(root);
-    for (let i = 0; i < count; i += 1) {
-      const found = findClass(childAt(root, i), className);
-      if (found) return found;
-    }
     return null;
   }
 
@@ -911,6 +953,10 @@
   // ================= 消息读取与过滤 =================
 
   function readMessageRow(row) {
+    // 面板缓存:若行的签名未变且已有缓存 record,直接返回缓存,跳过所有 DOM 读取(性能优化)
+    if (row && row.__lctCached && row.__lctCachedSig === row.__lctSig) {
+      return row.__lctCached;
+    }
     // 大厅聊天行(hudchat:ChatLineContainer 直挂 ChatLinesPanel,无 MessageSource/MessageContents)
     if (hasClass(row, LOBBY_ROW_CLASS)) {
       const lineLabel = findClass(row, LOBBY_LINE_CLASS);
@@ -919,7 +965,7 @@
       const sender = safeText(findClass(row, LOBBY_PERSONA_CLASS)) || UNKNOWN_NAME;
       const prefix = safeText(findClass(row, LOBBY_PREFIX_CLASS));
       const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
-      return {
+      const result = {
         sender: sender,
         channel: prefix || "lobby",
         text: text,
@@ -930,6 +976,9 @@
         lobby: true,
         quick: !!findChild(row, "PingLabel"), // 大厅行的 Ping/快捷短语本地化,跳过翻译
       };
+      row.__lctCached = result;
+      row.__lctCachedSig = row.__lctSig;
+      return result;
     }
     // HUD 顶栏行:无 MessageSource,文本在 MessageText(气泡内),sender 未知
     const isHudRow = hasClass(row, "ChatMessage") && !!findClass(row, HUD_BUBBLE_CLASS);
@@ -938,8 +987,11 @@
       const text = safeText(textLabel) || collectText(row);
       if (!text) return null;
       const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
-      return { sender: UNKNOWN_NAME, channel: "hud", text: text, isOwn: isOwn, hud: true,
+      const result = { sender: UNKNOWN_NAME, channel: "hud", text: text, isOwn: isOwn, hud: true,
         quick: hasClass(row, "Ping") || !!findChild(row, "PingLabel") };
+      row.__lctCached = result;
+      row.__lctCachedSig = row.__lctSig;
+      return result;
     }
     const source = findChild(row, MESSAGE_SOURCE_ID);
     const contents = findChild(row, MESSAGE_CONTENTS_ID);
@@ -954,7 +1006,7 @@
     if (!text) return null;
     const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
     const quick = hasClass(contents, "Ping") || !!findChild(contents, "PingLabel");
-    return {
+    const result = {
       sender: sender,
       channel: channel,
       text: text,
@@ -964,6 +1016,9 @@
       heroId: readHeroIdFromRow(row),
       steamid: readSteamIdFromRow(row),
     };
+    row.__lctCached = result;
+    row.__lctCachedSig = row.__lctSig;
+    return result;
   }
 
   function makeSignature(record) {
@@ -977,13 +1032,6 @@
       return CJK_RE.test(text) && !/[A-Za-z]/.test(String(text || ""));
     }
     return false;
-  }
-
-  // 主语言子标签是否相同(如 zh-Hans 与 zh-CN 视为同语言)
-  function sameLanguage(a, b) {
-    const pa = String(a || "").toLowerCase().split("-")[0];
-    const pb = String(b || "").toLowerCase().split("-")[0];
-    return !!pa && pa === pb;
   }
 
   function shouldSkip(record) {
@@ -1236,7 +1284,7 @@ function injectTranslation(row, sig, text) {
   }
 
   function enqueue(row, sig, record) {
-    State.queue.push({ kind: "chat", row: row, sig: sig, record: record, attempts: 0, nameMap: record._nameMap || null });
+    State.queue.push({ kind: "chat", row: row, sig: sig, record: record, attempts: 0, nameMap: record._nameMap || null, zhNameMap: record._zhNameMap || null });
     pumpQueue();
   }
 
@@ -1253,8 +1301,15 @@ function injectTranslation(row, sig, text) {
     };
     // 翻译前占位替换:保护英雄/物品名不被翻译API意译
     const _ng = replaceGameNames(text, null); // outgoing:保留英文原名不翻译
-    const sendText = _ng.nameMap ? _ng.text : text;
-    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: sendText }, attempts: 0, done: once, enqueuedAt: nowMs(), nameMap: _ng.nameMap || null, originalText: text });
+    let sendText = _ng.nameMap ? _ng.text : text;
+    // 双向:出站也保护中文游戏名(中文玩家→英文玩家场景)
+    let outgoingZhNameMap = null;
+    const _outTgt = resolveOutgoingTarget();
+    if (!_outTgt.toLowerCase().startsWith("zh")) {
+      const _zg = replaceChineseGameNames(sendText, ZH_TO_EN);
+      if (_zg.zhNameMap) { sendText = _zg.text; outgoingZhNameMap = _zg.zhNameMap; }
+    }
+    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: sendText }, attempts: 0, done: once, enqueuedAt: nowMs(), nameMap: _ng.nameMap || null, zhNameMap: outgoingZhNameMap, originalText: text });
     pumpQueue();
   }
 
@@ -1423,7 +1478,9 @@ function injectTranslation(row, sig, text) {
       if (job._timeout) { try { clearTimeout(job._timeout); } catch (e) {} job._timeout = null; }
       if (payload && payload.ok && payload.translation) {
         // 还原占位符(英雄/物品名)
-        const translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
+        let translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
+      // 双向:还原中文名占位符
+      if (job.zhNameMap) translation = restoreChineseGameNames(translation, job.zhNameMap);
         job.done(translation, payload.detectedLanguage || null);
         finishJob();
       } else {
@@ -1892,7 +1949,9 @@ function injectTranslation(row, sig, text) {
   function handleResult(job, payload) {
     if (payload.ok && payload.translation) {
       // 还原占位符(英雄/物品名)
-      const translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
+      let translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
+      // 双向:还原中文名占位符
+      if (job.zhNameMap) translation = restoreChineseGameNames(translation, job.zhNameMap);
       State.cache.set(job.sig, { translation: translation });
       trimCache();
       // 行可能已被回收复用:只有行仍持有同一条消息时才注入,避免旧译文贴到新消息
@@ -2240,6 +2299,9 @@ function injectTranslation(row, sig, text) {
 
   // 回收复用清理:聊天行被游戏复用时,清除本 mod 残留(旧译文标签 + 原文折叠样式)
   function resetRowModState(row) {
+    // 清除 readMessageRow 的面板缓存(签名变化,旧缓存失效)
+    row.__lctCached = null;
+    row.__lctCachedSig = null;
     try {
       const contents = findChild(row, MESSAGE_CONTENTS_ID);
       if (contents && contents.style) {
@@ -2282,6 +2344,12 @@ function injectTranslation(row, sig, text) {
     // 翻译前占位替换:保护英雄/物品名不被翻译API意译
     const _ng = replaceGameNames(record.text, PROTECT_TO_ZH);
     if (_ng.nameMap) { record.text = _ng.text; record._nameMap = _ng.nameMap; }
+    // 双向:中文游戏名→英文占位(目标语言非中文时,保护中文名不被翻译API意译)
+    const _tgt = targetLanguage();
+    if (!_tgt.toLowerCase().startsWith("zh")) {
+      const _zg = replaceChineseGameNames(record.text, ZH_TO_EN);
+      if (_zg.zhNameMap) { record.text = _zg.text; record._zhNameMap = _zg.zhNameMap; }
+    }
     const sig = makeSignature(record);
 
     // 已处理过的行:若签名变化说明被回收复用,重置处理状态
@@ -2577,7 +2645,7 @@ function injectTranslation(row, sig, text) {
     }
 
     // 发送前翻译(off=发原文 / translation=仅译文 / bilingual=原文|译文)
-    // 若检测到消息已是目标语言(sameLanguage),则按原文发送,不做无用翻译
+    // 按配置的发送前翻译模式处理
     const outgoingMode = State.cfg.outgoing || "off";
     if (State.cfg.enabled && outgoingMode !== "off" && trimmed.charAt(0) !== "/") {
       const outTarget = resolveOutgoingTarget();
@@ -2593,7 +2661,7 @@ function injectTranslation(row, sig, text) {
       translateOutgoing(trimmed, function (translated, detected) {
         State.outgoingPending = null;
         let send = trimmed;
-        if (translated && translated !== trimmed && !sameLanguage(detected, outTarget)) {
+        if (translated && translated !== trimmed) {
           const trText = String(translated).trim();
           if (outgoingMode === "translation") send = trText;
           else if (outgoingMode === "bilingual") send = trimmed + " | " + trText;
@@ -2614,10 +2682,10 @@ function injectTranslation(row, sig, text) {
           log("outgoing: translation unavailable (timeout/error), sending original");
           showOutgoingFailTip();
           setStatus("翻译不可用,已按原文发送");
-        } else if (translated === trimmed || sameLanguage(detected, outTarget)) {
-          // 目标语言与原文相同(en->en 等):不发无用译文
-          log("outgoing: no-op (detected=" + (detected || "unknown") + " == target), sending original");
-          setStatus("原文已是目标语言,按原文发送");
+        } else if (translated === trimmed) {
+          // 翻译结果与原文相同(如 API 未做实质翻译):按原文发送
+          log("outgoing: no-op (translation === original), sending original");
+          setStatus("翻译结果与原文相同,按原文发送");
         }
         log("outgoing mode=" + outgoingMode + " detected=" + (detected || "-") + " -> " + send.slice(0, 80));
         // 覆盖前先捕获当前输入框内容:若用户已输入新消息,不能丢失
