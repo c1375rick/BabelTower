@@ -110,6 +110,20 @@ function watchLocalization() {
           } catch (e) {}
         }
       }
+      // 快捷语音白名单:主本地化文件变化(游戏更新改了台词条)时自动重建
+      if (/citadel_main_schinese\.txt$/.test(filename)) {
+        try {
+          const quickchat = require("./quickchat");
+          const built = quickchat.build();
+          if (built.ok) {
+            const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
+            fs.writeFileSync(qcPath, JSON.stringify({ version: 1, patterns: built.patterns }, null, 2) + "\n", "utf8");
+            console.log("[quickchat] localization changed -> rebuilt whitelist:", built.count, "patterns");
+          }
+        } catch (e) {
+          console.log("[quickchat] rebuild failed (non-fatal):", e.message);
+        }
+      }
     });
     console.log("[name_protect] watching localization for auto-update:", loc);
   } catch (e) {

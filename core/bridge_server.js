@@ -31,11 +31,25 @@ const configStore = require("./config");
 const providerRegistry = require("./providers/registry");
 const dictionary = require("./dictionary");
 const nameProtect = require("./name_protect");
+const quickchat = require("./quickchat");
 // 首次运行生成词典文件;桥启动后自动落盘高频词(自适应学习)
 dictionary.ensureFile();
 dictionary.startAutoFlush();
 nameProtect.load();
 nameProtect.watchLocalization();
+// 快捷语音白名单:启动时从游戏本地化生成(失败不阻塞桥启动,客户端用兑底模板)
+try {
+  const qcBuilt = quickchat.build();
+  const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
+  if (qcBuilt.ok) {
+    fs.writeFileSync(qcPath, JSON.stringify({ version: 1, patterns: qcBuilt.patterns }, null, 2) + "\n", "utf8");
+    console.log("[quickchat] whitelist generated:", qcBuilt.count, "patterns");
+  } else {
+    console.log("[quickchat] whitelist build failed (client fallback in effect):", qcBuilt.error);
+  }
+} catch (e) {
+  console.log("[quickchat] whitelist build error (non-fatal):", e.message);
+}
 
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TEXT_CHARS = 4000; // 单条聊天文本长度上限
@@ -601,6 +615,22 @@ async function handleApi(req, res, url, bodyObj) {
       sendJson(res, 200, { ok: true, count: Object.keys(data).length, names: data });
     } catch (e) {
       sendJson(res, 200, { ok: false, error: "gamenames_not_found" });
+    }
+    return;
+  }
+
+  if (p === "/api/v1/quickchat") {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+    const quickchatPath = path.join(__dirname, "..", "config", "quickchat.json");
+    try {
+      const data = JSON.parse(fs.readFileSync(quickchatPath, "utf8"));
+      const patterns = Array.isArray(data.patterns) ? data.patterns : [];
+      sendJson(res, 200, { ok: true, count: patterns.length, patterns: patterns });
+    } catch (e) {
+      sendJson(res, 200, { ok: false, error: "quickchat_not_found" });
     }
     return;
   }

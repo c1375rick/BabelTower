@@ -541,6 +541,49 @@ async function test17_entryEscReleasesFocusThenClosesPanel() {
     !env.contextPanel._focused, "root focused=" + env.contextPanel._focused);
 }
 
+// 新:混合消息(中文+英文专名,典型:英文英雄名设置下的快捷语音渲染)
+// 中文部分原样保留,只把非中文片段送去翻译;原文气泡不折叠
+async function test18_mixedMessageFragmentTranslation() {
+  console.log("\n[18] CORE FIX: mixed message (Chinese + English name) -> only fragment translated, original kept");
+  const env = freshEnv(CFG.translationOnly);
+  // 非模板混合文本(真人打字含英文名):中文部分原样保留,只把非中文片段送去翻译
+  // (不能用快捷语音模板文本如 "我看到 X",那会被白名单拦截,见 test20)
+  const row = env.addRow("text", "Dave", "\u8fd9\u6ce2 McGinnis \u6253\u5f97\u4e0d\u9519\u554a");
+  const ok = await waitFor(() => labelsOf(row).length > 0, 12000);
+  await sleep(300);
+  const labels = labelsOf(row);
+  assert("translation label injected", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  // 中文部分必须原样保留在译文中(不能整句被机翻改写)
+  assert("Chinese part kept intact", labels[0] && labels[0].text.indexOf("\u8fd9\u6ce2") !== -1, labels[0] && labels[0].text);
+  // 混合消息原文不折叠(translation_only 模式下中文部分在原文里)
+  assert("original NOT collapsed (mixed message)", row.FindChildTraverse("MessageContents").style.visibility === "visible", row.FindChildTraverse("MessageContents").style.visibility);
+}
+
+// 纯中文消息照旧跳过(混合规则不得破坏原有跳过行为)
+async function test19_pureChineseStillSkipped() {
+  console.log("\n[19] pure Chinese message still skipped (no API call, no label)");
+  const env = freshEnv(CFG.bilingual);
+  const row = env.addRow("text", "Eve", "\u64a4\u9000\u5427");
+  await sleep(2500);
+  assert("no label for pure Chinese", labelsOf(row).length === 0, labelsOf(row).length + " labels");
+  assert("original visible", row.FindChildTraverse("MessageContents").style.visibility === "visible");
+}
+
+// 新:快捷语音模板白名单——游戏本地化渲染的快捷语音(中文模板+英文参数)精确命中即跳过,
+// 零 API 调用、零译文标签(这是"英文英雄名设置下快捷语音被误翻译"的最终修复)
+async function test20_quickchatWhitelistSkip() {
+  console.log("\n[20] CORE FIX: quick chat template render (我看到 McGinnis) -> whitelist skip, zero API");
+  const env = freshEnv(CFG.translationOnly);
+  const row = env.addRow("text", "Fay", "\u6211\u770b\u5230 McGinnis");
+  await sleep(3000);
+  assert("no translation label (whitelist hit)", labelsOf(row).length === 0, labelsOf(row).length + " labels");
+  assert("original visible", row.FindChildTraverse("MessageContents").style.visibility === "visible");
+  // 非快捷语音的英文消息不受白名单影响
+  const row2 = env.addRow("text", "Fay", "retreat please now");
+  const ok = await waitFor(() => labelsOf(row2).length > 0, 12000);
+  assert("non-template english still translated", ok && labelsOf(row2).length === 1, labelsOf(row2).length + " labels");
+}
+
 async function main() {
   console.log("=== Babel Tower lingua_chat simulation tests v7 (bridge must run on 8791) ===");
   await test1_injectAndCollapse();
@@ -560,6 +603,9 @@ async function main() {
   await test15_bridgeUpDotGreen();
   await test16_entryBlurDropsFocusOnEntryItself();
   await test17_entryEscReleasesFocusThenClosesPanel();
+  await test18_mixedMessageFragmentTranslation();
+  await test19_pureChineseStillSkipped();
+  await test20_quickchatWhitelistSkip();
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   process.exit(failCount === 0 ? 0 : 1);
 }

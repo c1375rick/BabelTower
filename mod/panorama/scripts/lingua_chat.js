@@ -236,9 +236,10 @@
     return true;
   }
 
-  /** 占位替换:lookup = {匹配文本 -> 目标译名};返回 { text, nameMap } */
+  /** 占位替换:lookup = {匹配文本 -> 目标译名};返回 { text, nameMap, originalText } */
   function replaceGameNames(text, lookup) {
-    if (!text || typeof text !== "string") return { text: text, nameMap: null };
+    if (!text || typeof text !== "string") return { text: text, nameMap: null, originalText: text };
+    const originalText = text;
     try {
       const nameMap = [];
       const replaced = text.replace(PROTECT_RE, function (match) {
@@ -246,10 +247,10 @@
         nameMap.push(lookup ? (lookup[match.toLowerCase()] || match) : match);
         return "LCTPH" + idx;
       });
-      return nameMap.length > 0 ? { text: replaced, nameMap: nameMap } : { text: text, nameMap: null };
+      return nameMap.length > 0 ? { text: replaced, nameMap: nameMap, originalText: originalText } : { text: text, nameMap: null, originalText: originalText };
     } catch (e) {
       log("replaceGameNames error: " + (e && e.message ? e.message : String(e)));
-      return { text: text, nameMap: null };
+      return { text: text, nameMap: null, originalText: originalText };
     }
   }
   /** 还原占位符([[G_i]] 格式,兼容 API 可能插入的空格/大小写变化) */
@@ -1034,10 +1035,114 @@
     return false;
   }
 
+  // ================= 快捷语音模板白名单 =================
+  // 快捷语音/轮盘消息由游戏本地化模板渲染(如 "我看到 {s:param_1}" → "我看到 McGinnis"),
+  // 本来就是给玩家看的目标语言文本,再送翻译只会产出质量差的重复译文。
+  // 白名单来源:桥扫描本地化生成的 quickchat.json(/api/v1/quickchat),模板编译成正则;
+  // 桥不可用时用硬编码兑底(高频模板,与游戏文本一致,需随游戏大版本偶尔更新)。
+  let QUICKCHAT_PATTERNS = [
+    "^我看到\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_see
+    "^一起去干掉\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_attack
+    "^小心\\s*[^\\s,.!?:;，。！？；：]*有\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_enemy_has_item
+    "^小心[^\\s,.!?:;，。！？；：]*[！!？?。.…⋯]{0,2}$", // ping_careful
+    "^快晕住[^\\s,.!?:;，。！？；：]*[！!？?。.…⋯]{0,2}$", // ping_stun
+    "^[^\\s,.!?:;，。！？；：]*准备就绪[！!？?。.…⋯]{0,2}$", // ping_use_ability / ping_ability_ready
+    "^[^\\s,.!?:;，。！？；：]*还要冷却[^\\s,.!?:;，。！？；：]*秒[！!？?。.…⋯]{0,2}$", // ping_ability_on_cooldown
+    "^[^\\s,.!?:;，。！？；：]*往(蓝|黄|绿|紫)路走了[！!？?。.…⋯]{0,2}$", // chatwheel headed
+    "^(黄|蓝|绿|紫)路需要帮助[！!？?。.…⋯]{0,2}$", // chatwheel help
+    "^(黄|蓝|绿|紫)路敌人消失[！!？?。.…⋯]{0,2}$", // ping missing
+    "^(黄|蓝|绿|紫)路(敌人消失|需要帮助)[！!？?。.…⋯]{0,2}$",
+    "^防守(黄|蓝|绿|紫)路[！!？?。.…⋯]{0,2}$", "^防守基地[！!？?。.…⋯]{0,2}$", "^防守[！!？?。.…⋯]{0,2}$",
+    "^我们去(推进|拿下|去)?(黄|蓝|绿|紫)路吧[！!？?。.…⋯]{0,2}$",
+    "^撤[！!？?。.…⋯]{0,2}$", "^撤退[！!？?。.…⋯]{0,2}$", "^小心[！!？?。.…⋯]{0,2}$",
+    "^需要帮助[！!？?。.…⋯]{0,2}$", "^掩护我[！!？?。.…⋯]{0,2}$", "^跟我来[！!？?。.…⋯]{0,2}$", "^跟着我[！!？?。.…⋯]{0,2}$",
+    "^我马上就到[！!？?。.…⋯]{0,2}$", "^我马上回来[！！?。…⋯]{0,2}$", "^马上回来[！!？?。.…⋯]{0,2}$",
+    "^算了吧[！!？?。.…⋯]{0,2}$", "^干得不错[！!？?。.…⋯]{0,2}$", "^干得漂亮[！!？?。.…⋯]{0,2}$",
+    "^谢谢[！!？?。.…⋯]{0,2}$", "^没问题[！!？?。.…⋯]{0,2}$", "^眩晕[！!？?。.…⋯]{0,2}$",
+    "^我还没准备好团战[！!？?。.…⋯]{0,2}$", "^我们要乘胜追击[！!？?。.…⋯]{0,2}$",
+    "^我们在这躲躲[！!？?。.…⋯]{0,2}$", "^这里很危险[…⋯.。!！?？]{0,2}$", "^有危险[！!？?。.…⋯]{0,2}$",
+    "^我来对付步兵[！!？?。.…⋯]{0,2}$", "^我来清理步兵[！!？?。.…⋯]{0,2}$", "^我们在这集合[！!？?。.…⋯]{0,2}$",
+    "^复生石掉落了[！！?。…⋯]{0,2}$", "^灵瓮在此[！！?。…⋯]{0,2}$", "^不稳定裂隙在这里[！!？?。.…⋯]{0,2}$",
+    "^他们在打我们的守护神[！!？?。.…⋯]{0,2}$", "^去打他们的守护神[！！?。…⋯]{0,2}$",
+    "^去打他们的核心[！!？?。.…⋯]{0,2}$", "^他们在打中区头目[！！?。…⋯]{0,2}$", "^我们去拿下中区头目[！!？?。.…⋯]{0,2}$",
+    "^我回来了[！！?。…⋯]{0,2}$", "^我要上了[！！?。…⋯]{0,2}$", "^一起行动[！!？?。.…⋯]{0,2}$",
+    "^敌人[！!？?。.…⋯]{0,2}$", "^他们[！!？?。.…⋯]{0,2}$",
+    "^我还没准备好[！!？?。.…⋯]{0,2}$",
+  ].map(function (p) { try { return new RegExp(p, "i"); } catch (e) { return null; } }).filter(Boolean);
+  let quickchatSynced = false;
+
+  function isQuickChatTemplate(text) {
+    const s = String(text || "").trim();
+    if (!s) return false;
+    for (const re of QUICKCHAT_PATTERNS) {
+      try { if (re.test(s)) return true; } catch (e) {}
+    }
+    return false;
+  }
+
+  // 从桥拉取快捷语音模板白名单(/api/v1/quickchat)。
+  // 成功则覆盖硬编码兑底;失败保留兑底(桥未运行/旧版桥,不重试——兑底已覆盖高频模板)。
+  function syncQuickChat(callback) {
+    const url = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/api/v1/quickchat";
+    httpGetJson(url, function (res) {
+      if (res && res.ok && Array.isArray(res.patterns) && res.patterns.length > 0) {
+        const regs = [];
+        for (const p of res.patterns) {
+          try { regs.push(new RegExp(p, "i")); } catch (e) {}
+        }
+        if (regs.length > 0) {
+          QUICKCHAT_PATTERNS = regs;
+          quickchatSynced = true;
+          log("quickchat whitelist synced from bridge: " + regs.length + " patterns");
+        }
+      }
+      if (callback) callback();
+    }, 10000);
+  }
+
+  // 剥掉中文+标点/数字/空格后剩下的拉丁字母 = 消息里真正非中文的部分
+  // (游戏专名如 McGinnis 也留在残余里,由占位/还原链路负责中文化)
+  function leftoverEnglish(text) {
+    let s = String(text || "");
+    s = s.replace(/[\u3400-\u4dbf\u4e00-\u9fff]+/g, " ");
+    s = s.replace(/[\d\s\W_]+/g, " ");
+    return s.trim();
+  }
+
+  // 混合消息(中文+少量英文,典型:开启"英文英雄名"后的快捷语音渲染结果,如 "我看到 McGinnis")
+  // 返回需送去翻译的非中文片段;纯中文返回空串;纯英文返回 null(整句照旧翻译)。
+  function mixedFragment(text) {
+    const s = String(text || "");
+    if (!CJK_RE.test(s)) return null; // 没有中文 → 整句翻译
+    return leftoverEnglish(s);
+  }
+
+  // 拼装混合消息的最终显示文本: 中文部分原样保留, 译文替换非中文片段.
+  // 恰好一段英文 → 原位替换 (常见: 快捷语音 "我看到 McGinnis"); 多段英文 (罕见) → 中文连排+译文.
+  function assembleMixedTranslation(originalText, fragmentTranslation) {
+    const frag = String(fragmentTranslation || "").trim();
+    const orig = String(originalText || "");
+    if (!frag) return orig;
+    const segs = orig.split(/([\u3400-\u4dbf\u4e00-\u9fff]+)/); // 捕获组: 偶数下标=非中文段, 奇数=中文段
+    let latinCount = 0;
+    let lastLatin = -1;
+    for (let i = 0; i < segs.length; i += 2) {
+      if (segs[i] && /[A-Za-z]/.test(segs[i])) { latinCount += 1; lastLatin = i; }
+    }
+    if (latinCount === 1) {
+      segs[lastLatin] = " " + frag + " ";
+      return segs.join("").replace(/\s+/g, " ").trim();
+    }
+    let chinese = "";
+    for (let i = 1; i < segs.length; i += 2) chinese += segs[i];
+    return (chinese + " " + frag).replace(/\s+/g, " ").trim();
+  }
+
   function shouldSkip(record) {
     const text = record.text;
     if (!text || text.length < 2) return true;
     if (record.quick) return true; // 游戏原生快捷短语/Ping 已由游戏本地化,不调用翻译接口
+    if (isQuickChatTemplate(text)) return true; // 本地化模板白名单:快捷语音渲染结果(含参数填空),精确命中即跳过
     if (record.hud && isRecentQuickText(text)) return true; // 跳过同一快捷短语在 HUD 顶栏的重复气泡
     if (text.charAt(0) === "/") return true; // 指令消息
     if (/^[\d\s\W_]+$/.test(text)) return true; // 纯数字/符号
@@ -1190,10 +1295,12 @@ function applyUniversalInlineStyle(label) {
   } catch (e) {}
 }
 
-function injectTranslation(row, sig, text) {
+function injectTranslation(row, sig, text, fragment) {
     if (!isValid(row)) return;
     const hud = isHudRow(row);
     const lobby = isLobbyRow(row);
+    // 混合消息(只翻译了片段):原文含中文部分,必须保持可见
+    const isMixed = fragment !== null && fragment !== undefined;
     // HUD 行:译文 label 挂到 MessageContents(ChatBubble 正下方);大厅行:行内容下方;普通行:MessageBody 下
     const body = hud ? hudLabelHost(row) : (lobby ? lobbyLabelHost(row) : (findClass(row, MESSAGE_BODY_CLASS) || row));
     let label = getTransLabel(row, sig);
@@ -1213,9 +1320,9 @@ function injectTranslation(row, sig, text) {
     try {
       label.text = String(text);
     } catch (e) {}
-    // 只显示译文模式:隐藏原文(快捷对话/Ping 行保留气泡,避免消息"消失")
+    // 只显示译文模式:隐藏原文。混合消息不折叠(原文含未翻译的中文部分,折叠会让内容消失)
     // HUD 顶栏行/大厅行不折叠:气泡本身短暂显示,折叠会连译文一起隐藏
-    if (!hud && !lobby && State.cfg.displayMode === "translation_only") {
+    if (!isMixed && !hud && !lobby && State.cfg.displayMode === "translation_only") {
       const contents = findChild(row, MESSAGE_CONTENTS_ID);
       if (contents) {
         let isPing = false;
@@ -1259,7 +1366,7 @@ function injectTranslation(row, sig, text) {
     const cached = State.cache.get(sig);
     if (!cached) return false;
     if (getTransLabel(row, sig)) return true;
-    injectTranslation(row, sig, cached.translation);
+    injectTranslation(row, sig, cached.translation, cached.fragment);
     return true;
   }
 
@@ -1283,8 +1390,12 @@ function injectTranslation(row, sig, text) {
     return lang;
   }
 
-  function enqueue(row, sig, record) {
-    State.queue.push({ kind: "chat", row: row, sig: sig, record: record, attempts: 0, nameMap: record._nameMap || null, zhNameMap: record._zhNameMap || null });
+  function enqueue(row, sig, record, mixedFrag) {
+    // 混合消息:任务里的 record 用浅拷贝,只把待译片段当作 text(完整原文挂在 mixedFullText)
+    const jobRecord = mixedFrag === null
+      ? record
+      : Object.assign({}, record, { text: record._transText || record.text });
+    State.queue.push({ kind: "chat", row: row, sig: sig, record: jobRecord, attempts: 0, nameMap: record._nameMap || null, zhNameMap: record._zhNameMap || null, mixedFullText: mixedFrag === null ? null : (record.text || null) });
     pumpQueue();
   }
 
@@ -1952,11 +2063,17 @@ function injectTranslation(row, sig, text) {
       let translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
       // 双向:还原中文名占位符
       if (job.zhNameMap) translation = restoreChineseGameNames(translation, job.zhNameMap);
-      State.cache.set(job.sig, { translation: translation });
+      // 混合消息:译文只包含非中文片段,拼装回完整文本(中文原样保留)
+      let fragment = null;
+      if (job.mixedFullText) {
+        fragment = translation;
+        translation = assembleMixedTranslation(job.mixedFullText, translation);
+      }
+      State.cache.set(job.sig, { translation: translation, fragment: fragment });
       trimCache();
       // 行可能已被回收复用:只有行仍持有同一条消息时才注入,避免旧译文贴到新消息
       if (isValid(job.row) && job.row.__lctSig === job.sig) {
-        injectTranslation(job.row, job.sig, translation);
+        injectTranslation(job.row, job.sig, translation, job.mixedFullText ? fragment : null);
         log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + translation.slice(0, 60));
       } else {
         // 诊断:翻译成功但行已失效(游戏可能在 2 秒内清理了顶栏消息行)
@@ -2253,6 +2370,8 @@ function injectTranslation(row, sig, text) {
           State.gamenamesLoading = true;
           syncGameNames(function () { State.gamenamesLoading = false; });
         }
+        // 快捷语音白名单:桥上线后拉一次(失败保留硬编码兑底,不重试)
+        if (!quickchatSynced) syncQuickChat();
       } else {
         // offline grace: only mark red after BRIDGE_OFFLINE_GRACE_SECONDS of continuous failure,
         // absorbing the few-second LCTBridgePanel-unreachable blip when opening settings / switching UI
@@ -2341,14 +2460,25 @@ function injectTranslation(row, sig, text) {
     if (!record) return false;
     if (record.quick) rememberQuickText(record.text);
     const skipTranslation = shouldSkip(record);
+    // 混合消息(中文+少量英文,典型:英文英雄名设置下的快捷语音渲染如 "我看到 McGinnis"):
+    // 只把非中文片段送去翻译,中文部分原样保留。record.text 保持完整原文(签名稳定)。
+    const mixedFrag = skipTranslation ? null : mixedFragment(record.text);
+    const translatingText = mixedFrag === null ? record.text : mixedFrag;
     // 翻译前占位替换:保护英雄/物品名不被翻译API意译
-    const _ng = replaceGameNames(record.text, PROTECT_TO_ZH);
-    if (_ng.nameMap) { record.text = _ng.text; record._nameMap = _ng.nameMap; }
-    // 双向:中文游戏名→英文占位(目标语言非中文时,保护中文名不被翻译API意译)
-    const _tgt = targetLanguage();
-    if (!_tgt.toLowerCase().startsWith("zh")) {
-      const _zg = replaceChineseGameNames(record.text, ZH_TO_EN);
-      if (_zg.zhNameMap) { record.text = _zg.text; record._zhNameMap = _zg.zhNameMap; }
+    const _ng = replaceGameNames(translatingText, PROTECT_TO_ZH);
+    if (mixedFrag === null) {
+      // 原有路径:整句翻译,占位替换直接写回 record.text(替换幂等,重扫签名不变)
+      if (_ng.nameMap) { record.text = _ng.text; record._nameMap = _ng.nameMap; }
+      // 双向:中文游戏名→英文占位(目标语言非中文时,保护中文名不被翻译API意译)
+      const _tgt = targetLanguage();
+      if (!_tgt.toLowerCase().startsWith("zh")) {
+        const _zg = replaceChineseGameNames(record.text, ZH_TO_EN);
+        if (_zg.zhNameMap) { record.text = _zg.text; record._zhNameMap = _zg.zhNameMap; }
+      }
+    } else {
+      // 混合路径:不改 record.text(改动缓存 record 会让签名漂移,重扫时被当成新消息)
+      if (_ng.nameMap) record._nameMap = _ng.nameMap;
+      record._transText = _ng.text; // 占位替换后的待译片段
     }
     const sig = makeSignature(record);
 
@@ -2388,10 +2518,11 @@ function injectTranslation(row, sig, text) {
 
     if (skipTranslation) return false;
     if (State.cache.has(sig)) {
-      injectTranslation(row, sig, State.cache.get(sig).translation);
+      const cached = State.cache.get(sig);
+      injectTranslation(row, sig, cached.translation, cached.fragment);
       return false;
     }
-    enqueue(row, sig, record);
+    enqueue(row, sig, record, mixedFrag);
     return true;
   }
 
