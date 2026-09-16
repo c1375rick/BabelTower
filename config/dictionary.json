@@ -17,7 +17,12 @@
       "ok": "好的",
       "bruh": "老兄",
       "mybad": "我的错",
-      "rift": "裂缝"
+      "rift": "裂缝",
+      "fw": "防火墙",
+      "hh": "哈哈",
+      "hello world test": "你好，世界测试",
+      "hello no settimeout test": "你好，没有 settimeout 测试",
+      "retreat please now": "请现在撤退"
     }
   }
 }

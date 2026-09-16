@@ -42,7 +42,7 @@ try {
   const qcBuilt = quickchat.build();
   const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
   if (qcBuilt.ok) {
-    fs.writeFileSync(qcPath, JSON.stringify({ version: 1, patterns: qcBuilt.patterns }, null, 2) + "\n", "utf8");
+    fs.writeFileSync(qcPath, JSON.stringify({ version: 2, langs: ["schinese", "english"], patterns: qcBuilt.patterns }, null, 2) + "\n", "utf8");
     console.log("[quickchat] whitelist generated:", qcBuilt.count, "patterns");
   } else {
     console.log("[quickchat] whitelist build failed (client fallback in effect):", qcBuilt.error);
@@ -585,7 +585,7 @@ async function handleApi(req, res, url, bodyObj) {
     const healthResp = {
       ok: true,
       name: "Babel Tower Bridge",
-      version: "1.0.2",
+      version: "1.0.3",
       provider: cfgH.provider,
       providers: providerRegistry.listProviders(),
       fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],

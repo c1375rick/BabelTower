@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.0.2";
+  const VERSION = "1.0.3";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -253,17 +253,20 @@
       return { text: text, nameMap: null, originalText: originalText };
     }
   }
-  /** 还原占位符([[G_i]] 格式,兼容 API 可能插入的空格/大小写变化) */
+  /** 还原占位符(LCTPHi 格式;与桥侧 name_protect.restore 同一套规则)
+   *  2026-09-17 重写,修复两个历史 bug:
+   *  ① 前缀碰撞:旧实现按 i 升序 replace("LCTPH"+i),LCTPH1 是 LCTPH10 的前缀,
+   *     ≥10 个受保护名时两位编号被个位编号吃掉一位("LCTPH10"→"乙0");
+   *  ② 死兜底:旧 fallback 匹配 [[G_i]] 格式,与实际产出的 LCTPHi 从未对齐(死代码),
+   *     API 啃坏 token 时占位原文直接泄漏到玩家屏幕。
+   *  改为带编号捕获组的单趟全局替换,容忍空格/大小写变化。 */
   function restoreGameNames(text, nameMap) {
     if (!text || !nameMap) return text;
-    for (let i = 0; i < nameMap.length; i++) {
-      // 精确匹配优先
-      text = text.replace("LCTPH" + i, nameMap[i]);
-      // 兜底:API可能加空格(如 "[[ G0 ]]")
-      const fallback = new RegExp("\\[\\[\\s*G" + i + "\\s*\\]\\]", "gi");
-      text = text.replace(fallback, nameMap[i]);
-    }
-    return text;
+    return String(text).replace(/LCTPH\s*(\d{1,3})/gi, function (m, num) {
+      const idx = parseInt(num, 10);
+      if (!(idx >= 0 && idx < nameMap.length)) return m; // 未知编号:原样保留
+      return nameMap[idx] || m;
+    });
   }
 
   // ---- 语言启发式 ----
@@ -289,7 +292,8 @@
     gamenamesLoaded: false, // 启动后是否已从桥拉取过游戏名保护名单(healthCheck 补触发用)
     gamenamesLoading: false, // 名单拉取是否进行中(防 healthCheck 重复触发叠加)
     seen: new Set(), // 消息签名去重
-    cache: new Map(), // 签名 -> { translation }
+    cache: new Map(), // textKey(归一化文本+目标语言) -> { translation, fragment }
+    inflight: new Map(), // textKey -> 在途合并组 { key, rows, settled }:同文本只发一次桥请求,结果扇出所有同文行
     queue: [], // 待翻译任务
     activeRequests: 0,
     requestSeq: 0,
@@ -310,7 +314,6 @@
     matchId: null, // 当前比赛 ID(缓存)
     nickInfoCache: null, // 昵称 -> { hero, heroId, steamid }(Players API 匹配缓存)
     recentLogs: new Map(), // 最近完整日志文本(去重 HUD 重复/未填充条目)
-    recentQuickTexts: new Map(), // 快捷短语/Ping 文本 -> 过期时间,用于跳过 HUD 顶栏的重复气泡
     pendingLogs: {}, // 挂起的未填充完整日志:文本\x00isOwn -> { entry, t }
     updateNotified: false, // 版本更新提示是否已显示(只显示一次)
   };
@@ -1036,10 +1039,11 @@
   }
 
   // ================= 快捷语音模板白名单 =================
-  // 快捷语音/轮盘消息由游戏本地化模板渲染(如 "我看到 {s:param_1}" → "我看到 McGinnis"),
-  // 本来就是给玩家看的目标语言文本,再送翻译只会产出质量差的重复译文。
-  // 白名单来源:桥扫描本地化生成的 quickchat.json(/api/v1/quickchat),模板编译成正则;
-  // 桥不可用时用硬编码兑底(高频模板,与游戏文本一致,需随游戏大版本偶尔更新)。
+  // 快捷语音/轮盘消息网络上传输的是本地化 key+参数,每个客户端用自己的游戏语言渲染
+  // (中文玩家看到 "我看到 McGinnis",英文玩家看到 "I see McGinnis")——
+  // 官方本地化层就是翻译本身,无论渲染成中文还是英文,mod 再翻一遍都只是劣质重复译文。
+  // 白名单来源:桥双语扫描(schinese+english)生成的 quickchat.json(/api/v1/quickchat);
+  // 桥不可用时保留下面的硬编码兜底(仅中文高频模板;英文模板由桥同步提供)。
   let QUICKCHAT_PATTERNS = [
     "^我看到\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_see
     "^一起去干掉\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_attack
@@ -1143,29 +1147,10 @@
     if (!text || text.length < 2) return true;
     if (record.quick) return true; // 游戏原生快捷短语/Ping 已由游戏本地化,不调用翻译接口
     if (isQuickChatTemplate(text)) return true; // 本地化模板白名单:快捷语音渲染结果(含参数填空),精确命中即跳过
-    if (record.hud && isRecentQuickText(text)) return true; // 跳过同一快捷短语在 HUD 顶栏的重复气泡
     if (text.charAt(0) === "/") return true; // 指令消息
     if (/^[\d\s\W_]+$/.test(text)) return true; // 纯数字/符号
     if (record.isOwn && State.cfg.translateOwn === false) return true; // 可配置:默认翻译自己的消息
     if (!State.cfg.force && isTargetLanguageText(text)) return true; // 已为目标语言
-    return false;
-  }
-
-  // 原生快捷短语/Ping 文本去重:游戏已本地化,且在 HUD 顶栏会以气泡形式短暂重复出现,
-  // 记录近期文本避免重复调用翻译接口(5 秒窗口)。
-  function rememberQuickText(text) {
-    const now = nowMs();
-    State.recentQuickTexts.set(String(text || ""), now + 5000);
-    for (const [value, expiresAt] of State.recentQuickTexts) {
-      if (expiresAt <= now) State.recentQuickTexts.delete(value);
-    }
-  }
-
-  function isRecentQuickText(text) {
-    const value = String(text || "");
-    const expiresAt = State.recentQuickTexts.get(value) || 0;
-    if (expiresAt > nowMs()) return true;
-    if (expiresAt) State.recentQuickTexts.delete(value);
     return false;
   }
 
@@ -1361,9 +1346,9 @@ function injectTranslation(row, sig, text, fragment) {
     flashBridgeFail();
   }
 
-  // 滚动回收重建:已翻译过的行重新出现时,从缓存恢复译文
-  function restoreFromCache(row, sig) {
-    const cached = State.cache.get(sig);
+  // 滚动回收重建:已翻译过的行重新出现时,从缓存恢复译文(缓存按 textKey 归一化键存取)
+  function restoreFromCache(row, sig, textKey) {
+    const cached = State.cache.get(textKey);
     if (!cached) return false;
     if (getTransLabel(row, sig)) return true;
     injectTranslation(row, sig, cached.translation, cached.fragment);
@@ -1390,12 +1375,35 @@ function injectTranslation(row, sig, text, fragment) {
     return lang;
   }
 
+  // 归一化文本键:同一句话(顶栏 HUD 行与左下聊天行两处渲染)共享同一翻译任务与缓存。
+  // key = 占位替换后的请求文本(_transText 或整句)+ 目标语言;同原文 → 同占位串 → 必然同键。
+  // sig(channel+sender+text)保留不动,继续负责行级去重与回收复用判定。
+  function makeTextKey(record) {
+    return String(record._transText || record.text || "") + "\x00" + targetLanguage();
+  }
+
   function enqueue(row, sig, record, mixedFrag) {
     // 混合消息:任务里的 record 用浅拷贝,只把待译片段当作 text(完整原文挂在 mixedFullText)
     const jobRecord = mixedFrag === null
       ? record
       : Object.assign({}, record, { text: record._transText || record.text });
-    State.queue.push({ kind: "chat", row: row, sig: sig, record: jobRecord, attempts: 0, nameMap: record._nameMap || null, zhNameMap: record._zhNameMap || null, mixedFullText: mixedFrag === null ? null : (record.text || null) });
+    const job = {
+      kind: "chat", row: row, sig: sig, record: jobRecord, attempts: 0,
+      nameMap: record._nameMap || null, zhNameMap: record._zhNameMap || null,
+      mixedFullText: mixedFrag === null ? null : (record.text || null),
+    };
+    // in-flight 合并:同 textKey 只发一次桥请求,结果回来扇出注入所有同文行
+    // (两行常在同一轮询周期被扫到,此处把合并窗口提前到入队那一刻;跨轮询窗口由 textKey 缓存兜住)
+    const textKey = makeTextKey(record);
+    const existing = State.inflight.get(textKey);
+    if (existing) {
+      existing.rows.push({ row: row, sig: sig });
+      return;
+    }
+    const group = { key: textKey, rows: [{ row: row, sig: sig }], settled: false };
+    State.inflight.set(textKey, group);
+    job.group = group;
+    State.queue.push(job);
     pumpQueue();
   }
 
@@ -2069,18 +2077,9 @@ function injectTranslation(row, sig, text, fragment) {
         fragment = translation;
         translation = assembleMixedTranslation(job.mixedFullText, translation);
       }
-      State.cache.set(job.sig, { translation: translation, fragment: fragment });
-      trimCache();
-      // 行可能已被回收复用:只有行仍持有同一条消息时才注入,避免旧译文贴到新消息
-      if (isValid(job.row) && job.row.__lctSig === job.sig) {
-        injectTranslation(job.row, job.sig, translation, job.mixedFullText ? fragment : null);
-        log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + translation.slice(0, 60));
-      } else {
-        // 诊断:翻译成功但行已失效(游戏可能在 2 秒内清理了顶栏消息行)
-        log("translated skipped: row=" + (isValid(job.row) ? "valid" : "GONE") + " sig=" + ((job.row && job.row.__lctSig === job.sig) ? "match" : "MISMATCH") + " text=" + String(job.record.text || "").slice(0, 30));
-        // HUD 测试行被游戏清理后,重建一条译文显示行(验证通路;真实消息行生命周期更长不受影响)
-        tryRecreateHudTranslation(job, translation);
-      }
+      log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + translation.slice(0, 60));
+      // 行可能已被回收复用:注入前逐行校验 sig,避免旧译文贴到新消息(见 deliverResult)
+      deliverResult(job.group, translation, fragment);
       finishJob();
     } else {
       failJob(job, payload.error || "unknown_error");
@@ -2155,6 +2154,28 @@ function injectTranslation(row, sig, text, fragment) {
     }
   }
 
+  // 结果扇出:同 textKey 的所有行(顶栏 HUD + 左下聊天)注入同一份译文,保证两处显示一致。
+  // 行已被游戏回收/复用(sig 不匹配)时不注入;HUD 行走浮层兜底(行生命周期短于翻译延迟的老问题)。
+  function deliverResult(group, translation, fragment) {
+    if (!group) return;
+    if (!group.settled) {
+      State.cache.set(group.key, { translation: translation, fragment: fragment });
+      trimCache();
+    }
+    group.settled = true;
+    if (State.inflight.get(group.key) === group) State.inflight.delete(group.key);
+    for (const entry of group.rows) {
+      if (isValid(entry.row) && entry.row.__lctSig === entry.sig) {
+        injectTranslation(entry.row, entry.sig, translation, fragment);
+      } else {
+        // 诊断:某行已失效(游戏可能在 2 秒内清理了顶栏消息行)
+        log("deliver skipped: row=" + (isValid(entry.row) ? "valid" : "GONE") + " sig=" + ((entry.row && entry.row.__lctSig === entry.sig) ? "match" : "MISMATCH"));
+        // HUD 测试行被游戏清理后,重建一条译文显示行(验证通路;真实消息行生命周期更长不受影响)
+        tryRecreateHudTranslation({ record: { channel: "hud" }, sig: entry.sig }, translation);
+      }
+    }
+  }
+
   // 失败/重试:统一由 failJob 释放活动槽(finishJob),避免队列卡死
   function failJob(job, error) {
     job.attempts += 1;
@@ -2163,16 +2184,33 @@ function injectTranslation(row, sig, text, fragment) {
       $.Schedule(RETRY_DELAY_SECONDS, pumpQueue);
       log("retry (" + job.attempts + "): " + String(error).slice(0, 80));
     } else {
-      // 失败后允许同一文本在新行上重试(旧行已注入错误;seen 去重不应永久吞掉重试)
-      if (job.kind === "chat" && job.sig) {
-        try { State.seen.delete(job.sig); } catch (e) {}
-      }
-      if (isValid(job.row) && job.row.__lctSig === job.sig) {
-        injectError(job.row, job.sig, String(error || "unknown_error").slice(0, 120));
+      if (job.group) {
+        deliverError(job.group, String(error || "unknown_error").slice(0, 120));
+      } else {
+        // 失败后允许同一文本在新行上重试(旧行已注入错误;seen 去重不应永久吞掉重试)
+        if (job.kind === "chat" && job.sig) {
+          try { State.seen.delete(job.sig); } catch (e) {}
+        }
+        if (isValid(job.row) && job.row.__lctSig === job.sig) {
+          injectError(job.row, job.sig, String(error || "unknown_error").slice(0, 120));
+        }
       }
       log("failed: " + String(error).slice(0, 80));
     }
     finishJob();
+  }
+
+  // 失败扇出:整组同文行注入错误并释放 seen,允许后续新行重试
+  function deliverError(group, message) {
+    if (!group) return;
+    group.settled = true;
+    if (State.inflight.get(group.key) === group) State.inflight.delete(group.key);
+    for (const entry of group.rows) {
+      try { State.seen.delete(entry.sig); } catch (e) {}
+      if (isValid(entry.row) && entry.row.__lctSig === entry.sig) {
+        injectError(entry.row, entry.sig, message);
+      }
+    }
   }
 
   function finishJob() {
@@ -2458,7 +2496,6 @@ function injectTranslation(row, sig, text, fragment) {
     if (!isValid(row)) return false;
     const record = readMessageRow(row);
     if (!record) return false;
-    if (record.quick) rememberQuickText(record.text);
     const skipTranslation = shouldSkip(record);
     // 混合消息(中文+少量英文,典型:英文英雄名设置下的快捷语音渲染如 "我看到 McGinnis"):
     // 只把非中文片段送去翻译,中文部分原样保留。record.text 保持完整原文(签名稳定)。
@@ -2486,7 +2523,7 @@ function injectTranslation(row, sig, text, fragment) {
     const prevSig = row.__lctSig;
     if (row.__lctProcessed && prevSig === sig) {
       // 尝试从缓存恢复译文(聊天滚动回收场景)
-      if (!skipTranslation && State.cache.has(sig)) restoreFromCache(row, sig);
+      if (!skipTranslation) restoreFromCache(row, sig, makeTextKey(record));
       return false;
     }
     if (prevSig !== sig) {
@@ -2497,7 +2534,7 @@ function injectTranslation(row, sig, text, fragment) {
     row.__lctProcessed = true;
 
     if (State.seen.has(sig)) {
-      if (!skipTranslation && State.cache.has(sig)) restoreFromCache(row, sig);
+      if (!skipTranslation) restoreFromCache(row, sig, makeTextKey(record));
       // 测试行:相同文本也强制重新翻译(seen 去重会吞掉重复测试)
       if (row.__lctTestForce) {
         State.seen.delete(sig);
@@ -2517,8 +2554,9 @@ function injectTranslation(row, sig, text, fragment) {
     pushChatLog(record);
 
     if (skipTranslation) return false;
-    if (State.cache.has(sig)) {
-      const cached = State.cache.get(sig);
+    const textKey = makeTextKey(record);
+    if (State.cache.has(textKey)) {
+      const cached = State.cache.get(textKey);
       injectTranslation(row, sig, cached.translation, cached.fragment);
       return false;
     }

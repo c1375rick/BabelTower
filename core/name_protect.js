@@ -73,20 +73,22 @@ function protect(text) {
   return nameMap.length > 0 ? { text: replaced, nameMap } : { text: text, nameMap: null };
 }
 
-// 翻译后还原:把 [[G_i]] 还原成目标语言译名
+// 翻译后还原:把占位 token(LCTPH0/LCTPH1/...)一次性还原成目标语言译名
 // toZh=true -> 用中文译名(zh),用于出站(中文玩家看中文);false -> 用英文原名(入站/队友视角)
+// 2026-09-17 重写,修复两个历史 bug:
+//   ① 前缀碰撞:旧实现按 i 升序逐个 split/join("LCTPH"+i),LCTPH1 是 LCTPH10 的前缀,
+//      两位编号被个位编号吃掉一位,产出 "乙0" 之类鬼文 → 改为带编号捕获组的单趟全局替换;
+//   ② 死兜底:旧 fallback 匹配 [[G_i]] 格式,与实际产出的 LCTPHi 从未对齐(死代码),
+//      API 啃坏 token 时占位原文直接泄漏到玩家屏幕 → 兜底并入同一正则(容忍空格/大小写变化)。
 function restore(text, nameMap, toZh) {
   if (!text || !nameMap) return text;
-  for (let i = 0; i < nameMap.length; i++) {
-    const rep = toZh ? nameMap[i].zh : nameMap[i].en;
-    if (!rep) continue;
-    // 精确匹配优先
-    text = text.split(token(i)).join(rep);
-    // 兜底:API 可能插入空格/大小写变化,如 [[ G0 ]] 或 [[g0]]
-    const fallback = new RegExp("\\[\\[\\s*G" + i + "\\s*\\]\\]", "gi");
-    text = text.replace(fallback, rep);
-  }
-  return text;
+  return String(text).replace(/LCTPH\s*(\d{1,3})/gi, function (m, num) {
+    const idx = parseInt(num, 10);
+    if (!(idx >= 0 && idx < nameMap.length)) return m; // 未知编号:保留原样,不做猜测
+    const e = nameMap[idx];
+    const rep = toZh ? (e && e.zh) : (e && e.en);
+    return rep || m;
+  });
 }
 
 // 监听游戏本地化目录:游戏更新后本地化文件变化,自动重建映射表
@@ -110,14 +112,14 @@ function watchLocalization() {
           } catch (e) {}
         }
       }
-      // 快捷语音白名单:主本地化文件变化(游戏更新改了台词条)时自动重建
-      if (/citadel_main_schinese\.txt$/.test(filename)) {
+      // 快捷语音白名单:主本地化文件变化(游戏更新改了台词条)时自动重建(双语:schinese+english)
+      if (/citadel_main_(schinese|english)\.txt$/.test(filename)) {
         try {
           const quickchat = require("./quickchat");
           const built = quickchat.build();
           if (built.ok) {
             const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
-            fs.writeFileSync(qcPath, JSON.stringify({ version: 1, patterns: built.patterns }, null, 2) + "\n", "utf8");
+            fs.writeFileSync(qcPath, JSON.stringify({ version: 2, langs: ["schinese", "english"], patterns: built.patterns }, null, 2) + "\n", "utf8");
             console.log("[quickchat] localization changed -> rebuilt whitelist:", built.count, "patterns");
           }
         } catch (e) {
