@@ -40,3 +40,6 @@ tmp_*.ps1
 tmp_*.b64
 tmp_deploy_*
 
+
+# 本地讨论稿(不入库)
+其他方案.txt
