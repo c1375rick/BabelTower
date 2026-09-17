@@ -15,6 +15,10 @@
 		<include src="s2r://panorama/styles/lingua_chat.vcss_c" />
 	</styles>
 	<scripts>
+		<!-- 快捷语音模板兑底语料(自动生成,勿手改);必须先于 lingua_chat.vjs_c 加载 -->
+		<include src="s2r://panorama/scripts/lingua_chat_quickchat_fallback.vjs_c" />
+		<!-- 模板参数约束专名表(自动生成,勿手改) -->
+		<include src="s2r://panorama/scripts/lingua_chat_gamenames_fallback.vjs_c" />
 		<include src="s2r://panorama/scripts/lingua_chat.vjs_c" />
 	</scripts>
 	<snippets>

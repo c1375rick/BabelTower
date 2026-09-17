@@ -112,15 +112,16 @@ function watchLocalization() {
           } catch (e) {}
         }
       }
-      // 快捷语音白名单:主本地化文件变化(游戏更新改了台词条)时自动重建(双语:schinese+english)
+      // 快捷语音模板:主本地化文件变化(游戏更新改了台词条)时自动重建(双语:schinese+english)
+      // 2026-09-17 v3:输出原始模板字典(免正则),格式与 core/quickchat.js main() 一致
       if (/citadel_main_(schinese|english)\.txt$/.test(filename)) {
         try {
           const quickchat = require("./quickchat");
           const built = quickchat.build();
           if (built.ok) {
             const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
-            fs.writeFileSync(qcPath, JSON.stringify({ version: 2, langs: ["schinese", "english"], patterns: built.patterns }, null, 2) + "\n", "utf8");
-            console.log("[quickchat] localization changed -> rebuilt whitelist:", built.count, "patterns");
+            fs.writeFileSync(qcPath, JSON.stringify({ version: 3, langs: ["schinese", "english"], templates: built.templates }, null, 2) + "\n", "utf8");
+            console.log("[quickchat] localization changed -> rebuilt templates:", built.count, "keys");
           }
         } catch (e) {
           console.log("[quickchat] rebuild failed (non-fatal):", e.message);

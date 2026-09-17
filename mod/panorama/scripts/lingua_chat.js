@@ -956,11 +956,18 @@
 
   // ================= 消息读取与过滤 =================
 
+  // ===== 诊断探针(2026-09-17 快捷消息不显示排查,临时;确认根因后移除) =====
+  // 背景:用户报告部分快捷消息语音正常但聊天栏+HUD都不渲染,且当局 mod 零记录。
+  // 假设:消息行根本没被创建进 DOM(语音走游戏音频层,不经过 Panorama 渲染)。
+  // 探针1:quick 行被读到时打一行日志(去重);探针2:boot 后每 15s 打容器行数(变化时)。
+  // 判读:日志有 quick row 且当局有 chatlog → 渲染在,问题在显示;无 quick row + rows=0 → 行未创建(布局层断)
+  const diagSet = new Set();
+
   function readMessageRow(row) {
-    // 面板缓存:若行的签名未变且已有缓存 record,直接返回缓存,跳过所有 DOM 读取(性能优化)
-    if (row && row.__lctCached && row.__lctCachedSig === row.__lctSig) {
-      return row.__lctCached;
-    }
+    // 注:曾有"面板缓存"(__lctCached/__lctCachedSig 守卫)在此跳过 DOM 读取。
+    // 2026-09-17 移除:守卫两端都是 mod 自管值,游戏回收复用行(改 DOM 内容)时两者均不变 →
+    // 永远命中旧缓存 record → sig 永不变化 → resetRowModState 永不触发 → 行冻结在旧译文+折叠态
+    // (simtest test2 实锤;9-15 该缓存已咬过一次 record.text 改写)。DOM 每扫必读,扫描范围本就有界。
     // 大厅聊天行(hudchat:ChatLineContainer 直挂 ChatLinesPanel,无 MessageSource/MessageContents)
     if (hasClass(row, LOBBY_ROW_CLASS)) {
       const lineLabel = findClass(row, LOBBY_LINE_CLASS);
@@ -980,8 +987,6 @@
         lobby: true,
         quick: !!findChild(row, "PingLabel"), // 大厅行的 Ping/快捷短语本地化,跳过翻译
       };
-      row.__lctCached = result;
-      row.__lctCachedSig = row.__lctSig;
       return result;
     }
     // HUD 顶栏行:无 MessageSource,文本在 MessageText(气泡内),sender 未知
@@ -993,8 +998,6 @@
       const isOwn = hasClass(row, "IsSelf") || !!findClass(row, LOCAL_CLIENT_ID);
       const result = { sender: UNKNOWN_NAME, channel: "hud", text: text, isOwn: isOwn, hud: true,
         quick: hasClass(row, "Ping") || !!findChild(row, "PingLabel") };
-      row.__lctCached = result;
-      row.__lctCachedSig = row.__lctSig;
       return result;
     }
     const source = findChild(row, MESSAGE_SOURCE_ID);
@@ -1020,8 +1023,6 @@
       heroId: readHeroIdFromRow(row),
       steamid: readSteamIdFromRow(row),
     };
-    row.__lctCached = result;
-    row.__lctCachedSig = row.__lctSig;
     return result;
   }
 
@@ -1038,70 +1039,231 @@
     return false;
   }
 
-  // ================= 快捷语音模板白名单 =================
+  // ================= 快捷语音模板匹配(2026-09-17 重构,免正则) =================
   // 快捷语音/轮盘消息网络上传输的是本地化 key+参数,每个客户端用自己的游戏语言渲染
   // (中文玩家看到 "我看到 McGinnis",英文玩家看到 "I see McGinnis")——
-  // 官方本地化层就是翻译本身,无论渲染成中文还是英文,mod 再翻一遍都只是劣质重复译文。
-  // 白名单来源:桥双语扫描(schinese+english)生成的 quickchat.json(/api/v1/quickchat);
-  // 桥不可用时保留下面的硬编码兜底(仅中文高频模板;英文模板由桥同步提供)。
-  let QUICKCHAT_PATTERNS = [
-    "^我看到\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_see
-    "^一起去干掉\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_attack
-    "^小心\\s*[^\\s,.!?:;，。！？；：]*有\\s*[^\\s,.!?:;，。！？；：]*\\s*[！!？?。.…⋯]{0,2}$", // ping_enemy_has_item
-    "^小心[^\\s,.!?:;，。！？；：]*[！!？?。.…⋯]{0,2}$", // ping_careful
-    "^快晕住[^\\s,.!?:;，。！？；：]*[！!？?。.…⋯]{0,2}$", // ping_stun
-    "^[^\\s,.!?:;，。！？；：]*准备就绪[！!？?。.…⋯]{0,2}$", // ping_use_ability / ping_ability_ready
-    "^[^\\s,.!?:;，。！？；：]*还要冷却[^\\s,.!?:;，。！？；：]*秒[！!？?。.…⋯]{0,2}$", // ping_ability_on_cooldown
-    "^[^\\s,.!?:;，。！？；：]*往(蓝|黄|绿|紫)路走了[！!？?。.…⋯]{0,2}$", // chatwheel headed
-    "^(黄|蓝|绿|紫)路需要帮助[！!？?。.…⋯]{0,2}$", // chatwheel help
-    "^(黄|蓝|绿|紫)路敌人消失[！!？?。.…⋯]{0,2}$", // ping missing
-    "^(黄|蓝|绿|紫)路(敌人消失|需要帮助)[！!？?。.…⋯]{0,2}$",
-    "^防守(黄|蓝|绿|紫)路[！!？?。.…⋯]{0,2}$", "^防守基地[！!？?。.…⋯]{0,2}$", "^防守[！!？?。.…⋯]{0,2}$",
-    "^我们去(推进|拿下|去)?(黄|蓝|绿|紫)路吧[！!？?。.…⋯]{0,2}$",
-    "^撤[！!？?。.…⋯]{0,2}$", "^撤退[！!？?。.…⋯]{0,2}$", "^小心[！!？?。.…⋯]{0,2}$",
-    "^需要帮助[！!？?。.…⋯]{0,2}$", "^掩护我[！!？?。.…⋯]{0,2}$", "^跟我来[！!？?。.…⋯]{0,2}$", "^跟着我[！!？?。.…⋯]{0,2}$",
-    "^我马上就到[！!？?。.…⋯]{0,2}$", "^我马上回来[！！?。…⋯]{0,2}$", "^马上回来[！!？?。.…⋯]{0,2}$",
-    "^算了吧[！!？?。.…⋯]{0,2}$", "^干得不错[！!？?。.…⋯]{0,2}$", "^干得漂亮[！!？?。.…⋯]{0,2}$",
-    "^谢谢[！!？?。.…⋯]{0,2}$", "^没问题[！!？?。.…⋯]{0,2}$", "^眩晕[！!？?。.…⋯]{0,2}$",
-    "^我还没准备好团战[！!？?。.…⋯]{0,2}$", "^我们要乘胜追击[！!？?。.…⋯]{0,2}$",
-    "^我们在这躲躲[！!？?。.…⋯]{0,2}$", "^这里很危险[…⋯.。!！?？]{0,2}$", "^有危险[！!？?。.…⋯]{0,2}$",
-    "^我来对付步兵[！!？?。.…⋯]{0,2}$", "^我来清理步兵[！!？?。.…⋯]{0,2}$", "^我们在这集合[！!？?。.…⋯]{0,2}$",
-    "^复生石掉落了[！！?。…⋯]{0,2}$", "^灵瓮在此[！！?。…⋯]{0,2}$", "^不稳定裂隙在这里[！!？?。.…⋯]{0,2}$",
-    "^他们在打我们的守护神[！!？?。.…⋯]{0,2}$", "^去打他们的守护神[！！?。…⋯]{0,2}$",
-    "^去打他们的核心[！!？?。.…⋯]{0,2}$", "^他们在打中区头目[！！?。…⋯]{0,2}$", "^我们去拿下中区头目[！!？?。.…⋯]{0,2}$",
-    "^我回来了[！！?。…⋯]{0,2}$", "^我要上了[！！?。…⋯]{0,2}$", "^一起行动[！!？?。.…⋯]{0,2}$",
-    "^敌人[！!？?。.…⋯]{0,2}$", "^他们[！!？?。.…⋯]{0,2}$",
-    "^我还没准备好[！!？?。.…⋯]{0,2}$",
-  ].map(function (p) { try { return new RegExp(p, "i"); } catch (e) { return null; } }).filter(Boolean);
+  // 官方本地化层就是翻译本身,mod 再翻一遍都只是劣质重复译文。
+  //
+  // 旧方案(已废弃的屎山):桥生成 253 条巨型正则 + 客户端硬编码兑底正则。
+  //   参数转义/量词(叠标点漏网 "Venator不见了！！！")/双语覆盖/新模板跟随,每个维度都是漏网面。
+  // 新方案:模板 = token 序列(param | fixed)。匹配 = 归一化(去空白/小写)后 token 走查:
+  //   fixed 必须逐字命中;param 消费 ≥1 字符且只允许【已知游戏名(英/中)】或【不含 CJK 的短 latin 连串】
+  //   ——防任意 CJK 通配误杀真人消息("他也不见了")。尾部标点先剥(兼容 HUD 叠标点渲染)。
+  //   语料:桥同步(/api/v1/quickchat,游戏更新自动跟随);兑底 lingua_chat_quickchat_fallback.js(自动生成)。
+  //   参数约束表:lingua_chat_gamenames_fallback.js(英雄/物品/能力名,自动生成)。
+  // 结构化识别(Ping class/PingLabel)仍在 shouldSkip 先行,这里只兜"以 Text 形态渲染的轮盘消息"。
+  if (typeof LCT_QUICKCHAT_FALLBACK_TEMPLATES === "undefined") {
+    $.Msg("[LCT] quickchat fallback templates missing!");
+  }
+  if (typeof LCT_GAMENAMES_FALLBACK === "undefined") {
+    $.Msg("[LCT] gamenames fallback missing!");
+  }
+  let QUICKCHAT_TEMPLATES = (typeof LCT_QUICKCHAT_FALLBACK_TEMPLATES !== "undefined" && LCT_QUICKCHAT_FALLBACK_TEMPLATES)
+    ? LCT_QUICKCHAT_FALLBACK_TEMPLATES.slice() : [];
   let quickchatSynced = false;
 
-  function isQuickChatTemplate(text) {
-    const s = String(text || "").trim();
-    if (!s) return false;
-    for (const re of QUICKCHAT_PATTERNS) {
-      try { if (re.test(s)) return true; } catch (e) {}
+  // @sync-begin core/quickchat_match.js —— 本块(归一化/名表/走查/匹配缓存)与 core 参考实现保持行为同步,
+  // tests/client_copy_sync.test.js 逐用例对账;改任何一侧必须同步另一侧并重跑该测试。
+  // 归一化:小写 + 去所有空白(游戏渲染空格不稳定,"小 心"/"小心！X 有Y")
+  function __qcNorm(s) {
+    return String(s || "").toLowerCase().replace(/\s+/g, "");
+  }
+
+  let QC_NAME_SORTED = null; // 长度降序归一化名表(惰性构建)
+  function __qcBuildNames() {
+    const src = (typeof LCT_GAMENAMES_FALLBACK !== "undefined" && LCT_GAMENAMES_FALLBACK) ? LCT_GAMENAMES_FALLBACK : [];
+    QC_NAME_SORTED = [];
+    for (let i = 0; i < src.length; i++) QC_NAME_SORTED.push(__qcNorm(src[i]));
+    QC_NAME_SORTED.sort(function (a, b) { return b.length - a.length; });
+  }
+  function __qcNameLenAt(msg, pos) {
+    if (QC_NAME_SORTED === null) __qcBuildNames();
+    for (let i = 0; i < QC_NAME_SORTED.length; i++) {
+      if (msg.startsWith(QC_NAME_SORTED[i], pos)) return QC_NAME_SORTED[i].length;
     }
+    return 0;
+  }
+  function __qcHasCJK(s) {
+    return /[\u3400-\u4dbf\u4e00-\u9fff]/.test(s);
+  }
+
+  // 模板 token 化: [{p:true}] | [{p:false, v:归一化固定段}]
+  function __qcTplTokens(tpl) {
+    const parts = String(tpl || "").split(/(\{[sd]:[a-zA-Z0-9_]+\})/);
+    const tokens = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      if (/^\{[sd]:[a-zA-Z0-9_]+\}$/.test(parts[i])) tokens.push({ p: true });
+      else {
+        const v = __qcNorm(parts[i]);
+        if (v) tokens.push({ p: false, v: v });
+      }
+    }
+    return tokens;
+  }
+
+  // 匹配缓存(2026-09-17 评审):同一条文本在 HUD 顶栏与左下聊天栏各渲染一行,shouldSkip 各调一次
+  // matchesQuickTemplate——token 走查(双语全量模板)每通道各做一遍。缓存按【走查自身归一化形式】
+  // 记忆结果(非 makeTextKey:不依赖目标语言,且剥尾后 "Venator不见了"/"Venator不见了！！！" 同键),
+  // 双通道 skip 判定同源;上限 500 防长会话膨胀(缓存只省走查,清空不影响正确性)。
+  // 语料整体替换(桥同步)时必须清空——见 adoptQuickChatTemplates。
+  let QC_MATCH_CACHE = new Map();
+  const QC_MATCH_CACHE_LIMIT = 500;
+
+  function matchesQuickTemplate(text) {
+    const msg0 = String(text || "").trim();
+    if (!msg0 || QUICKCHAT_TEMPLATES.length === 0) return false;
+    const msg = __qcNorm(msg0.replace(/[\s!！?？.。…⋯~〜]+$/g, "")); // 剥尾部标点(叠标点兼容)后归一化
+    if (!msg) return false;
+    const cached = QC_MATCH_CACHE.get(msg);
+    if (cached !== undefined) return cached; // 双通道同文本:第二通道直接命中,不再走查
+
+    for (let ti = 0; ti < QUICKCHAT_TEMPLATES.length; ti++) {
+      const tokens = __qcTplTokens(QUICKCHAT_TEMPLATES[ti]);
+      if (tokens.length === 0) continue;
+      if (tokens.length === 1 && !tokens[0].p) {
+        if (msg === tokens[0].v) return true; // 纯固定模板:整句相等
+        continue;
+      }
+      // token 走查(param 在下一 fixed 锚点处停靠)
+      let pos = 0;
+      let ok = true;
+      for (let i = 0; i < tokens.length; i++) {
+        const tok = tokens[i];
+        if (!tok.p) {
+          if (!msg.startsWith(tok.v, pos)) { ok = false; break; }
+          pos += tok.v.length;
+        } else {
+          const rest = msg.length - pos;
+          const isLast = i === tokens.length - 1;
+          if (isLast) {
+            if (rest < 1) { ok = false; break; }
+            // 末尾 param:已知游戏名 或 整段 latin 连串(防任意 CJK 通配误杀)
+            if (__qcNameLenAt(msg, pos) > 0 || !__qcHasCJK(msg.slice(pos))) {
+              pos = msg.length;
+            } else { ok = false; break; }
+          } else {
+            // 中间 param:在下一 fixed 锚点处停靠(从 pos+1 起,保证 ≥1 字符)
+            const nextFixed = tokens[i + 1].p ? null : tokens[i + 1].v;
+            if (!nextFixed) { ok = false; break; } // 连续 param(结构键,生成侧已剔除)
+            let found = -1;
+            let search = pos + 1;
+            while (true) {
+              const idx = msg.indexOf(nextFixed, search);
+              if (idx < 0) { ok = false; break; }
+              // 参数段 = msg[pos..idx):已知名字 或 不含 CJK 的短 latin 连串(≤24;
+              // norm 粘接后 latin 段无法与固定段分开,如 "restorativelocket"+"isoncooldownfor")
+              const segLen = idx - pos;
+              const segVal = msg.slice(pos, idx);
+              const latinRun = segLen >= 1 && segLen <= 24 && !__qcHasCJK(segVal);
+              if (segLen >= 1 && (__qcNameLenAt(msg, pos) === segLen || latinRun)) {
+                found = idx;
+                break;
+              }
+              search = idx + 1; // 该锚点不合适,继续找下一处
+            }
+            if (!ok || found < 0) { ok = false; break; }
+            pos = found;
+          }
+        }
+      }
+      if (!ok) continue;
+      if (pos !== msg.length) continue; // 必须恰好走完整条消息
+      if (QC_MATCH_CACHE.size >= QC_MATCH_CACHE_LIMIT) QC_MATCH_CACHE.clear();
+      QC_MATCH_CACHE.set(msg, true);
+      return true;
+    }
+    if (QC_MATCH_CACHE.size >= QC_MATCH_CACHE_LIMIT) QC_MATCH_CACHE.clear();
+    QC_MATCH_CACHE.set(msg, false);
     return false;
   }
 
-  // 从桥拉取快捷语音模板白名单(/api/v1/quickchat)。
-  // 成功则覆盖硬编码兑底;失败保留兑底(桥未运行/旧版桥,不重试——兑底已覆盖高频模板)。
+  function isQuickChatTemplate(text) {
+    return matchesQuickTemplate(text);
+  }
+  // @sync-end core/quickchat_match.js
+
+  // 从桥拉取快捷语音模板(/api/v1/quickchat,v3 原始模板数组)。
+  // 握手裁决(内容指纹;与 core/quickchat_sync.js evaluateQuickChatSync 同源,改一处必查另一处):
+  //   ① 桥不可达/响应无效 → 保留兜底,告警一次(离线是常态,不刷屏);
+  //   ② 桥指纹 === 兑底指纹 → 采纳(标记 synced);
+  //   ③ 指纹缺失(旧桥/旧兑底)或不一致 → 重拉一次确认(防瞬时/截断响应误判);
+  //   ④ 重拉后仍不一致 → 采纳桥语料(桥从本机游戏文件实时生成,是更新的一方) + 告警一次(兑底过期)。
+  // 语料采纳后必须清空匹配缓存,否则旧判定残留(模板已换、判定还是旧的)。
+  const QC_SYNC_STATE = { reloadTried: false, warnedOffline: false, warnedMismatch: false };
+  // 兑底指纹:生成器写入 lingua_chat_quickchat_fallback.js 的全局(旧兑底文件无 → null,握手按指纹缺失路径走)
+  // 客户端不重算指纹(无 FNV 代码):兑底指纹由生成器写入全局变量,桥侧指纹来自响应,这里只做比对。
+  // (曾有的 count 字段已删:裁决只看指纹,count 从未被读——死字段)
+  const QC_LOCAL_META = {
+    fingerprint: (typeof LCT_QUICKCHAT_FALLBACK_FINGERPRINT === "string") ? LCT_QUICKCHAT_FALLBACK_FINGERPRINT : null,
+  };
+
+  function adoptQuickChatTemplates(templates, note) {
+    QUICKCHAT_TEMPLATES = templates;
+    quickchatSynced = true;
+    QC_MATCH_CACHE.clear(); // 语料换了,旧匹配结果全部作废
+    log("quickchat templates " + note + ": " + templates.length);
+  }
+
+  // @sync core/quickchat_sync.js —— evaluateQuickChatSync 客户端同步副本(客户端无法 require,同 matchesQuickTemplate 先例;tests/client_copy_sync.test.js 对账)
+  function evaluateQuickChatSync(res, local, st) {
+    const s = {
+      reloadTried: !!(st && st.reloadTried),
+      warnedOffline: !!(st && st.warnedOffline),
+      warnedMismatch: !!(st && st.warnedMismatch),
+    };
+    const out = { adopt: null, synced: false, reload: false, warn: null, state: s };
+    const valid = res && res.ok && Array.isArray(res.templates) && res.templates.length > 0;
+    if (!valid) {
+      if (!s.warnedOffline) {
+        out.warn = "quickchat: 桥不可达/响应无效,保留兑底语料";
+        s.warnedOffline = true;
+      }
+      return out;
+    }
+    const fpSame = !!(res.fingerprint && local && local.fingerprint && res.fingerprint === local.fingerprint);
+    if (fpSame) {
+      out.adopt = res.templates;
+      out.synced = true;
+      return out;
+    }
+    if (!s.reloadTried) {
+      s.reloadTried = true;
+      out.reload = true;
+      return out;
+    }
+    out.adopt = res.templates;
+    out.synced = true;
+    if (!s.warnedMismatch) {
+      out.warn = "quickchat: 桥侧语料与兑底指纹不一致,已采用桥侧语料(兑底过期:重跑 node core/quickchat.js 并重编 VPK)";
+      s.warnedMismatch = true;
+    }
+    return out;
+  }
+
   function syncQuickChat(callback) {
     const url = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/api/v1/quickchat";
-    httpGetJson(url, function (res) {
-      if (res && res.ok && Array.isArray(res.patterns) && res.patterns.length > 0) {
-        const regs = [];
-        for (const p of res.patterns) {
-          try { regs.push(new RegExp(p, "i")); } catch (e) {}
+    const doFetch = function (onDone) {
+      httpGetJson(url, function (res) { onDone(res); }, 10000);
+    };
+    const decide = function (res) {
+      // 游戏移除 $.AsyncWebRequest 后(2026-09-17 实测,1717+ 次 ERROR),该通道永久失败。
+      // 只告警一次;若重试,健康循环每 5s 重入会刷屏(曾 322+ WARN/局)。
+      if (res && res.error === "no_asyncwebrequest") {
+        if (!QC_SYNC_STATE.warnedNoTransport) {
+          QC_SYNC_STATE.warnedNoTransport = true;
+          log("WARN: quickchat 同步通道不可用($.AsyncWebRequest 已被游戏移除),永久使用兑底语料");
         }
-        if (regs.length > 0) {
-          QUICKCHAT_PATTERNS = regs;
-          quickchatSynced = true;
-          log("quickchat whitelist synced from bridge: " + regs.length + " patterns");
-        }
+        if (callback) callback();
+        return;
       }
+      const verdict = evaluateQuickChatSync(res, QC_LOCAL_META, QC_SYNC_STATE);
+      if (verdict.reload) { doFetch(decide); return; } // 指纹缺失/不一致:重拉一次确认后再裁决
+      if (verdict.adopt) adoptQuickChatTemplates(verdict.adopt, verdict.synced ? "synced from bridge" : "synced from bridge (fingerprint mismatch, fallback stale)");
+      if (verdict.warn) log("WARN: " + verdict.warn);
       if (callback) callback();
-    }, 10000);
+    };
+    doFetch(decide);
   }
 
   // 剥掉中文+标点/数字/空格后剩下的拉丁字母 = 消息里真正非中文的部分
@@ -2408,7 +2570,6 @@ function injectTranslation(row, sig, text, fragment) {
           State.gamenamesLoading = true;
           syncGameNames(function () { State.gamenamesLoading = false; });
         }
-        // 快捷语音白名单:桥上线后拉一次(失败保留硬编码兑底,不重试)
         if (!quickchatSynced) syncQuickChat();
       } else {
         // offline grace: only mark red after BRIDGE_OFFLINE_GRACE_SECONDS of continuous failure,
@@ -2456,9 +2617,6 @@ function injectTranslation(row, sig, text, fragment) {
 
   // 回收复用清理:聊天行被游戏复用时,清除本 mod 残留(旧译文标签 + 原文折叠样式)
   function resetRowModState(row) {
-    // 清除 readMessageRow 的面板缓存(签名变化,旧缓存失效)
-    row.__lctCached = null;
-    row.__lctCachedSig = null;
     try {
       const contents = findChild(row, MESSAGE_CONTENTS_ID);
       if (contents && contents.style) {
@@ -2496,6 +2654,15 @@ function injectTranslation(row, sig, text, fragment) {
     if (!isValid(row)) return false;
     const record = readMessageRow(row);
     if (!record) return false;
+    // 诊断探针1:读到的 quick 行(去重防刷屏,上限 200 条重置)
+    if (record.quick) {
+      const dkey = (record.hud ? "H\x00" : "C\x00") + (record.text || "");
+      if (!diagSet.has(dkey)) {
+        if (diagSet.size > 200) diagSet.clear();
+        diagSet.add(dkey);
+        log("diag: quick row hud=" + (record.hud ? 1 : 0) + " text=" + String(record.text || "").slice(0, 60));
+      }
+    }
     const skipTranslation = shouldSkip(record);
     // 混合消息(中文+少量英文,典型:英文英雄名设置下的快捷语音渲染如 "我看到 McGinnis"):
     // 只把非中文片段送去翻译,中文部分原样保留。record.text 保持完整原文(签名稳定)。
@@ -2682,6 +2849,12 @@ function injectTranslation(row, sig, text, fragment) {
         const messages = State.hudMessages[i];
         if (!isValid(messages)) continue;
         const count = childCount(messages);
+        // 诊断探针3:HUD 容器行数心跳(变化时才打;count=0 持续 → HUD 行未创建)
+        if (!State._diagHudRows) State._diagHudRows = [];
+        if (count !== State._diagHudRows[i]) {
+          State._diagHudRows[i] = count;
+          log("diag: HUD[" + i + "] rows=" + count);
+        }
         if (count < State.hudScanned[i]) State.hudScanned[i] = 0;
         const start = State.hudScanned[i];
         touched = processRange(messages, start, count) || touched;
@@ -3581,6 +3754,18 @@ function injectTranslation(row, sig, text, fragment) {
     $.Schedule(8.0, function logLoop() {
       flushChatLog();
       $.Schedule(8.0, logLoop);
+    });
+    // 诊断探针2:容器行数心跳(每 15s,变化时才打;rows=-1 = ChatMessages 容器不存在=布局断)
+    $.Schedule(15.0, function diagLoop() {
+      try {
+        const messages = resolveChatMessages();
+        const n = messages ? childCount(messages) : -1;
+        if (n !== State._diagRows) {
+          State._diagRows = n;
+          log("diag: ChatMessages rows=" + n);
+        }
+      } catch (e) {}
+      $.Schedule(15.0, diagLoop);
     });
   }
 

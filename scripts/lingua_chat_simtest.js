@@ -13,6 +13,12 @@ const nativeSetTimeout = setTimeout;
 const SCRIPT = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
 
 // ---------------- Mock 面板 ----------------
+// 环境隔离(2026-09-17):真实引擎里 UI 重载会销毁整个 JS 上下文,旧轮询链/挂起回调随之死亡;
+// simtest 的 $ 与 setTimeout 是进程级全局,旧环境实例永生,其轮询链会借全局 $ 重新
+// resolveHudMessages 到【当前】环境的面板树,用旧配置抢先送译(实锤:test10 窗口内出现
+// 多个旧实例 token 的扫描记录,cfgOwn=true ≠ 当前环境配置)。freshEnv 创建新环境时
+// 取消上一环境注册的所有 $.Schedule 定时器与桥请求回调 = 等价引擎的上下文销毁语义。
+let envTimers = [];
 let uid = 0;
 class MockPanel {
   constructor(id, parent) {
@@ -68,6 +74,9 @@ class MockPanel {
 
 // ---------------- 独立环境:面板树 + $ + 配置 + 模块加载 ----------------
 function freshEnv(cfg) {
+  // 上一环境的所有定时器与挂起桥回调在此终止(见 envTimers 注释)
+  for (const tid of envTimers) { try { clearTimeout(tid); } catch (e) {} }
+  envTimers = [];
   delete require.cache[require.resolve(SCRIPT)];
 
   const contextPanel = new MockPanel("ContextPanel");
@@ -100,7 +109,7 @@ function freshEnv(cfg) {
     const text = q.get("text") || "";
     const source = q.get("source") || "auto";
     const target = q.get("target") || "zh-Hans";
-    nativeSetTimeout(() => {
+    envTimers.push(nativeSetTimeout(() => {
       if (bridgePanel._deleted) return;
       const body = JSON.stringify({ text, sourceLanguage: source, targetLanguage: target });
       const req = http.request({
@@ -117,7 +126,7 @@ function freshEnv(cfg) {
       });
       req.on("error", () => { bridgePanel.title = "LCT" + id + JSON.stringify({ ok: false, error: "bridge_fetch_error" }); });
       req.write(body); req.end();
-    }, 0);
+    }, 0));
   };
 
   contextPanel.SetAttributeString("lct_ui", JSON.stringify(cfg)); // UI_CONVAR = "lct_ui"
@@ -127,13 +136,21 @@ function freshEnv(cfg) {
   const dispatchLog = [];
   globalThis.$ = {
     Msg: (...a) => console.log("[LCT-sim]", ...a),
-    Schedule: (sec, fn) => nativeSetTimeout(fn, sec * 1000),
+    Schedule: (sec, fn) => { const tid = nativeSetTimeout(fn, sec * 1000); envTimers.push(tid); return tid; },
     CreatePanel: (type, parent, id) => parent.addChild(new MockPanel(id)).setClass(type === "Label" ? "Label" : type),
     RegisterForUnhandledEvent: () => {},
     DispatchEvent: (name, target) => { dispatchLog.push({ name, target }); },
     GetContextPanel: () => focusedPanel || contextPanel,
   };
   globalThis.Convars = { GetStr: () => "", RegisterConVar: () => {}, SetValue: () => {} };
+
+  // 快捷语音模板兑底语料 + 专名表(模拟游戏 xml 的 include 顺序:先语料后主脚本)
+  require(path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_quickchat_fallback.js"));
+  require(path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_gamenames_fallback.js"));
+  // require 是模块作用域,生成的全局用 var 赋值会挂到 globalThis;若主脚本 typeof 检查失败,手动补挂
+  if (typeof globalThis.LCT_QUICKCHAT_FALLBACK_TEMPLATES === "undefined" && globalThis.LCT_QUICKCHAT_FALLBACK_TEMPLATES !== undefined) {
+    // noop
+  }
 
   require(SCRIPT);
 
@@ -286,12 +303,13 @@ async function test4_bilingualNoCollapse() {
 }
 
 async function test5_pingBubbleKept() {
-  console.log("\n[5] english quick chat (Ping) in translation_only: bubble kept + translation appended");
+  // 2026-09-17 预期同步:record.quick → skip(游戏原生快捷短语已由游戏本地化,mod 再翻是劣质重复);
+  // 旧预期"Ping 行也要翻译"是 9-17 设计落地前的陈旧断言(HEAD 基线挂了 4 天的测试债)。
+  console.log("\n[5] quick chat (Ping form) -> skipped by design: zero API, zero label, bubble kept");
   const env = freshEnv(CFG.translationOnly);
   const row = env.addRow("ping", "Carol", "go mid");
-  const ok = await waitFor(() => labelsOf(row).length > 0, 10000);
-  const labels = labelsOf(row);
-  assert("translation label injected", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  await sleep(3000);
+  assert("no translation label (quick skip)", labelsOf(row).length === 0, labelsOf(row).length + " labels");
   assert("ping bubble NOT collapsed", row.FindChildTraverse("MessageContents").style.visibility === "visible");
 }
 

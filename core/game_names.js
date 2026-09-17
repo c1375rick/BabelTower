@@ -3,6 +3,10 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
+// 2026-09-17: 解析改用公共 parser(与 quickchat.js 共用单一实现)。
+// 旧本地 parseLoc 用朴素正则 "([^"]+)"\s+"([^"]*)",值含内嵌转义引号时配对错位,
+// 后续条目被整个吞进假值静默丢 key(LEARNINGS 8-31 ⑤ 同款 bug)——由本次重构修复。
+const { parseLocFile } = require("./loc_parser.js");
 
 // 定位 Deadlock 安装目录:优先环境变量,否则常见路径(Steam 库)
 function findDeadlockRoot() {
@@ -18,25 +22,6 @@ function findDeadlockRoot() {
   return null;
 }
 
-function readUtf8StripBom(file) {
-  let buf = fs.readFileSync(file);
-  if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) buf = buf.slice(3);
-  return buf.toString("utf8");
-}
-
-// 解析 valve 本地化 txt: "key" "value"  (可能多行,这里逐行粗略匹配)
-function parseLoc(file) {
-  const out = {};
-  if (!fs.existsSync(file)) return out;
-  const text = readUtf8StripBom(file);
-  const re = /"([^"]+)"\s+"([^"]*)"/g;
-  let m;
-  while ((m = re.exec(text))) {
-    out[m[1]] = m[2];
-  }
-  return out;
-}
-
 // 清洗官方中文里的 "kongjian 空尖弹 zidan" 这种 拼音+汉字+拼音 噪声
 // 规则:若含汉字,提取连续汉字部分;否则原样
 function cleanZh(s) {
@@ -48,10 +33,10 @@ function build() {
   const root = findDeadlockRoot();
   if (!root) return { ok: false, error: "deadlock_not_found" };
   const loc = path.join(root, "game", "citadel", "resource", "localization");
-  const heroEn = parseLoc(path.join(loc, "citadel_gc_hero_names", "citadel_gc_hero_names_english.txt"));
-  const heroZh = parseLoc(path.join(loc, "citadel_gc_hero_names", "citadel_gc_hero_names_schinese.txt"));
-  const modEn = parseLoc(path.join(loc, "citadel_gc_mod_names", "citadel_gc_mod_names_english.txt"));
-  const modZh = parseLoc(path.join(loc, "citadel_gc_mod_names", "citadel_gc_mod_names_schinese.txt"));
+  const heroEn = parseLocFile(path.join(loc, "citadel_gc_hero_names", "citadel_gc_hero_names_english.txt"));
+  const heroZh = parseLocFile(path.join(loc, "citadel_gc_hero_names", "citadel_gc_hero_names_schinese.txt"));
+  const modEn = parseLocFile(path.join(loc, "citadel_gc_mod_names", "citadel_gc_mod_names_english.txt"));
+  const modZh = parseLocFile(path.join(loc, "citadel_gc_mod_names", "citadel_gc_mod_names_schinese.txt"));
 
   const map = {}; // 英文 -> 中文
   const add = (enTable, zhTable) => {

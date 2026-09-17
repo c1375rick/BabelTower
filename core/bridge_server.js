@@ -37,18 +37,20 @@ dictionary.ensureFile();
 dictionary.startAutoFlush();
 nameProtect.load();
 nameProtect.watchLocalization();
-// 快捷语音白名单:启动时从游戏本地化生成(失败不阻塞桥启动,客户端用兑底模板)
+// 快捷语音模板:启动时从游戏本地化生成(失败不阻塞桥启动,客户端用兑底语料)
+// 2026-09-17 v3:原始模板字典(免正则),客户端 token 走查匹配
 try {
   const qcBuilt = quickchat.build();
   const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
   if (qcBuilt.ok) {
-    fs.writeFileSync(qcPath, JSON.stringify({ version: 2, langs: ["schinese", "english"], patterns: qcBuilt.patterns }, null, 2) + "\n", "utf8");
-    console.log("[quickchat] whitelist generated:", qcBuilt.count, "patterns");
+    // fingerprint 必须随写随传:客户端握手比对兑底指纹全靠这个字段(漏写 = 指纹缺失路径永远告警)
+    fs.writeFileSync(qcPath, JSON.stringify({ version: 3, fingerprint: qcBuilt.fingerprint || null, langs: ["schinese", "english"], templates: qcBuilt.templates }, null, 2) + "\n", "utf8");
+    console.log("[quickchat] templates generated:", qcBuilt.count, "keys, fingerprint:", qcBuilt.fingerprint);
   } else {
-    console.log("[quickchat] whitelist build failed (client fallback in effect):", qcBuilt.error);
+    console.log("[quickchat] templates build failed (client fallback in effect):", qcBuilt.error);
   }
 } catch (e) {
-  console.log("[quickchat] whitelist build error (non-fatal):", e.message);
+  console.log("[quickchat] templates build error (non-fatal):", e.message);
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -91,8 +93,17 @@ function transCacheSet(text, target, translation, detectedLanguage) {
 // ---------- 日志(可选落盘,绝不含 apiKey) ----------
 let activeConfig = null;
 
+// 本地时间戳(2026-09-17:由 UTC toISOString 改为本地时区。
+// UTC 时间戳比文件时间慢 8 小时,排查问题时会误判日志时段)
+function pad2(n) { return n < 10 ? "0" + n : String(n); }
+function localTimestamp() {
+  const d = new Date();
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+    " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+}
+
 function log(level, msg) {
-  const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
+  const ts = localTimestamp();
   const line = "[" + ts + "] [" + level + "] " + msg;
   // 任何日志都不允许包含 apiKey;调用方自行保证
   console.log(line);
@@ -627,8 +638,19 @@ async function handleApi(req, res, url, bodyObj) {
     const quickchatPath = path.join(__dirname, "..", "config", "quickchat.json");
     try {
       const data = JSON.parse(fs.readFileSync(quickchatPath, "utf8"));
-      const patterns = Array.isArray(data.patterns) ? data.patterns : [];
-      sendJson(res, 200, { ok: true, count: patterns.length, patterns: patterns });
+      // v3(2026-09-17): 原始模板数组(免正则,客户端分段比对);兼容读取旧 v2 patterns 字段
+      let templates = [];
+      if (Array.isArray(data.templates)) {
+        templates = data.templates;
+      } else if (data.templates && typeof data.templates === "object") {
+        for (const k of Object.keys(data.templates)) {
+          for (const t of data.templates[k]) templates.push(t);
+        }
+      } else if (Array.isArray(data.patterns)) {
+        templates = data.patterns; // 旧版桥配置尚持 v2 时,发正则串无意义,但不至于报错
+      }
+      // fingerprint(内容指纹)透传:客户端 syncQuickChat 与兑底指纹比对,防"模板变了 version 忘 bump"
+      sendJson(res, 200, { ok: true, version: data.version || 3, fingerprint: data.fingerprint || null, count: templates.length, templates: templates });
     } catch (e) {
       sendJson(res, 200, { ok: false, error: "quickchat_not_found" });
     }
