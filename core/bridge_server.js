@@ -596,7 +596,7 @@ async function handleApi(req, res, url, bodyObj) {
     const healthResp = {
       ok: true,
       name: "Babel Tower Bridge",
-      version: "1.0.3",
+      version: readLocalVersion() || "unknown",
       provider: cfgH.provider,
       providers: providerRegistry.listProviders(),
       fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],

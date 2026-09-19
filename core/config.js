@@ -59,8 +59,8 @@ const DEFAULTS = {
   // 进程监视:Deadlock 退出时桥自动关闭(设为 false 或启动参数 --no-watch 可禁用)
   watchGame: true,
   watchGameExe: "deadlock.exe",
-  // 可选文件日志(相对项目根目录;留空则不落盘)
-  logFile: "",
+  // 文件日志(相对项目根目录;默认落盘到 logs/bridge.log,便于用户反馈时提供调试信息)
+  logFile: "logs/bridge.log",
 };
 
 function configDir() {

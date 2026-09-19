@@ -1,0 +1,93 @@
+name: Bug 反馈
+description: 翻译失败 / 译文不显示 / 桥无法运行等问题
+title: "[Bug] 一句话描述问题"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈!请先确认:
+        1. 已升级到[最新 Release](https://github.com/c1375rick/BabelTower/releases)(旧版本的问题可能已修复)
+        2. 已阅读[调试教程](https://github.com/c1375rick/BabelTower/blob/main/docs/debugging.md),尽量附上 `logs\bridge.log` 相关片段(日志不含 API Key,可放心粘贴)
+
+  - type: input
+    id: version
+    attributes:
+      label: Mod 版本
+      description: 设置面板底部或下载的 zip 文件名上的版本号,如 1.0.4
+      placeholder: "例:1.0.4"
+    validations:
+      required: true
+
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 问题现象
+      description: 做了什么操作、期望发生什么、实际发生什么(游戏内截图有帮助)
+      placeholder: |
+        例:队友发英文消息后,译文位置显示
+        "⚠ 翻译失败: bing:接口拒绝访问(401): ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: 桥日志片段(logs\bridge.log)
+      description: 出问题时间点前后约 30~50 行,特别是 translate failed / fallback / 429 相关的行
+      placeholder: |
+        [2026-09-19 20:xx:xx] [warn] translate failed: ...
+        [2026-09-19 20:xx:xx] [info] fallback -> ...
+      render: text
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: 安装方式
+      options:
+        - Deadlock Mod Manager 导入 VPK + 本地桥
+        - 手动放 VPK 到 addons 目录 + 本地桥
+        - 只装了 VPK(没有本地桥)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bridge-start
+    attributes:
+      label: 本地桥启动方式
+      options:
+        - 开机自启(install-autostart.bat)
+        - 每次手动 StartDeadlock.bat
+        - 手动 node 命令
+        - 不确定
+    validations:
+      required: false
+
+  - type: dropdown
+    id: network
+    attributes:
+      label: 网络环境
+      description: 影响公共翻译接口(bing 免 Key)的连通性
+      options:
+        - 中国大陆直连
+        - 使用代理/VPN
+        - 其他/不确定
+    validations:
+      required: true
+
+  - type: input
+    id: target-lang
+    attributes:
+      label: 目标语言
+      description: 设置面板里选择的目标语言,如 简体中文
+      placeholder: "例:简体中文(zh-Hans)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 复现步骤、游戏控制台 [LCT] 报错截图等
+    validations:
+      required: false

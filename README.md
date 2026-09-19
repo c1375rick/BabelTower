@@ -9,7 +9,7 @@
 - 名称保护:启动时从桥动态同步全量 285 条英雄/物品名(桥离线降级到 60 条兜底)
 - 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
-> 版本:1.0.0 (2026-08-31)
+> 版本:1.0.5 (2026-09-19)
 
 ---
 
@@ -181,15 +181,34 @@ curl.exe http://127.0.0.1:8791/api/v1/health
 curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: application/json" -d "{\"text\":\"hello\",\"targetLanguage\":\"zh-Hans\"}"
 ```
 
+## 查看调试信息与提交 Bug
+
+遇到翻译失败/不显示/桥连不上时,按下面的步骤收集调试信息再反馈
+(详细图文教程见 **[docs/debugging.md](docs/debugging.md)**):
+
+1. **看桥状态**:游戏内 `/tr` 打开设置面板,「本地桥状态」绿色=运行中,红色=未运行
+   (未运行先双击 `restart_bridge.bat`)
+2. **看桥日志**:用记事本打开 `logs\bridge.log`,找 `translate failed:` 开头的行,
+   那就是失败原因(如 `翻译失败(429)`=限流、`接口拒绝访问(401/403)`=接口拒绝)
+3. **手动验证**(可选):浏览器访问 `http://127.0.0.1:8791/api/v1/health`,
+   能看到 JSON 即桥正常
+4. **提交反馈**:[GitHub Issues](https://github.com/c1375rick/BabelTower/issues)
+   (用 Bug Report 模板)或 GameBanana 评论区,附上:
+   Mod 版本 + 现象描述 + `bridge.log` 相关片段 + 安装方式 + 是否代理
+
+> 日志默认开启(v1.0.5+),保存在本地 `logs\bridge.log`,**不含 API Key**,
+> 上传前可自行检查。
+
 ## 故障排查
 
 | 现象 | 处理 |
 | --- | --- |
 | 译文显示"本地桥未运行" | 确认桥在运行(自启/StartDeadlock.bat/手动 node);或看 `logs\bridge.log` |
-| Bing 接口报错 | 公共接口偶发不稳,自动重试;长期不行切 Microsoft |
+| 翻译失败,日志出现 429 | 公共接口限流,桥会自动退避重试;频繁出现可切 Microsoft 或稍后再试 |
 | 401/403(用 Microsoft 时) | Key 错误;403 检查是否需填区域 |
 | 完全不翻译 | 检查"启用翻译"、目标语言;确认桥日志有请求进来 |
 | 聊天发不出去 | 见 docs/development.md 的回退方案 |
+| 其它 | 按[调试教程](docs/debugging.md)收集信息后[提 Issue](https://github.com/c1375rick/BabelTower/issues) |
 
 ## 许可证与致谢
 

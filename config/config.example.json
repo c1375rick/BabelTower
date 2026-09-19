@@ -15,5 +15,5 @@
   "maxQueue": 200,
   "watchGame": true,
   "watchGameExe": "deadlock.exe",
-  "logFile": ""
+  "logFile": "logs/bridge.log"
 }
