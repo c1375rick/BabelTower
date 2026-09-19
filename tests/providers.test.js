@@ -182,14 +182,8 @@ before(() => mock.install());
 after(() => mock.restore());
 beforeEach(() => mock.reset());
 
-// Bing 首页 HTML mock: 需要包含 IG / data-iid / params_AbusePreventionHelper
-const BING_PAGE_HTML = [
-  "<html>",
-  '<script>var IG:"ABC123IG";</script>',
-  '<div data-iid="IID-456"></div>',
-  '<script>params_AbusePreventionHelper = ["thekey","thetoken",3600000]</script>',
-  "</html>",
-].join("\n");
+// (2026-09-19) bing provider 改用 Edge 免鉴权端点 edge.microsoft.com/translate/translatetext,
+// 无需页面 token,故旧版 BING_PAGE_HTML mock 已移除。
 
 function ok(bodyObj) {
   return { status: 200, body: JSON.stringify(bodyObj) };
@@ -394,38 +388,41 @@ test("google: 超时抛出 provider_timeout", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Bing Translator Provider (免 Key,需先 GET 页面取 token 再 POST 翻译)
+// Bing Translator Provider (免 Key,Edge 免鉴权端点,无需 token)
 // ---------------------------------------------------------------------------
-function bingSuccessHandler() {
+function bingEdgeHandler() {
   return (req) => {
-    if (req.method === "GET" && req.path === "/translator") {
-      return { status: 200, body: BING_PAGE_HTML };
-    }
-    if (req.method === "POST" && req.path === "/ttranslatev3") {
-      return ok([{ translations: [{ text: "Hello" }], detectedLanguage: { language: "en" } }]);
+    if (req.method === "POST" && req.path === "/translate/translatetext") {
+      return ok([{ translations: [{ text: "Hello" }], detectedLanguage: { language: "zh-Hans" } }]);
     }
     return { status: 200, body: "" };
   };
 }
 
-test("bing: 成功翻译 (GET 页面 + POST 翻译) 返回 translation 与 detectedLanguage", async () => {
-  mock.setHandler(bingSuccessHandler());
+test("bing: 成功翻译 (POST edge translatetext) 返回 translation 与 detectedLanguage", async () => {
+  mock.setHandler(bingEdgeHandler());
   const r = await bing.translate("你好", { targetLanguage: "en" });
   assert.strictEqual(r.translation, "Hello");
-  assert.strictEqual(r.detectedLanguage, "en");
-  // 应当先后发生 GET /translator 与 POST /ttranslatev3
-  const methods = mock.requests.map((x) => x.method + " " + x.path);
-  assert.ok(methods.includes("GET /translator"), "应有 GET /translator");
-  assert.ok(methods.includes("POST /ttranslatev3"), "应有 POST /ttranslatev3");
+  assert.strictEqual(r.detectedLanguage, "zh-Hans");
+  // 应当只发生一次 POST edge.microsoft.com/translate/translatetext(无 token 流程)
+  const reqs = mock.requests.map((x) => x.method + " " + x.hostname + x.path);
+  assert.ok(reqs.includes("POST edge.microsoft.com/translate/translatetext"), "应有 POST edge translatetext");
+  assert.strictEqual(reqs.length, 1, "免 token 流程只需一次请求");
+  // 请求体应为 JSON 数组 [{text}],query 应带 to 与 isEnterpriseClient=false
+  const req = mock.requests[0];
+  assert.deepStrictEqual(JSON.parse(req.body), ["你好"]);
+  assert.ok(req.query.includes("to=en"), "query 应带 to=en");
+  assert.ok(req.query.includes("isEnterpriseClient=false"), "query 应带 isEnterpriseClient=false");
 });
 
-test("bing: HTTP 401 抛出带 status 的错误 (含 token 失效刷新重试)", async () => {
-  mock.setHandler((req) => {
-    if (req.method === "GET" && req.path === "/translator") {
-      return { status: 200, body: BING_PAGE_HTML };
-    }
-    return httpErr(401, ""); // POST 始终 401 -> bing 会刷新页面配置后重试一次
-  });
+test("bing: sourceLanguage=auto 时不带 from 参数", async () => {
+  mock.setHandler(bingEdgeHandler());
+  await bing.translate("hello", { sourceLanguage: "auto", targetLanguage: "zh-Hans" });
+  assert.strictEqual(mock.requests[0].query.includes("from="), false, "auto 源语言不应带 from");
+});
+
+test("bing: HTTP 401 抛出带 status 的错误", async () => {
+  mock.setHandler(() => httpErr(401, ""));
   await assert.rejects(
     bing.translate("你好", { targetLanguage: "en" }),
     (e) => e.status === 401
@@ -433,12 +430,7 @@ test("bing: HTTP 401 抛出带 status 的错误 (含 token 失效刷新重试)",
 });
 
 test("bing: HTTP 403 抛出带 status 的错误", async () => {
-  mock.setHandler((req) => {
-    if (req.method === "GET" && req.path === "/translator") {
-      return { status: 200, body: BING_PAGE_HTML };
-    }
-    return httpErr(403, "");
-  });
+  mock.setHandler(() => httpErr(403, ""));
   await assert.rejects(
     bing.translate("你好", { targetLanguage: "en" }),
     (e) => e.status === 403
@@ -446,12 +438,7 @@ test("bing: HTTP 403 抛出带 status 的错误", async () => {
 });
 
 test("bing: 返回非法 JSON 抛出解析错误", async () => {
-  mock.setHandler((req) => {
-    if (req.method === "GET" && req.path === "/translator") {
-      return { status: 200, body: BING_PAGE_HTML };
-    }
-    return badJson(); // POST 返回非法 JSON
-  });
+  mock.setHandler(() => badJson());
   await assert.rejects(
     bing.translate("你好", { targetLanguage: "en" }),
     /无法解析/
@@ -459,7 +446,7 @@ test("bing: 返回非法 JSON 抛出解析错误", async () => {
 });
 
 test("bing: 超时抛出 provider_timeout", async () => {
-  mock.setHandler(() => timeoutResp()); // 所有请求(含 GET 页面)均超时
+  mock.setHandler(() => timeoutResp());
   await assert.rejects(
     bing.translate("你好", { targetLanguage: "en", timeoutMs: 100 }),
     /provider_timeout/
@@ -480,11 +467,8 @@ function genericSuccessHandler() {
   return (req) => {
     const h = req.hostname || "";
     const p = req.path || "";
-    // Bing 需要先 GET 页面取 token,再 POST 翻译
-    if (h.includes("bing.com") && req.method === "GET" && p === "/translator") {
-      return { status: 200, body: BING_PAGE_HTML };
-    }
-    if (h.includes("bing.com")) {
+    // Bing(Edge 端点): 一次 POST 即完成翻译
+    if (h.includes("edge.microsoft.com")) {
       return ok([{ translations: [{ text: "OK" }], detectedLanguage: { language: "en" } }]);
     }
     if (h.includes("microsofttranslator")) {
@@ -598,38 +582,23 @@ test("openai: 温度参数 400 自动去掉 temperature 重试并成功", async 
   assert.strictEqual(secondBody.temperature, undefined, "重试请求不应带 temperature");
 });
 
-// 6. Bing token 刷新: 第一次翻译 POST 400/401,刷新 pageConfig 后重试成功
-test("bing: 翻译 400 后刷新 pageConfig 重试并成功", async () => {
-  // bing 的 pageConfig 为模块级缓存,为了 deterministic 地验证「刷新重试」,
-  // 重新加载一个全新的 bing 模块实例(pageConfig 初始为 null)。
-  const bingPath = require.resolve("../core/providers/bing");
-  const originalBingModule = require.cache[bingPath];
-  delete require.cache[bingPath];
-  const bingFresh = require(bingPath);
-
+// 6. Bing 429 限流: 指数退避重试(1s→2s),之后成功
+test("bing: 429 指数退避重试后成功", async () => {
   let postCount = 0;
-  let pageFetches = 0;
-  mock.setHandler((req) => {
-    if (req.method === "GET" && req.path === "/translator") {
-      pageFetches++;
-      return { status: 200, body: BING_PAGE_HTML };
+  mock.setHandler(() => {
+    postCount++;
+    if (postCount <= 2) {
+      return httpErr(429, "");
     }
-    if (req.method === "POST" && req.path === "/ttranslatev3") {
-      postCount++;
-      if (postCount === 1) {
-        return httpErr(400, "token invalid"); // 触发刷新重试
-      }
-      return ok([{ translations: [{ text: "Hello" }], detectedLanguage: { language: "en" } }]);
-    }
-    return { status: 200, body: "" };
+    return ok([{ translations: [{ text: "Hello" }], detectedLanguage: { language: "zh-Hans" } }]);
   });
-  const r = await bingFresh.translate("你好", { targetLanguage: "en", timeoutMs: 2000 });
+  const r = await bing.translate("你好", { targetLanguage: "en", timeoutMs: 2000 });
   assert.strictEqual(r.translation, "Hello");
-  assert.strictEqual(postCount, 2, "应重试一次 POST 翻译");
-  assert.strictEqual(pageFetches, 2, "刷新后应再次 GET 页面取 token(首次取 + 刷新取)");
-
-  // 还原模块缓存,避免影响其它测试
-  require.cache[bingPath] = originalBingModule;
+  assert.strictEqual(postCount, 3, "429 应退避重试,第三次成功");
+  assert.ok(
+    mock.requests.every((x) => x.path === "/translate/translatetext"),
+    "重试应发往同一 Edge 端点"
+  );
 });
 
 // 7. Microsoft region 头: opts.region 有值时请求头包含 Ocp-Apim-Subscription-Region

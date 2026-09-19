@@ -34,7 +34,9 @@ snippet,以及 ChatLinesArea / ChatMessages / ChatControls / ChatInput 等 ID �
 
 ### plainheart/bing-translate-api(MIT)
 
-- Bing 网页翻译公共接口(ttranslatev3 + 页面参数提取)的协议参考
+- Bing/微软公共翻译接口的协议参考(2026-09-19 起采用其 MET 模式同款
+  Edge 免鉴权端点 edge.microsoft.com/translate/translatetext;
+  早期为 Bing 网页翻译 ttranslatev3 + 页面参数提取)
 
 ### 其它
 

@@ -136,7 +136,8 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 
 ### 默认:Bing Translator(免 Key,公共免费接口)
 
-- 使用 Bing 网页翻译同款协议(翻译页提取 IG/IID/token,POST `ttranslatev3`),国内直连可用
+- 使用 Edge 内置翻译同款免鉴权端点(`edge.microsoft.com/translate/translatetext`,无需 token),国内直连可用
+  (2026-09 更换:原 Bing 网页翻译接口受区域跳转影响间歇性 401,已弃用)
 - 无需注册;公共接口有隐形限流,出现 429 会自动重试
 - 该接口可能随微软调整而变化,届时本仓库会跟进修复
 

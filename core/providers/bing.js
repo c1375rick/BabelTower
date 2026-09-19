@@ -1,16 +1,18 @@
-// Babel Tower - Bing Translator Provider(无密钥公共接口)
+// Babel Tower - Bing/Microsoft Translator Provider(免 Key 公共接口)
 // ------------------------------------------------------------------
-// 2026-08-03 更新:微软下线了旧的免Key授权端点(edge.microsoft.com/translate/auth,404),
-// 现改用 Bing 网页翻译(ttranslatev3)同款协议:
-//   1. GET https://www.bing.com/translator(跟随重定向到 cn.bing.com)
-//      从页面 HTML 提取:IG、IID、以及 params_AbusePreventionHelper 数组
-//      [key, token, tokenExpiryInterval]
-//   2. POST https://<sub>.bing.com/ttranslatev3?isVertical=1&IG=..&IID=..
-//      表单字段:fromLang / text / to / token / key
+// 2026-09-19 更新:Bing 网页翻译接口(ttranslatev3)被区域跳转击穿:
+//   www.bing.com 现在会 302 到 cn.bing.com(区域相关),而 cn 子域页面签发的
+//   token 被自己的 ttranslatev3 拒绝(401 {"ShowCaptcha":false}),刷新重试也无效。
+//   改用 Edge 免费翻译端点(Edge 浏览器内置翻译同款协议):
+//     POST https://edge.microsoft.com/translate/translatetext?to=..&from=..
+//     JSON 数组 body,无需 IG/IID/token,天然不会有 token 失效 401。
+//   响应结构与 ttranslatev3 一致({detectedLanguage, translations}),国内直连可用。
+//   (协议参考 plainheart/bing-translate-api v4 的 MET 模式;该端点即
+//    edge.microsoft.com/translate/translatetext,与 2026-08 下线的旧
+//    edge.microsoft.com/translate/auth 授权端点无关。)
 // 说明:
-//   - 公共免费接口(非官方合同 API),有隐形限流;个人聊天翻译场景足够。
-//   - token 约 1 小时有效(由页面返回的 interval 决定),缓存到期自动刷新。
-//   - 若该接口不可用,可在设置面板把服务商切回 microsoft(需 Azure Key)。
+//   - 公共免费接口(非官方合同 API),个人聊天翻译场景足够。
+//   - 若该接口不可用,可在设置面板把服务商切换为 microsoft(需 Azure Key)。
 "use strict";
 
 const https = require("https");
@@ -19,27 +21,9 @@ const https = require("https");
 const agent = new https.Agent({ keepAlive: true, maxSockets: 4 });
 
 const DEFAULT_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/151.0.4129.59";
-const TRANSLATOR_PAGE = "https://www.bing.com/translator";
-const MIN_CACHE_MS = 60000;
-
-let pageConfig = null; // { ig, iid, key, token, subdomain, fetchedAt, interval }
-
-function match1(text, re) {
-  const m = re.exec(String(text || ""));
-  return m ? m[1] : "";
-}
-
-// 退避等待:用 Promise + setTimeout(不要用同步 sleep 阻塞事件循环)
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// 轻量 info 日志(各 provider 独立,不依赖外部日志模块)
-function logInfo(msg) {
-  // eslint-disable-next-line no-console
-  console.log("[bing] [info] " + msg);
-}
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0";
+// Edge 免费翻译端点:无需任何 token/鉴权
+const EDGE_TRANSLATE_URL = "https://edge.microsoft.com/translate/translatetext";
 
 function request(url, { method = "GET", headers = {}, body = null, timeoutMs = 15000, redirects = 0 } = {}) {
   return new Promise((resolve, reject) => {
@@ -67,57 +51,24 @@ function request(url, { method = "GET", headers = {}, body = null, timeoutMs = 1
   });
 }
 
-async function fetchPageConfig(timeoutMs) {
-  const res = await request(TRANSLATOR_PAGE, {
-    headers: { "User-Agent": DEFAULT_UA },
-    timeoutMs: timeoutMs,
-  });
-  if (res.status !== 200) {
-    throw new Error("bing 页面获取失败(" + res.status + ")");
-  }
-  const html = res.body;
-  const ig = match1(html, /IG:"([^"]+)"/);
-  const iid = match1(html, /data-iid="([^"]+)"/);
-  const arrRaw = match1(html, /params_AbusePreventionHelper\s?=\s?([^\]]+\])/);
-  let fields = null;
-  try {
-    fields = JSON.parse(arrRaw);
-  } catch (e) {}
-  if (!ig || !iid || !fields || fields.length < 3 || !fields[1]) {
-    throw new Error("bing 页面参数解析失败");
-  }
-  let subdomain = "www";
-  try {
-    const host = new URL(res.finalUrl).hostname;
-    const m = host.match(/^([a-z0-9-]+)\.bing\.com$/i);
-    if (m) subdomain = m[1].toLowerCase();
-  } catch (e) {}
-  pageConfig = {
-    ig: ig,
-    iid: iid,
-    key: String(fields[0]),
-    token: String(fields[1]),
-    interval: Number(fields[2]) || 3600000,
-    subdomain: subdomain,
-    fetchedAt: Date.now(),
-  };
-  return pageConfig;
+// 退避等待:用 Promise + setTimeout(不要用同步 sleep 阻塞事件循环)
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function getPageConfig(timeoutMs) {
-  if (pageConfig && Date.now() - pageConfig.fetchedAt < Math.max(MIN_CACHE_MS, pageConfig.interval - MIN_CACHE_MS)) {
-    return pageConfig;
-  }
-  return fetchPageConfig(timeoutMs);
+// 轻量 info 日志(各 provider 独立,不依赖外部日志模块)
+function logInfo(msg) {
+  // eslint-disable-next-line no-console
+  console.log("[bing] [info] " + msg);
 }
 
 function describeError(status, body) {
   const snippet = body ? ": " + String(body).slice(0, 200) : "";
   switch (status) {
     case 400:
-      return "请求被拒(400,已自动刷新参数重试)" + snippet;
+      return "请求被拒(400)" + snippet;
     case 401:
-      return "token 失效(401,已自动刷新重试)" + snippet;
+      return "接口拒绝访问(401)" + snippet;
     case 403:
       return "接口拒绝访问(403)" + snippet;
     case 429:
@@ -137,52 +88,35 @@ function describeError(status, body) {
  * @returns {Promise<{translation:string, detectedLanguage:string|null}>}
  */
 async function translate(text, opts) {
-  let cfg = await getPageConfig(opts.timeoutMs);
+  const to = String(opts.targetLanguage || "zh-Hans");
+  const from = opts.sourceLanguage && opts.sourceLanguage !== "auto" ? String(opts.sourceLanguage) : "";
+  const params = new URLSearchParams({ to: to, isEnterpriseClient: "false" });
+  if (from) params.set("from", from);
+  const url = EDGE_TRANSLATE_URL + "?" + params.toString();
 
-  const attempt = async function (c) {
-    const base =
-      "https://" + c.subdomain + ".bing.com/ttranslatev3?isVertical=1" +
-      "&IG=" + encodeURIComponent(c.ig) +
-      "&IID=" + encodeURIComponent(c.iid);
-    const form = new URLSearchParams();
-    form.set("fromLang", opts.sourceLanguage && opts.sourceLanguage !== "auto" ? opts.sourceLanguage : "auto-detect");
-    form.set("text", String(text));
-    // BUGFIX 2026-08-14:bing 免费接口对裸 "en" 目标的中文短词语言检测失败直接返回原文
-    // (detectedLanguage:null,实测:你好/在吗/收到/打团/上单/撤退→en 均返回原文),
-    // 映射为区域代码 en-GB 后稳定正常(你好→Hello/早上好→Good morning 等)。
-    // en-US 实测被拒(400),故不用 en-US。
-    const TO_TARGET_OVERRIDES = { "en": "en-GB" };
-    form.set("to", TO_TARGET_OVERRIDES[String(opts.targetLanguage || "zh-Hans")] || String(opts.targetLanguage || "zh-Hans"));
-    form.set("token", c.token);
-    form.set("key", c.key);
-    form.set("tryFetchingGenderDebiasedTranslations", "true");
-    return request(base, {
+  const attempt = function () {
+    const body = JSON.stringify([String(text)]);
+    return request(url, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
         "User-Agent": DEFAULT_UA,
-        "Referer": "https://" + c.subdomain + ".bing.com/translator",
       },
-      body: form.toString(),
+      body: body,
       timeoutMs: opts.timeoutMs,
     });
   };
 
-  let res = await attempt(cfg);
-  // token/参数异常时刷新页面配置重试一次(保持原逻辑不变)
-  if (res.status === 400 || res.status === 401) {
-    pageConfig = null;
-    cfg = await fetchPageConfig(opts.timeoutMs);
-    res = await attempt(cfg);
-  }
+  let res = await attempt();
 
   // 429 限流:指数退避重试(初始 1s,每次翻倍,最多 3 次:1s→2s→4s,总等待 ≤ 8s)
   let retry = 0;
   while (res.status === 429 && retry < 3) {
     const waitMs = 1000 * Math.pow(2, retry); // 1000, 2000, 4000
-    logInfo("bing 429 限流,等待 " + waitMs + "ms 后重试...");
+    logInfo("edge 端点 429 限流,等待 " + waitMs + "ms 后重试...");
     await sleep(waitMs);
-    res = await attempt(cfg);
+    res = await attempt();
     retry++;
   }
 
@@ -197,12 +131,6 @@ async function translate(text, opts) {
     parsed = JSON.parse(res.body);
   } catch (e) {
     throw new Error("翻译服务返回了无法解析的数据");
-  }
-  if (parsed && parsed.ShowCaptcha) {
-    throw new Error("bing 触发了验证码,请稍后再试或切换服务商");
-  }
-  if (parsed && parsed.statusCode) {
-    throw new Error("bing 请求被拒(" + parsed.statusCode + ")");
   }
   const entry = Array.isArray(parsed) ? parsed[0] : null;
   const translation =
