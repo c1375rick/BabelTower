@@ -61,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Csdk12Root "F:\Steam
 ## 4. 常用本地测试(不开游戏)
 
 ```powershell
-cd F:\LinguaChat
+cd F:\BabelTower
 node core\bridge_server.js
 # 另一终端:
 curl.exe http://127.0.0.1:8791/api/v1/health
@@ -76,5 +76,7 @@ curl.exe http://127.0.0.1:8791/api/v1/config
 - **改了 config.json 不用重启?**:config 每次请求时重新读取,改完即生效
 - **Key 显示为 **********:打码显示;留空保存 = 清除 Key
 - **日志里有 Key?**:不应该有;若发现,视为 bug 提交
-- **Bing 接口 429/限流**:公共接口有隐形限流,连发测试会短暂 400;等 1 分钟自动恢复
+- **Bing 接口 429/限流**:公共接口有隐形限流,连发测试会短暂 400;等 1 分钟自动恢复(桥内已做指数退避重试)
+- **Bing 接口 401/403**:2026-09-19 已切换 Edge 免鉴权端点(无需 token),正常不会再出现 token 失效类 401;
+  若再现,多为微软接口变动,对照 docs/architecture.md §6 的协议变更历史处理
 - **调试工具**:`tools\Source2Viewer-CLI.exe`(VRF 19.2)可解编译 .vxml_c/.vjs_c 等

@@ -19,7 +19,8 @@
 │  本地翻译桥 Node.js(core/)         │                       │
 │  /bridge 页面(同源 fetch 受限 API) ◄┘                       │
 │  /api/v1/translate|test|config|health                      │
-│  providers/microsoft.js ── HTTPS ──► Microsoft Translator  │
+│  providers/*.js ── HTTPS ──► 翻译服务商                     │
+│  (bing免Key/Azure/DeepL/Google/OpenAI兼容,见 §6)           │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +64,41 @@
 - **游戏侧 UI 偏好**(enabled/displayMode/outgoing/outgoingTarget/force/timeoutMs):
   存于根面板属性 + convar `lct_ui`,不包含任何密钥
 
-## 6. 复用与扩展
+## 6. 翻译服务商
+
+主服务商与回退链由 `config.json` 的 `provider` / `fallbackProviders` 决定;
+游戏侧只需传 provider id,新增/切换服务商对游戏内无感。
+
+### bing(默认,免 Key)
+
+- **当前协议(2026-09-19 起)**:`POST https://edge.microsoft.com/translate/translatetext?to=<lang>[&from=<lang>]&isEnterpriseClient=false`
+  - body 为 JSON 数组 `["<text>"]`
+  - 响应与旧 ttranslatev3 同构:`[{detectedLanguage:{language},translations:[{text,to}]}]`
+  - **无需任何 token/Key**,不存在 token 失效问题;语言代码直接传目标语言(含 `en`,旧版 en→en-GB workaround 已随协议切换移除)
+  - 429 限流:指数退避重试(1s→2s→4s,最多 3 次)
+  - 协议参考 plainheart/bing-translate-api v4 的 MET 模式(该端点即 Edge 浏览器内置翻译所用)
+
+### 协议变更历史(排障用)
+
+| 时期 | 协议 | 现状 |
+| --- | --- | --- |
+| ~2026-08 上旬 | `edge.microsoft.com/translate/auth` 免 Key 授权端点 | 已 404 下线 |
+| 2026-08 ~ 2026-09 | Bing 网页翻译 `ttranslatev3`(GET /translator 提取 IG/IID/token 后 POST) | `www.bing.com` 会 302 到 `cn.bing.com`(区域跳转),cn 子域签发的 token 被其自家接口拒绝(401 `{"ShowCaptcha":false}`,刷新无效),弃用 |
+| 2026-09-19 起 | Edge `translatetext`(免鉴权) | 当前使用 |
+
+> 排障提示:日志出现 `接口拒绝访问(401/403)` 且 provider 为 bing 时,多为微软接口/协议变动,
+> 先对照上表,再参考 plainheart/bing-translate-api 的最新实现跟进。
+
+### microsoft(可选,需 Azure Key)
+
+- `POST https://api.cognitive.microsofttranslator.com/translate?api-version=3.0`
+- 头:`Ocp-Apim-Subscription-Key`;配置了 region 时另带 `Ocp-Apim-Subscription-Region`
+
+### 其它(deepl / google / openai 兼容)
+
+- 各自独立 provider 文件,需在设置面板填对应 Key;主服务商失败时按 `fallbackProviders` 依次回退(未配 Key 的自动跳过)
+
+## 7. 复用与扩展
 
 - 新增翻译服务商:`core/providers/` 新增文件,在 `registry.js` 注册即可,
   游戏侧无改动(面板的服务商字段填 id)
