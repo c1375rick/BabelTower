@@ -15,7 +15,17 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Node = Join-Path $Root "portable-node\node.exe"
 $Server = Join-Path $Root "core\bridge_server.js"
-$HealthUrl = "http://127.0.0.1:8791/api/v1/health"
+# 端口从 config.json 读取(用户改过端口时硬编码 8791 会假报"未通过")
+$HealthPort = 8791
+$cfgPath = Join-Path $Root "config\config.json"
+if (Test-Path $cfgPath) {
+  try {
+    $raw = [System.IO.File]::ReadAllText($cfgPath)
+    $m = [regex]::Match($raw, '"port"\s*:\s*(\d+)')
+    if ($m.Success) { $HealthPort = [int]$m.Groups[1].Value }
+  } catch { }
+}
+$HealthUrl = "http://127.0.0.1:{0}/api/v1/health" -f $HealthPort
 
 if (-not (Test-Path $Node)) { $Node = "node" }
 if (-not (Test-Path $Server)) { throw "找不到桥服务器: $Server" }
@@ -36,7 +46,8 @@ if ($killed.Count -gt 0) {
 
 # 2. 启动新桥(隐藏窗口, 保留 watchGame)
 Write-Host ("[LCT] 启动桥: {0} {1}" -f $Node, $Server)
-$proc = Start-Process -FilePath $Node -ArgumentList $Server -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+# 路径手动加引号:Start-Process 不会自动为含空格/特殊字符的参数加引号
+$proc = Start-Process -FilePath $Node -ArgumentList ('"' + $Server + '"') -WorkingDirectory $Root -WindowStyle Hidden -PassThru
 Write-Host ("[LCT] 桥进程已启动 PID {0}" -f $proc.Id)
 
 # 3. 健康检查: 最多等 15 秒

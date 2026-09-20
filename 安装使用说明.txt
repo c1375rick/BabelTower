@@ -11,7 +11,7 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
 一、安装(约 3 分钟)
 --------------------------------------------------
 
-1. 把整个文件夹解压到你喜欢的位置(建议路径不要带空格,如 D:\BabelTower)
+1. 把整个文件夹解压到你喜欢的位置(路径可含中文,但不要带空格,如 D:\BabelTower)
 
 2. 安装游戏内 Mod(二选一):
    方法 A(推荐):打开 Deadlock Mod Manager,把 pak01_dir.vpk 拖进去导入
@@ -54,10 +54,25 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
 
 Q: 译文显示"本地桥未运行"?
 A: 桥没启动。确认第 3 步做了:要么装了自启(重启电脑后生效),要么双击了 StartDeadlock.bat。
+   也可以直接双击 restart_bridge.bat 一键重启并自动健康检查。
+
+Q: 双击 portable-node\node.exe 只出现一个 "> " 提示符的窗口?
+A: 那是 Node.js 的命令行控制台,不是启动器,直接关掉。启动桥请用
+   install-autostart.bat / StartDeadlock.bat / restart_bridge.bat,不要直接双击 node.exe。
+
+Q: 开机时弹窗 "Windows Script Host 80070002 系统找不到指定的文件"?
+A: 旧版自启脚本对含中文的解压路径(如 D:\Bandizip\解压\)兼容有问题。
+   重新双击 install-autostart.bat 即可修复(1.0.5 起的自启脚本自动适应任意路径),
+   然后重启电脑验证。
 
 Q: 点测试显示失败?
 A: 先确认桥在运行;再确认网络能访问 bing.com(公共接口,偶尔抽风会自动重试)。
    一直失败可把服务商切到 microsoft 并填自己的 Azure Key。
+
+Q: StartDeadlock.bat 窗口一闪就没了,或桥总是起不来?
+A: 双击 run-bridge.bat(诊断启动器):它前台运行桥,报错会停在窗口里不会闪退。
+   常见原因:解压不完整(core 目录缺文件)。请重新解压完整安装包,不要删除 core 里任何文件。
+   崩溃详情在 logs\bridge.log,反馈问题时请附上这个文件。
 
 Q: 游戏里没反应?
 A: 确认 VPK 装到了 addons 目录且游戏完全重启过;确认 /tr 能打开设置面板。
@@ -75,6 +90,8 @@ A: 游戏部分:Mod Manager 里禁用/删除,或删掉 addons 里对应的 vpk�
   portable-node\         内置 Node.js 运行时(不要删)
   install-autostart.bat  双击安装开机自启
   remove-autostart.bat   双击卸载开机自启
+  restart_bridge.bat     一键重启桥 + 健康检查(桥没起来先点它)
+  run-bridge.bat         诊断启动器(报错不闪退;反馈问题前先跑它)
   StartDeadlock.bat      手动启动(桥 + 游戏)
   scripts\autostart.ps1  自启脚本(一般由上面的 bat 调用,无需手动执行)
 

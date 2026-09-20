@@ -28,6 +28,10 @@ if (Test-Path $nodeExe) {
 # single files
 $singleFiles = @(
   "scripts\autostart.ps1",
+  "scripts\restart_bridge.ps1",
+  "scripts\bridge_health.ps1",
+  "restart_bridge.bat",
+  "run-bridge.bat",
   "install-autostart.bat",
   "remove-autostart.bat",
   "StartDeadlock.bat",

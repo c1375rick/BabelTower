@@ -21,11 +21,53 @@
 // 用法: node bridge_server.js   (默认端口 8791,可用 config.json 修改)
 "use strict";
 
+// ---------- 启动期崩溃兜底(必须最先注册) ----------
+// 2026-09-20 教训: require 阶段崩溃(发布包漏 loc_parser.js/quickchat.js)发生在本文件
+// 剩余部分执行之前,console 输出随窗口关闭消失,用户侧表现为"窗口开几秒就挂"且无日志。
+// 兜底必须落盘到 logs/bridge.log,让用户能拿到可反馈的错误现场。
+const _crashFs = require("fs");
+const _crashPath = require("path");
+function _crashLogFilePath() {
+  return _crashPath.join(__dirname, "..", "logs", "bridge.log");
+}
+function writeCrashLog(kind, err) {
+  try {
+    const logPath = _crashLogFilePath();
+    _crashFs.mkdirSync(_crashPath.dirname(logPath), { recursive: true });
+    const stamp = new Date().toString();
+    _crashFs.appendFileSync(
+      logPath,
+      "[" + stamp + "] [crash] " + kind + ": " + (err && err.stack ? err.stack : String(err)) + "\n",
+      "utf8"
+    );
+  } catch (e) {
+    // 日志都写不进去时(磁盘/权限)只能放弃,不能因此再抛
+  }
+}
+process.on("uncaughtException", function (err) {
+  writeCrashLog("uncaughtException", err);
+  console.error("[LCT] 发生未捕获错误,日志已写入 logs\\bridge.log,请将该文件反馈给开发者。");
+  console.error(err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});
+process.on("unhandledRejection", function (err) {
+  writeCrashLog("unhandledRejection", err);
+});
+
 const http = require("http");
 const https = require("https");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
+// 打包/安装完整性自检: 缺任一必需内部模块立即给出可读错误并退出,
+// 避免 "Cannot find module" 原始堆栈吓用户(且现在的 uncaughtException 会把堆栈落盘)。
+for (const _m of ["./config", "./providers/registry", "./dictionary", "./name_protect", "./quickchat", "./loc_parser.js"]) {
+  try { require(_m); } catch (e) {
+    console.error("[LCT] 安装不完整: 加载 " + _m + " 失败。请重新解压完整安装包,不要手动删除 core 内任何文件。");
+    writeCrashLog("module-load-failed", e);
+    process.exit(1);
+  }
+}
 
 const configStore = require("./config");
 const providerRegistry = require("./providers/registry");
@@ -33,6 +75,7 @@ const dictionary = require("./dictionary");
 const nameProtect = require("./name_protect");
 const quickchat = require("./quickchat");
 // 首次运行生成词典文件;桥启动后自动落盘高频词(自适应学习)
+// (顶部 for 循环已逐个 require 过五个模块,这里直接拿句柄用,不重复 require)
 dictionary.ensureFile();
 dictionary.startAutoFlush();
 nameProtect.load();
