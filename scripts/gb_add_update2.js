@@ -1,4 +1,4 @@
-// gb_add_update2.js — 发布第二条更新日志: 0.1.3 紧急修复(hero_names.js 缺失导致桥离线)
+// gb_add_update2.js — 发布 1.0.6 更新日志: UMM 设置联动 + 指纹丢失根治
 // 用法: node gb_add_update2.js
 const puppeteer = require("puppeteer-core");
 const fs = require("fs");
@@ -10,18 +10,18 @@ const UPDATES_URL = "https://gamebanana.com/mods/updates/700107";
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const TITLE = "1.0.5 重要修复：旧包桥无法启动 + 自启 80070002";
-const VERSION = "1.0.5";
+const TITLE = "1.0.6 新功能：UMM 设置窗口联动（游戏内改设置不用再开 /tr）";
+const VERSION = "1.0.6";
 
 const CHANGELOG = [
-  ["Bugfix", "修复发布包本地桥启动即崩：打包清单漏掉 core/loc_parser.js 与 core/quickchat.js（1.0.0~1.0.4 全部受影响，表现为 StartDeadlock.bat 窗口闪退或游戏内显示本地桥未运行）"],
-  ["Bugfix", "修复开机自启弹窗 Windows Script Host 80070002：自启脚本改为纯 ASCII 自定位，解压路径含中文（如 Bandizip 解压）不再乱码，文件夹移动后依然有效"],
-  ["Improvement", "桥崩溃现在落盘 logs/bridge.log（启动即注册兜底，缺文件时给出中文提示），反馈问题请附上该文件"],
-  ["Improvement", "新增 run-bridge.bat 诊断启动器：前台运行桥，报错停留可见不闪退；StartDeadlock.bat 增加活性检查，桥启动失败自动转诊断窗口"],
-  ["Improvement", "打包流程新增产物冒烟测试（桥健康检查通过才允许出包），此类问题不会再漏"],
+  ["Feature", "新增 Universal Mod Manager (UMM) 设置联动：安装 UMM 后自动出现“巴别塔”设置页，10 项常用设置（启用/服务商/目标语言/显示模式/发送前翻译/发送目标语言/强制翻译/超时/翻译自己的消息/聊天日志）可直接在游戏内 UMM 窗口调整"],
+  ["Feature", "UMM 中文界面：游戏语言为中文时 UMM 里显示中文标签；不装 UMM 完全不影响本 mod"],
+  ["Improvement", "设置同步架构：/tr 面板保存值为持久真值，UMM 改动即时生效并双向持久化；推荐装了 UMM 的用户统一用 UMM 改设置（详见 README）"],
+  ["Bugfix", "修复 quickchat 模板指纹在游戏更新触发本地化重建后丢失的问题（客户端握手告警路径永久触发的根因）"],
+  ["Note", "API Key / 区域 / 回退服务商不含在 UMM 中（机密不走广播通道），仍用 /tr 面板设置"],
 ];
 
-const BLURB = "重要：如果旧版出现过【开机 80070002 弹窗 / StartDeadlock 闪退 / 游戏内显示本地桥未运行】，请更新本版。请下载新的 BabelTower-1.0.5-win64.zip（旧文件已归档）。升级方法：删除旧 BabelTower 文件夹，重新解压，重新双击 install-autostart.bat。注意：含桥/脚本改动，需要重新下载完整 zip 包。";
+const BLURB = "新功能：安装 Universal Mod Manager (UMM) 后，游戏内 UMM 设置窗口会自动出现“巴别塔”标签页，常用设置不用再开 /tr 面板。UMM 前置：https://gamebanana.com/mods/693642 。改动即时生效；/tr 面板仍是完整设置入口（API Key 等仍需 /tr）。含游戏内 Mod 改动，需重新下载并导入 pak（本地桥无变化，可不重装桥）。";
 
 async function loadCookies(page) {
   if (!fs.existsSync(COOKIES_FILE)) return;
@@ -126,12 +126,12 @@ async function setInput(page, selector, value) {
     await sleep(1500);
   }
 
-  // 勾选新文件(带 _22047 后缀的)
+  // 勾选要发布的文件(匹配 BabelTower-106 优先,回退 105)
   const fileChecked = await page.evaluate(() => {
     const boxes = [...document.querySelectorAll("input[type=checkbox]")];
     const target = boxes.find(b => {
       const label = b.closest(".RadioCheckWrapper");
-      return label && /babeltower-105-win64/i.test(label.innerText);
+      return label && /babeltower-10[56]-win64/i.test(label.innerText);
     });
     if (!target) return { ok: false };
     target.click();
