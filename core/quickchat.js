@@ -167,13 +167,21 @@ function buildExtraNames(root) {
   return out;
 }
 
+// 桥配置唯一写入口:bridge_server.js 启动与 name_protect.js watcher 重建都必须走这里,
+// 严禁各自手写 JSON.stringify —— 漏带 fingerprint 会让客户端握手永远走告警路径
+// (2026-09-25 实锢: watcher 路径漏写指纹,quickchat_handshake 测试间歇性红)。
+function writeBridgeConfig(r) {
+  const out = path.join(__dirname, "..", "config", "quickchat.json");
+  fs.writeFileSync(out, JSON.stringify({ version: 3, fingerprint: r.fingerprint, langs: ["schinese", "english"], templates: r.templates }, null, 2) + "\n", "utf8");
+  return out;
+}
+
 function main() {
   const r = build();
   if (!r.ok) { console.error("BUILD FAIL:", r.error); process.exit(1); }
 
   // 桥配置:模板字典(key -> [模板串]),客户端按渲染文本分段比对;fingerprint 供客户端握手校验
-  const out = path.join(__dirname, "..", "config", "quickchat.json");
-  fs.writeFileSync(out, JSON.stringify({ version: 3, fingerprint: r.fingerprint, langs: ["schinese", "english"], templates: r.templates }, null, 2) + "\n", "utf8");
+  const out = writeBridgeConfig(r);
   console.log("wrote", out, "keys:", r.count, "(skipped:", r.skipped, ") fingerprint:", r.fingerprint);
 
   // 客户端兜底语料:生成到 mod 源码目录(需随 VPK 编译;游戏更新后重跑本脚本+重编 VPK)
@@ -221,4 +229,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { build, buildClientFallback, splitTemplate, buildExtraNames, parseLocFile, fingerprintTemplates, fnv1a32 };
+module.exports = { build, buildClientFallback, splitTemplate, buildExtraNames, parseLocFile, fingerprintTemplates, fnv1a32, writeBridgeConfig };

@@ -274,6 +274,8 @@
 
   // ---- 状态 ----
   const State = {
+    ummRegistered: false, // UMM 设置清单已广播(防重复注册)
+    ummEchoUntil: 0, // 吸收窗截止时间:此前的 set 是 UMM 存档回放,整体忽略(桥配置为唯一持久真值)
     chat: null,
     messages: null,
     input: null,
@@ -859,7 +861,10 @@
     bridgeStatusPrefix: { zh: "桥状态: ", en: "Bridge: " },
     bridgeOnline: { zh: "桥在线", en: "Bridge online" },
     bridgeOffline: { zh: "桥离线,翻译不可用", en: "Bridge offline, translation unavailable" },
-    bridgeDmmHint: { zh: "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat", en: "Installed via DMM? You need the full bridge: download from GitHub and run StartDeadlock.bat" },
+    bridgeDmmHint: { zh: "仅装了翻译面板(DMM 或手动 vpk),还需本地桥:下载 GitHub 完整包并运行 StartDeadlock.bat", en: "Only the panel is installed (DMM or manual vpk); the local bridge is also required: download the full package from GitHub and run StartDeadlock.bat" },
+    errBridgeNotRunning: { zh: "桥未运行:请在 BabelTower 目录运行 StartDeadlock.bat(仅装 vpk 不够)", en: "Bridge not running: run StartDeadlock.bat in the BabelTower folder (the vpk alone is not enough)" },
+    errBridgeNav: { zh: "翻译面板不可用;若持续出现,请运行 StartDeadlock.bat 启动桥", en: "Panel unavailable; if this persists, run StartDeadlock.bat to start the bridge" },
+    errTimeout: { zh: "翻译超时", en: "Translation timed out" },
     hintBing: { zh: "免 Key 公共接口,可能有隐形限流;失败可配置自动回退", en: "Free public API, may have hidden rate limits; configure auto-fallback on failure" },
     hintMicrosoft: { zh: "Azure Translator Key(可留空则跳过该服务商)", en: "Azure Translator Key (leave empty to skip)" },
     hintOpenai: { zh: "OpenAI 兼容端点:DeepSeek 填 https://api.deepseek.com + deepseek-chat;Ollama/LM Studio/OneAPI 亦可", en: "OpenAI-compatible endpoint: for DeepSeek use https://api.deepseek.com + deepseek-chat; also Ollama/LM Studio/OneAPI" },
@@ -952,6 +957,252 @@
         if (Convars.SetValue) Convars.SetValue(UI_CONVAR, json);
       }
     } catch (e) {}
+  }
+
+  // ================= UMM (Universal Mod Manager) 设置联动 =================
+  // 文档: https://xaohs.github.io/universal-mod-manager/authors/integration/
+  // 机制: ClientUI_FireOutput 是唯一跨 Panorama 上下文通道(引擎事件,字符串载荷);
+  //       UMM 不在时无人应答,本 mod 行为不变(见 values 上报设计,注释在下方)。
+  // @sync-begin umm-manifest (tests/umm_integration.test.js 从此提取;同步副本 core/umm_bridge.js)
+  const UMM_CHANNEL = "ClientUI_FireOutput";
+  const UMM_PROTOCOL = 1;
+  const UMM_ID = "babeltower";
+  const UMM_NAME = "Babel Tower";
+  // 设置清单: 镜像 /tr 面板的纯偏好项。API Key 故意不进 UMM ——
+  // 通道是明文 JSON 广播(所有 mod 都能听到),机密不跨上下文传输。
+  const UMM_SETTINGS = [
+    { type: "group", label: "Translation" },
+    { id: "enabled", type: "toggle", label: "Enabled", default: true },
+    {
+      id: "provider", type: "select", label: "Provider", default: "bing",
+      options: [
+        { value: "bing", label: "Bing (free)" },
+        { value: "microsoft", label: "Microsoft (Azure)" },
+        { value: "openai", label: "OpenAI-compatible" },
+        { value: "deepl", label: "DeepL" },
+        { value: "google", label: "Google" },
+      ],
+    },
+    {
+      id: "targetLanguage", type: "select", label: "Target Language", default: "zh-Hans",
+      options: [
+        { value: "zh-Hans", label: "简体中文" },
+        { value: "zh-Hant", label: "繁體中文" },
+        { value: "en", label: "English" },
+        { value: "ja", label: "日本語" },
+        { value: "ko", label: "한국어" },
+        { value: "fr", label: "Français" },
+        { value: "de", label: "Deutsch" },
+        { value: "es", label: "Español" },
+      ],
+    },
+    {
+      id: "displayMode", type: "select", label: "Display Mode", default: "bilingual",
+      options: [
+        { value: "bilingual", label: "Bilingual" },
+        { value: "translation_only", label: "Translation only" },
+      ],
+    },
+    { type: "group", label: "Behaviour" },
+    {
+      id: "outgoing", type: "select", label: "Outgoing Translation", default: "off",
+      options: [
+        { value: "off", label: "Off (send original)" },
+        { value: "translation", label: "Translation only" },
+        { value: "bilingual", label: "Bilingual (original | translation)" },
+      ],
+    },
+    {
+      id: "outgoingTarget", type: "select", label: "Outgoing Target Language", default: "en",
+      options: [
+        { value: "en", label: "English" },
+        { value: "zh-Hans", label: "简体中文" },
+        { value: "zh-Hant", label: "繁體中文" },
+        { value: "ja", label: "日本語" },
+        { value: "ko", label: "한국어" },
+      ],
+    },
+    { id: "force", type: "toggle", label: "Force translate (skip language detection)", default: false },
+    { id: "timeoutMs", type: "slider", label: "Timeout", min: 5000, max: 30000, step: 1000, default: 15000, unit: "ms" },
+    { type: "group", label: "Misc" },
+    { id: "translateOwn", type: "toggle", label: "Translate own messages", default: true },
+    { id: "chatLog", type: "toggle", label: "Chat log (save by match ID)", default: true },
+  ];
+
+  // UMM 可控键白名单(设置消息逐键过滤,防未知 key 污染 State.cfg)
+  const UMM_MANAGED_KEYS = {
+    enabled: true, provider: true, targetLanguage: true, displayMode: true,
+    outgoing: true, outgoingTarget: true, force: true, timeoutMs: true,
+    translateOwn: true, chatLog: true,
+  };
+
+  // 从清单提取当前值(boot 注册时随 manifest 上报;文档值优先级:
+  // UMM 会话已存值 > 我们上报的 values > 清单声明默认值。
+  // 关键设计: LCT 有自己的持久化(convar+面板属性),未装 UMM 时 boot 绝不能跑
+  // "apply 默认值"循环 —— 否则每次启动都会把用户已保存的配置打回出厂。
+  // 所以 UMM 缺席路径是"什么都不做",UMM 在场时用 values 收编当前值作为起点)
+  function ummCurrentValues() {
+    const values = {};
+    const c = State.cfg || UI_DEFAULTS;
+    for (const key in UMM_MANAGED_KEYS) {
+      if (typeof c[key] !== "undefined") values[key] = c[key];
+    }
+    return values;
+  }
+
+  // ---- UMM 标签本地化(同步副本 core/umm_bridge.js localizeUmmManifest + UMM_I18N_ZH;
+  // ---- 测试对账 tests/umm_integration.test.js。放在 manifest 块后、announce 前) ----
+  // @sync-begin umm-i18n (tests/umm_integration.test.js 从此提取)
+  function localizeUmmManifest(list, lang) {
+    if (lang !== "zh") return list;
+    const t = {
+      groups: { "Translation": "翻译", "Behaviour": "行为", "Misc": "其他" },
+      settings: {
+        enabled: "启用翻译",
+        provider: "服务商",
+        targetLanguage: "目标语言",
+        displayMode: "显示模式",
+        outgoing: "发送前翻译",
+        outgoingTarget: "发送目标语言",
+        force: "强制翻译(跳过语言判断)",
+        timeoutMs: "超时",
+        translateOwn: "翻译自己的消息",
+        chatLog: "聊天日志(按比赛 ID 保存)",
+      },
+      options: {
+        provider: { "bing": "Bing(免费)", "microsoft": "Microsoft(Azure)", "openai": "OpenAI 兼容", "deepl": "DeepL", "google": "Google" },
+        displayMode: { "bilingual": "双语(原文+译文)", "translation_only": "仅译文" },
+        outgoing: { "off": "关(发原文)", "translation": "仅译文", "bilingual": "双语(原文 | 译文)" },
+      },
+    };
+    return list.map(function (s) {
+      if (s.type === "group") {
+        return { type: "group", label: t.groups[s.label] || s.label };
+      }
+      const out = {};
+      for (const k in s) out[k] = s[k];
+      if (t.settings[s.id]) out.label = t.settings[s.id];
+      if (Array.isArray(s.options) && t.options[s.id]) {
+        out.options = s.options.map(function (o) {
+          return t.options[s.id][o.value] ? { value: o.value, label: t.options[s.id][o.value] } : o;
+        });
+      }
+      return out;
+    });
+  }
+  // @sync-end umm-i18n
+
+  function ummAnnounce() {
+    try {
+      // 标签随界面语言: 中文界面下 UMM 设置窗口显示中文(core/umm_bridge.js localizeUmmManifest 同规则,
+      // 测试对账 tests/umm_integration.test.js);存储按 id 不按 label,切语言不丢设置。
+      const lang = (State.cfg && State.cfg.uiLang) || "zh";
+      const manifest = localizeUmmManifest(UMM_SETTINGS, lang);
+      // announce 后 UMM 会把它存档值逐键 set 回来(协议既定行为,每次 announce 都重放)。
+      // 吸收窗: 这批 set 整体忽略 —— 桥配置(/tr 保存)是唯一持久真值;
+      // 若放行回放,UMM 存档会在每次打开 UMM 面板(hello)时压回 /tr 的改动,
+      // 表现为"只履行 UMM 设置,不履行 /tr 设置"(2026-09-25 用户实测)。
+      // UMM 里的真实改动发生在窗口外(人工操作远慢于回放扫荡),照常应用。
+      State.ummEchoUntil = nowMs() + 1500;
+      $.DispatchEvent(UMM_CHANNEL, JSON.stringify({
+        umm: UMM_PROTOCOL,
+        t: "register",
+        id: UMM_ID,
+        name: (lang === "zh") ? "巴别塔" : UMM_NAME,
+        settings: manifest,
+        values: ummCurrentValues(),
+      }));
+    } catch (e) {}
+  }
+  // @sync-end umm-manifest
+
+  // UMM set -> 单键应用。返回是否命中(供测试与告警判别)。
+  // 副作用: 改 State.cfg + saveUiConfig() + 桥端部分推送(applyMaskedUpdate 合并语义,单键安全)。
+  // @sync-begin umm-apply (tests/umm_integration.test.js 从此提取;同步副本 core/umm_bridge.js applyUmmSettingCore)
+  function applyUmmSetting(key, value) {
+    if (!UMM_MANAGED_KEYS[key]) return false;
+    if (typeof value === "undefined") return false;
+    // 吸收窗: UMM 每次 announce 后的存档回放扫荡,整体忽略 ——
+    // 不改状态/不落盘/不推桥。桥配置(/tr 面板保存)是唯一持久真值,
+    // 否则 UMM 存档会在每次 hello 时压回 /tr 改动(2026-09-25 实锢"只履行 UMM 设置")。
+    // UMM 的真实改动在窗口外到达(人工操作远慢于回放),不受影响。
+    if (nowMs() < (State.ummEchoUntil || 0)) return true;
+    if (!State.cfg) State.cfg = Object.assign({}, UI_DEFAULTS);
+    // 逐键类型白名单校验(通道广播可被任意 mod 伪造,set 载荷不可信)
+    if (key === "timeoutMs") {
+      const n = Number(value);
+      if (!isFinite(n) || n < 1000 || n > 60000) return false;
+      State.cfg.timeoutMs = Math.floor(n);
+    } else if (key === "force" || key === "enabled" || key === "translateOwn" || key === "chatLog") {
+      State.cfg[key] = !!value;
+    } else {
+      const allowed = { provider: 1, targetLanguage: 1, displayMode: 1, outgoing: 1, outgoingTarget: 1 };
+      if (typeof value !== "string" || !allowed[key]) return false;
+      // 枚举值必须在清单 options 里(防野值把面板/桥推入未定义态)
+      let known = false;
+      for (let i = 0; i < UMM_SETTINGS.length; i += 1) {
+        const s = UMM_SETTINGS[i];
+        if (s && s.id === key && s.options) {
+          for (let j = 0; j < s.options.length; j += 1) {
+            if (s.options[j].value === value) { known = true; break; }
+          }
+          break;
+        }
+      }
+      if (!known) return false;
+      State.cfg[key] = value;
+    }
+    saveUiConfig();
+    // 桥端持久化(桥离线时静默失败,下次 boot syncBridgeConfig 会以桥配置为准回填;
+    // UMM 改动重进游戏仍在 —— State.cfg 自身持久化兜底了 UI 层)。
+    // 双形态镜像(与 collectPanelConfig 同构): 这些键在桥端同时存在扁平与 cfg.ui.* 两种形态,
+    // 只发扁平会被面板打开时的 GET(c.ui.* 优先)覆盖回去 ——
+    // 2026-09-25 实锢: UMM 改目标语言后 /tr 面板与翻译语言都不变。
+    const patch = {};
+    if (key === "chatLog") patch.chatLog = !!value;
+    else if (key === "translateOwn") patch.translateOwn = !!value;
+    else if (key === "timeoutMs") patch.timeoutMs = State.cfg.timeoutMs;
+    else if (key === "enabled") patch.enabled = State.cfg.enabled;
+    else if (key === "force") patch.force = State.cfg.force;
+    else patch[key] = value;
+    if (key !== "chatLog" && key !== "translateOwn") {
+      patch.ui = {};
+      patch.ui[key] = patch[key];
+    }
+    bridgePost("config", { config: patch }, function () {});
+    return true;
+  }
+  // @sync-end umm-apply
+
+  // @sync-begin umm-bus (tests/umm_integration.test.js 从此提取;同步副本 core/umm_bridge.js)
+  function onUmmBus(payload) {
+    // 廉价预检: 通道上还有其它 mod 的广播,非 UMM 流量不进 JSON.parse
+    if (typeof payload !== "string" || payload.indexOf('"umm"') === -1) return;
+    let msg = null;
+    try { msg = JSON.parse(payload); } catch (e) { return; }
+    if (!msg || msg.umm !== UMM_PROTOCOL) return;
+    if (msg.t === "hello") {
+      // UMM 晚于本 mod 启动时广播 hello 请求重报;幂等(重复 register 由 UMM 合并)
+      ummAnnounce();
+    } else if (msg.t === "set" && msg.id === UMM_ID) {
+      if (!applyUmmSetting(msg.key, msg.value)) {
+        log("umm: rejected set key=" + String(msg.key));
+      }
+    }
+  }
+  // @sync-end umm-bus
+
+  function registerUmmSettings() {
+    if (State.ummRegistered) return;
+    State.ummRegistered = true;
+    try {
+      $.RegisterForUnhandledEvent(UMM_CHANNEL, onUmmBus);
+    } catch (e) {
+      log("umm: event registration failed: " + (e && e.message ? e.message : String(e)));
+    }
+    // 只注册 + 广播,不套默认值(理由见 ummCurrentValues 注释)
+    ummAnnounce();
+    log("umm: settings announced");
   }
 
   // ================= 消息读取与过滤 =================
@@ -3739,6 +3990,7 @@ function injectTranslation(row, sig, text, fragment) {
     State.cfg = loadUiConfig();
     applyUILang(); // 初始化界面语言
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
+    registerUmmSettings(); // UMM 设置联动(UMM 不在时为无害空操作,见 ummCurrentValues 注释)
     syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
     applyUILang(); // 初始化界面语言(配置同步后应用)
     updateBridgeDot(); // 初始状态:桥未上线前显示红点

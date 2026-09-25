@@ -10,16 +10,18 @@ const UPDATES_URL = "https://gamebanana.com/mods/updates/700107";
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const TITLE = "0.1.3 紧急修复：桥不能离线 (hero_names.js 缺失)";
-const VERSION = "0.1.3";
+const TITLE = "1.0.5 重要修复：旧包桥无法启动 + 自启 80070002";
+const VERSION = "1.0.5";
 
 const CHANGELOG = [
-  ["Bugfix", "修复 0.1.3 初版包缺失 core/hero_names.js 导致本地桥启动崩溃/离线的严重问题（dictionary.js 启动时 require 该模块）"],
-  ["Improvement", "打包脚本强制校验：已补齐 hero_names.js 并加入冒烟测试（解压→内置 node 启动桥→健康检查通过→MD5 核对一致）"],
-  ["Improvement", "若您已安装旧 0.1.3 包请重新下载 babeltower-013-win64_22047.zip 覆盖安装；已下载旧包的用户只需替换本地桥与配置文件所在的整个安装目录"],
+  ["Bugfix", "修复发布包本地桥启动即崩：打包清单漏掉 core/loc_parser.js 与 core/quickchat.js（1.0.0~1.0.4 全部受影响，表现为 StartDeadlock.bat 窗口闪退或游戏内显示本地桥未运行）"],
+  ["Bugfix", "修复开机自启弹窗 Windows Script Host 80070002：自启脚本改为纯 ASCII 自定位，解压路径含中文（如 Bandizip 解压）不再乱码，文件夹移动后依然有效"],
+  ["Improvement", "桥崩溃现在落盘 logs/bridge.log（启动即注册兜底，缺文件时给出中文提示），反馈问题请附上该文件"],
+  ["Improvement", "新增 run-bridge.bat 诊断启动器：前台运行桥，报错停留可见不闪退；StartDeadlock.bat 增加活性检查，桥启动失败自动转诊断窗口"],
+  ["Improvement", "打包流程新增产物冒烟测试（桥健康检查通过才允许出包），此类问题不会再漏"],
 ];
 
-const BLURB = "重要：旧版 0.1.3 压缩包（babeltower-013-win64.zip，无 _22047 后缀）缺少 hero_names.js，会导致本地桥启动失败（翻译功能不可用）。本修复包已解决，MD5 校验通过。请重新下载新文件并覆盖安装。";
+const BLURB = "重要：如果旧版出现过【开机 80070002 弹窗 / StartDeadlock 闪退 / 游戏内显示本地桥未运行】，请更新本版。请下载新的 BabelTower-1.0.5-win64.zip（旧文件已归档）。升级方法：删除旧 BabelTower 文件夹，重新解压，重新双击 install-autostart.bat。注意：含桥/脚本改动，需要重新下载完整 zip 包。";
 
 async function loadCookies(page) {
   if (!fs.existsSync(COOKIES_FILE)) return;
@@ -129,7 +131,7 @@ async function setInput(page, selector, value) {
     const boxes = [...document.querySelectorAll("input[type=checkbox]")];
     const target = boxes.find(b => {
       const label = b.closest(".RadioCheckWrapper");
-      return label && /babeltower-013-win64_22047/i.test(label.innerText);
+      return label && /babeltower-105-win64/i.test(label.innerText);
     });
     if (!target) return { ok: false };
     target.click();

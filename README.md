@@ -44,8 +44,12 @@ BabelTower/
 2. 安装到 Deadlock(**二选一**):
    - **推荐**:用 Deadlock Mod Manager 导入(自动分配空闲 pak 槽位)
    - 或手动:复制到 `game/citadel/addons/` 目录(改名为空闲的 `pakNN_dir.vpk`,避免覆盖其它 mod)
-3. 安装 Node.js 18+([nodejs.org](https://nodejs.org)),或使用项目自带的 `portable-node/`
-4. 一键自启(推荐,之后 Steam 直接启动游戏即可,游戏退出桥自动关闭):
+
+3. (推荐)安装 [Universal Mod Manager](https://gamebanana.com/mods/693642):
+   游戏内设置窗口,调 Babel Tower 选项不用开 `/tr` 面板(见下方 [UMM 设置联动](#ummuniversal-mod-manager设置联动))
+
+4. 安装 Node.js 18+([nodejs.org](https://nodejs.org)),或使用项目自带的 `portable-node/`
+5. 一键自启(推荐,之后 Steam 直接启动游戏即可,游戏退出桥自动关闭):
 
 ```powershell
 # 先进入项目目录(换成你的实际路径)
@@ -56,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 > 若提示找不到脚本,说明当前目录不对:先 `cd` 到项目目录,或用完整路径
 > `powershell -ExecutionPolicy Bypass -File "<你的路径>\scripts\autostart.ps1" -Action Install`
 
-5. (可选)不用自启时,双击 `StartDeadlock.bat` 手动启动
+6. (可选)不用自启时,双击 `StartDeadlock.bat` 手动启动
 
 ## 使用
 
@@ -65,6 +69,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 | 聊天输入 `/tr` 回车 | 打开设置面板(鼠标锁定也能用) |
 | 输入框右侧 **译** 按钮 | 打开设置面板(鼠标可用时) |
 | 设置面板 | 选项均为**点击选择**,改完点**保存**生效;ESC 关闭 |
+| [UMM](https://gamebanana.com/mods/693642) 设置窗口 | **装了 UMM 的用户推荐用这个**(见下),不用再开 `/tr` |
 
 设置项:
 
@@ -157,9 +162,40 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 - ✅ **HUD 翻译浮层**:顶栏消息被游戏清理后自动接管显示
 - ✅ **聊天日志轮转**:单文件 5MB 自动归档,30 天清理
 - ✅ **Bing 指数退避**:限流时自动退避重试
+- ✅ **UMM 设置联动**:安装 [Universal Mod Manager](https://gamebanana.com/mods/693642) 后可在其设置窗口调整 Babel Tower 常用选项(不装 UMM 完全不影响本 mod)
 - planned **翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默
 - planned **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
 - planned **Linux 移植**:支持 Steam Deck / Proton 环境
+
+### UMM(Universal Mod Manager)设置联动
+
+安装 [UMM](https://gamebanana.com/mods/693642) 后,它会自动发现 Babel Tower 并提供设置窗口,可调:
+启用翻译 / 服务商 / 目标语言 / 显示模式 / 发送前翻译 / 发送目标语言 / 强制翻译 / 超时 / 翻译自己的消息 / 聊天日志。
+
+> **装了 UMM 的用户:建议统一用 UMM 修改设置,不要混用 `/tr` 面板**。
+>
+> 两处改动都即时生效、都写入同一份本地配置,但 UMM 窗口的**显示**跟随它自己的存档:
+> 混用两边时可能出现"行为已变、UMM 显示未变"的错位(不影响实际翻译,但看着别扭)。
+> 固定用一个入口就不会有显示错位。UMM 里点 **Save Settings** 可把当前值存为它自己的跨重启存档。
+
+UMM 使用要点:
+
+- **改动即时生效**:在 UMM 里改完,下一条消息/发送就按新值执行,无需重进游戏
+- **跨重启保留**:点一次 UMM 窗口的 **Save Settings** 即可;之后 UMM 会记住这些值
+- **想让某项跟随 `/tr` 面板的值**:点该项行旁的 **reset** 图标,清掉 UMM 存档后,
+  该项显示会回到 mod 上报的当前配置
+- **API Key / 区域 / 回退服务商** 不在 UMM 中提供(机密不走 UMM 通道),仍需用 `/tr` 面板或手改 `config/config.json`
+- 中文界面下 UMM 里显示为**巴别塔**,各设置项均为中文;`/tr` 面板界面语言切到 English 后 UMM 标签也变英文
+- 未安装 UMM 时本 mod 行为完全不变,无需任何配置
+
+#### 与 `/tr` 面板的关系(技术细节,选读)
+
+两个入口写的是**同一份本地配置**(本地桥的 `config/config.json`),没有两套设置文件:
+
+- UMM 改动 → 经协议下发 → 即时生效并写入桥配置
+- `/tr` 保存 → 直接写入桥配置,同样即时生效
+- 两边不一致时,**最后改动的一方生效**
+- UMM 的存档(点过 Save Settings 后)只影响 UMM 窗口自己的显示,不会覆盖 `/tr` 保存的值
 
 ## 从源码构建 VPK
 
@@ -208,6 +244,7 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 | 401/403(用 Microsoft 时) | Key 错误;403 检查是否需填区域 |
 | 完全不翻译 | 检查"启用翻译"、目标语言;确认桥日志有请求进来 |
 | 聊天发不出去 | 见 docs/development.md 的回退方案 |
+| 装了/卸了其它 mod 后翻译失效 | Mod Manager 里检查 Babel Tower 是否仍"已启用";pak 槽位可能被重新分配,重新用 Mod Manager 导入一次即可,无需重下完整包 |
 | 其它 | 按[调试教程](docs/debugging.md)收集信息后[提 Issue](https://github.com/c1375rick/BabelTower/issues) |
 
 ## 许可证与致谢

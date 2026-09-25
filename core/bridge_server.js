@@ -84,10 +84,9 @@ nameProtect.watchLocalization();
 // 2026-09-17 v3:原始模板字典(免正则),客户端 token 走查匹配
 try {
   const qcBuilt = quickchat.build();
-  const qcPath = path.join(__dirname, "..", "config", "quickchat.json");
   if (qcBuilt.ok) {
-    // fingerprint 必须随写随传:客户端握手比对兑底指纹全靠这个字段(漏写 = 指纹缺失路径永远告警)
-    fs.writeFileSync(qcPath, JSON.stringify({ version: 3, fingerprint: qcBuilt.fingerprint || null, langs: ["schinese", "english"], templates: qcBuilt.templates }, null, 2) + "\n", "utf8");
+    // 唯一写入口 core/quickchat.js writeBridgeConfig(fingerprint 随写随传,漏写 = 客户端握手永远告警)
+    const qcPath = quickchat.writeBridgeConfig(qcBuilt);
     console.log("[quickchat] templates generated:", qcBuilt.count, "keys, fingerprint:", qcBuilt.fingerprint);
   } else {
     console.log("[quickchat] templates build failed (client fallback in effect):", qcBuilt.error);
