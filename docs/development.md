@@ -2,8 +2,8 @@
 
 ## 1. 当前状态与验证情况
 
-**发布状态**:`1.0.8 (2026-10-04)` 发布 GitHub Release(`v1.0.8`)与 GameBanana;
-版本号跨渠道共用、口径见 `ipc-checklist-6726.md` §16.7。上一版 `1.0.7 (2026-10-03)`。
+**发布状态**:`1.0.9 (2026-10-09)` 发布 GitHub Release(`v1.0.9`)与 GameBanana;
+版本号跨渠道共用、口径见 `ipc-checklist-6726.md` §16.7。上一版 `1.0.8 (2026-10-04)`。
 
 **本地桥(core/)**:零依赖 Node.js,已通过本地端到端测试
 (health / config 读写与打码回传 / translate 与 test 的真实 HTTP 链路;

@@ -579,10 +579,10 @@ if (record.quick) {
 
 | 位置 | 含义 | 当前值 |
 |---|---|---|
-| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.8-6726-btipc07d` |
-| `VERSION` 文件 | 发布号 | `1.0.8` |
-| GitHub Release tag | **已发布版** | `v1.0.8`(@ `ffe9fb8`) |
-| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.0.8`(文件 `babeltower-108-win64.zip` / `1836617`) |
+| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.9-6726-btipc07d` |
+| `VERSION` 文件 | 发布号 | `1.0.9` |
+| GitHub Release tag | **已发布版** | `v1.0.9`(@ `8f54617`) |
+| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.0.9`(文件 `babeltower-109-win64.zip` / `File_1842856`) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
 > **1.0.8 起断言不再写死具体版本号**:原来 `/1\.0\.7-6726-btipc\d/` 每次升版都得手改一次、
@@ -624,6 +624,32 @@ if (record.quick) {
 **同批改动**:`安装使用说明.txt` 新增「第 4 步:给 Deadlock 加 `-condebug` 启动参数(必做)」
 及对应 FAQ(不设就是静默失效,判据 `game console.log found:`),
 `tests/launcher_condebug_guard.test.js` 加 3 条护栏锁住这段说明。
+
+#### 1.0.9 发版记录(2026-10-09)
+
+**发版前查重(铁律,两渠道都查)**:`gh release list` 最新为 `v1.0.8`、
+`node scripts/gb_updates_probe.js 1.0.9` → `含[1.0.9]: false` → **两渠道均未消耗**,可发。
+
+**本版顺带合入了上游**:发版前远端 `main` 领先 3 个提交(`7eefa31`/`9f7db44`/`65da2e1`,
+社区 PR,只在 `README.md` 末尾加第三方启动器章节),与本地 15 个改动文件仅 `README.md` 重叠且行区不相交,
+故先提交本地改动、再 `merge`、再推送。**合并后 README 变了而 zip 里也装 README,因此重打了一次包** ——
+不重打就会出现"仓库 README 已更新、线上包还是旧 README"的自相矛盾。
+
+| 渠道 | 落位结果 |
+|---|---|
+| GitHub | `v1.0.9` = **Latest**(@ `8f54617` = release 提交 `11ca35c` + 上游合并提交),资产 `BabelTower-1.0.9-win64.zip`(37,027,329B)+ `pak01_dir.vpk`(456,899B),发布 `2026-10-09T15:44:02Z` |
+| GameBanana | 上传 `babeltower-109-win64.zip`(`File_1842856`,37,027,329B,MD5 `830EEC26D48893D9…`)→ 行版本 `1.0.9` + 全局版本 `1.0.8`→`1.0.9`(回读 `GLOBAL VERSION: "1.0.9"`);新增更新条目 6 条 changelog(5×Bugfix + 1×Feature)+ blurb(463 字)+ 绑定 109 文件 |
+| 包内自报 | `README.md` → `1.0.9 (2026-10-09)`;抠包核验 VPK 内 `const VERSION = "1.0.9-6726-btipc07d"`、`点右下角 X 关闭` 在,`ESC 关闭` / `1.0.8-6726-btipc07d` / `LCTPanelKey` / `open: focus land` / `BHasKeyFocus` **0 残留** |
+| 装车 | 车上 `pak15_dir.vpk` == `dist/pak01_dir.vpk` == 包内 vpk(均 `456899B`,SHA256 前缀 `878C8A3F4C0C5DE9`),备份 `pre-1.0.9-release-20261009-233555` |
+| 一致性 | `node scripts/version_check.js` ✅(VERSION / 代码常量 / tag / zip 四处对齐);19/19 测试、86 个 JS `node --check` 全过 |
+
+**本版改动**:`/tr` 设置面板 660x600→580x520、关闭按钮从右上角移到底部 footer(原版聊天框遮住面板顶部,
+右上角 X 点不到),5 处口径「ESC 关闭」→「点右下角 X 关闭」;发布/安装链路 7 项脚本缺陷修复
+(详见 release commit `11ca35c`);新增 `scripts/gb_add_update3.js` 作为本版 GB 条目脚本。
+
+> **抠包取证的坑**:验证 VPK 内中文必须**按字节搜**。把 VPK 整体按 Latin-1 解码再 `String.IndexOf`,
+> 中文字节会被重映射成 U+0080–U+00FF,`点右下角` **永远搜不到**,只会得出"文案没进包"的假结论
+> (ASCII 不受影响,所以自报串搜得到)。判据要成立,先确认搜法对中文成立。
 
 #### 口径纪律
 
