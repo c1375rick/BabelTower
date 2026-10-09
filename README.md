@@ -294,4 +294,17 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 - 模拟测试框架(lingua_chat_simtest.js)的编写,用于在无真人队友的环境下回归验证翻译功能
 - 构建/发布脚本的编写与维护
 
-所有代码均由作者审查并测试后发布;作者对项目的功能、质量与合规性负全责。
+以上所有代码均由作者审查并测试后发布;作者对项目的功能、质量与合规性负全责。
+
+### Windows 图形界面启动器（第三方，可选）
+
+[BabelTowerLauncher — 巴别塔启动器](https://github.com/alloywr147/BabelTowerLauncher)
+是独立维护的 Windows x64 可视化启动与更新管理器，适用于官方 Windows 便携完整包。
+
+支持游戏与安装目录自动检测、启动前检查本地桥和翻译接口、
+拖入压缩包更新，以及桥重启与诊断。
+
+- [下载启动器](https://github.com/alloywr147/BabelTowerLauncher/releases)
+- [使用说明与已知限制](https://github.com/alloywr147/BabelTowerLauncher#readme)
+
+当前为测试版，启动器压缩包不包含 Mod 本体。
