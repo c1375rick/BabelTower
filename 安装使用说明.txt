@@ -13,15 +13,23 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
 
 1. 把整个文件夹解压到你喜欢的位置(路径可含中文,但不要带空格,如 D:\BabelTower)
 
-2. 安装游戏内 Mod(二选一):
-   方法 A(推荐):打开 Deadlock Mod Manager,把 pak01_dir.vpk 拖进去导入
-   方法 B(手动):把 pak01_dir.vpk 复制到
+2. 安装游戏内 Mod —— 槽位固定为 addons\pak15_dir.vpk,按下面三步做:
+   **① 先完全退出 Deadlock**(游戏运行中覆盖会留下损坏的半截 VPK)
+   **② 把 addons 里现有的 pak15_dir.vpk 改名备份**(如 pak15_dir.vpk.bak-日期)
+   **③ 再把包里的 pak01_dir.vpk 改名为 pak15_dir.vpk 放进去**
+
+   方法 A(推荐):打开 Deadlock Mod Manager 导入 pak01_dir.vpk
+      (同样要先退出游戏、先备份旧文件)
+   方法 B(手动):
+      把 pak01_dir.vpk 重命名为 pak15_dir.vpk,复制到
       <你的Steam库>\steamapps\common\Deadlock\game\citadel\addons\
-      如果该目录已有同名文件,改成别的编号,如 pak25_dir.vpk
+
+   注意:如果该目录已有我们旧版的 vpk,**覆盖它**,不要改成 pak25_dir.vpk
+   另存一份 —— 新旧两份 mod 同时加载会导致界面重复、行为错乱。
 
 3. 启动本地桥(二选一):
    方法 A(推荐,一劳永逸):**双击 install-autostart.bat**(安装开机自启)
-     之后开机自动启动桥,游戏退出桥自动关闭,什么都不用管。
+     之后开机自动启动桥;桥常驻不随游戏退出(2026-08-12 起),什么都不用管。
      卸载自启:双击 remove-autostart.bat
    方法 B(临时):双击 StartDeadlock.bat(每次玩之前都要双击一次)
 
@@ -43,7 +51,7 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
 5. 启动游戏,进任意一局(训练场也行):
    - 按 Enter 打开聊天,输入 /tr 回车,打开设置面板
    - 点"测试"按钮,应显示"测试成功: 你好"
-   - 点"保存",ESC 关闭面板
+   - 点"保存",点右下角 X 关闭面板
    - 大功告成!队友发外语消息,下方会显示金色中文译文
 
 --------------------------------------------------

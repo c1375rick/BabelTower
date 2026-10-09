@@ -6,7 +6,11 @@
 # ============================================================
 [CmdletBinding()]
 param(
-  [string]$Version = "0.1.0"
+  # 2026-10-09 review: the default was the literal "0.1.0", so running this
+  # script on its own (release.ps1 always passes -Version, we do not) staged
+  # BabelTower-0.1.0-win64 and overwrote that entry in dist. Single source of
+  # truth for the version is the VERSION file - same one release.ps1 reads.
+  [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +20,13 @@ $Stage = Join-Path $Dist "BabelTower-$Version-win64"
 $ZipOut = Join-Path $Dist "BabelTower-$Version-win64.zip"
 
 function Fail($msg) { Write-Host "[package] 错误: $msg" -ForegroundColor Red; exit 1 }
+
+# ---- 版本单一来源:VERSION(release.ps1 读的就是它) ----
+if (-not $Version) {
+  $vfile = Join-Path $Root "VERSION"
+  if (Test-Path $vfile) { $Version = (Get-Content $vfile -Raw -Encoding UTF8).Trim() }
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "版本号无效: '$Version'(传 -Version 或修正 VERSION 文件)" }
 
 # ---- 检查必要输入 ----
 $vpk = Join-Path $Dist "pak01_dir.vpk"

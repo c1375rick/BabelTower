@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.0.8-6726-btipc07d"; // 1.0.8 已于 2026-10-04 发布 GitHub(tag v1.0.8)+ GameBanana;升版时须同步 tests/lc_btipc_guard.test.js 的正则;1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏导致出站队列永久停摆);承 btipc05d 实车首验收口:op=config 读死线 35s→50s + op 忙等窗 37s→52s —— 05c 实车首验已验通(THREW 23→0、requeue 洪水 666→0、开机读 DONE frames=38 bytes=375、boot: config synced、回声 DONE frames=1 每 15s 稳定),但成功那读 total=30229ms 而另一次正好卡在 35025ms、帧只到 seq=22/38:首发起跑竞态(r=1 全404/混BUSY)白烧 5~6 轮 ×2.5s STORM 罚时 + 中途 CRC 重试,35s 余量仅 4.8s,约 1/3 概率超时白等再重试;50s 覆盖最坏 ≈43s。承 btipc05c:① 恢复被误删的 `} else {`(05b 里 op=config 掉进 if(test) → payload undefined → dispatch THREW ×23,test 被覆盖成 op=config)+ ② pumpQueue _btipcDeferred break(消 while 原地自旋刷 requeue 洪水 → 桥 tail 迟 7~24s → 回声超时 → CRC 风暴);承 btipc05b:读写死线分离 + 写应答瘦身 + 面板开读用开机 mask;承 btipc05:BTIPC v1 + ⑥上层整合(出站 TRQ/入站 chat/保存测试读配置 op/健应回声);前版 btipc04
+  const VERSION = "1.0.9-6726-btipc07d"; // 1.0.9 (2026-10-09) 发布 GitHub(tag v1.0.9) + GameBanana(前版 1.0.8 于 2026-10-04 发布 tag v1.0.8);升版时须同步 tests/lc_btipc_guard.test.js 的正则;1.0.9 内容:/tr 面板 660x600->580x520 + 关闭按钮从标题栏移到底部 footer(顶部被原版 HUD 遮挡点不到)+ 5 处文档口径改「点右下角 X 关闭」+ 7 项脚本缺陷修复;前版 1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏导致出站队列永久停摆);承 btipc05d 实车首验收口:op=config 读死线 35s→50s + op 忙等窗 37s→52s —— 05c 实车首验已验通(THREW 23→0、requeue 洪水 666→0、开机读 DONE frames=38 bytes=375、boot: config synced、回声 DONE frames=1 每 15s 稳定),但成功那读 total=30229ms 而另一次正好卡在 35025ms、帧只到 seq=22/38:首发起跑竞态(r=1 全404/混BUSY)白烧 5~6 轮 ×2.5s STORM 罚时 + 中途 CRC 重试,35s 余量仅 4.8s,约 1/3 概率超时白等再重试;50s 覆盖最坏 ≈43s。承 btipc05c:① 恢复被误删的 `} else {`(05b 里 op=config 掉进 if(test) → payload undefined → dispatch THREW ×23,test 被覆盖成 op=config)+ ② pumpQueue _btipcDeferred break(消 while 原地自旋刷 requeue 洪水 → 桥 tail 迟 7~24s → 回声超时 → CRC 风暴);承 btipc05b:读写死线分离 + 写应答瘦身 + 面板开读用开机 mask;承 btipc05:BTIPC v1 + ⑥上层整合(出站 TRQ/入站 chat/保存测试读配置 op/健应回声);前版 btipc04
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -880,7 +880,7 @@
     optUILangEn: { zh: "English(英语)", en: "English" },
     btnSave: { zh: "保存", en: "Save" },
     btnTest: { zh: "测试", en: "Test" },
-    btnHint: { zh: "选项点击选择 · 改完点保存 · ESC 关闭", en: "Click to select \u00b7 Save when done \u00b7 ESC to close" },
+    btnHint: { zh: "选项点击选择 · 改完点保存 · 点右下角 X 关闭", en: "Click to select \u00b7 Save when done \u00b7 Click X to close" },
     bridgeUp: { zh: "运行中", en: "Running" },
     bridgeDown: { zh: "未运行", en: "Not running" },
     bridgePort: { zh: "端口", en: "port" },
@@ -4621,7 +4621,8 @@ function injectTranslation(row, sig, text, fragment) {
   // entry 由 XML onkeydown="LCTEntryKey(event, this)" 显式传入 = 触发事件的 TextEntry 面板
   function LCTEntryKey(e, entry) {
     const k = e && (e.key || e.KeyCode);
-    const esc = (k === "Escape" || k === "esc" || k === 27);
+    const kc = e && (e.KeyCode !== undefined ? e.KeyCode : e.keyCode);
+    const esc = (k === "Escape" || k === "esc" || k === 27 || kc === 27);
     if (esc) {
       log("entry esc: closing settings");
       LCTEntryBlur(entry);   // 先释放焦点(entry = 真实 TextEntry, DropInputFocus 才有效)

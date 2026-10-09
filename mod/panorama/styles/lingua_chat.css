@@ -77,11 +77,15 @@
   box-shadow: 0px 0px 8px rgba(255, 179, 0, 0.9);
 }
 
-/* ---- 设置面板(默认隐藏,居中弹窗) ---- */
+/* ---- 设置面板(默认隐藏,居中弹窗) ----
+   尺寸 2026-10-09 从 660x600 收到 580x520:面板是 CitadelChat(原版仅
+   350px 宽,见 game_chat.vcss_c 的 CitadelChat{width:350px})的子节点,
+   align: center center 是相对它居中,所以每侧都会溢出 —— 面板越大,
+   越容易压到上/左/右的原版 HUD。见 docs/development.md「设置面板定位」。 */
 .LCTSettingsPanel {
   align: center center;
-  width: 660px;
-  height: 600px;
+  width: 580px;
+  height: 520px;
   background-color: gradient( linear, 0% 0%, 0% 100%, from( #141a20 ), color-stop( 0.48, #0e1318 ), to( #0a0d10 ) );
   border: 1px solid rgba(255, 252, 244, 0.08);
   border-radius: 6px;
@@ -113,6 +117,10 @@
   vertical-align: center;
 }
 
+/* 关闭按钮:2026-10-09 从标题栏(顶部)移到底部 footer。
+   玩家反馈 /tr 菜单顶部会被原版 UI 盖住,导致右上角的 X 点不到;
+   底部是不被遮挡的一侧,作为面板唯一的关闭入口。
+   本按钮是 footer 流内最后一个子项,LCTKeyHint 占满剩余宽度把它推到最右。 */
 .LCTCloseButton {
   align: right center;
   width: 32px;
@@ -123,6 +131,7 @@
   color: #a39c8e;
   font-size: 15px;
   font-weight: bold;
+  margin-left: 6px;
 }
 
 .LCTCloseButton:hover {
@@ -289,6 +298,8 @@
   font-size: 11px;
   margin-left: 8px;
   white-space: nowrap;
+  /* 占满 footer 剩余宽度,把关闭按钮顶到最右(见 .LCTCloseButton 注释) */
+  width: fill-parent-flow( 1.0 );
 }
 
 /* ---- 选择控件(点击切换/展开菜单) ---- */

@@ -100,13 +100,11 @@
 				<Label text="译" />
 			</Button>
 		</Panel>
-		<!-- Babel Tower 设置面板(默认隐藏,居中弹窗;ESC 关闭) -->
+		<!-- Babel Tower 设置面板(默认隐藏,居中弹窗;右下角 X 关闭) -->
 		<Panel id="LCTSettingsPanel" class="LCTSettingsPanel" canfocus="true" oncancel="LCTCloseSettings();">
 			<Panel class="LCTSettingsHeader">
 				<Label id="LCTPanelTitle" class="LCTPanelTitle" text="Babel Tower 设置" />
-				<Button id="LCTCloseBtn" class="LCTCloseButton" onactivate="LCTCloseSettings();">
-					<Label text="X" />
-				</Button>
+				<!-- 关闭按钮已移至底部 footer(2026-10-09):顶部会被原版 HUD 盖住 -->
 			</Panel>
 			<Panel class="LCTSettingsBody">
 				<Panel class="LCTSettingsList">
@@ -262,7 +260,11 @@
 			<Button id="LCTTestBtn" class="LCTBtn LCTBtnTest" onactivate="LCTTest();">
 				<Label id="LCTTestBtnLabel" text="测试" />
 			</Button>
-			<Label id="LCTKeyHint" class="LCTKeyHint" text="选项点击选择 · 改完点保存 · ESC 关闭" />
+			<Label id="LCTKeyHint" class="LCTKeyHint" text="选项点击选择 · 改完点保存 · 点右下角 X 关闭" />
+			<!-- 关闭按钮放底部:顶部被原版 HUD 遮挡时底部仍可点 -->
+			<Button id="LCTCloseBtn" class="LCTCloseButton" onactivate="LCTCloseSettings();">
+				<Label text="X" />
+			</Button>
 		</Panel>
 	</Panel>
 	<!-- Babel Tower 隐藏 HTML 桥面板(必须用 <HTML> 标签在 XML 声明,运行时 CreatePanel 不生效) -->

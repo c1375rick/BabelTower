@@ -56,7 +56,9 @@ const DEFAULTS = {
     force: false,
     timeoutMs: 15000,
   },
-  // 进程监视:Deadlock 退出时桥自动关闭(设为 false 或启动参数 --no-watch 可禁用)
+  // 进程监视:检测 deadlock.exe 的启动/退出。2026-08-12 起桥常驻 —— 游戏退出后
+  // 桥保持运行等待下次启动(见 bridge_server.js checkGameProcess)。
+  // 设为 false 或启动参数 --no-watch 只是不启动监视器本身,不会让桥退出。
   watchGame: true,
   watchGameExe: "deadlock.exe",
   // 文件日志(相对项目根目录;默认落盘到 logs/bridge.log,便于用户反馈时提供调试信息)

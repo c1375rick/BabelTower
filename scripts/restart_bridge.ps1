@@ -8,7 +8,8 @@
 #   双击 F:\BabelTower\restart_bridge.bat
 #   或 powershell -ExecutionPolicy Bypass -File scripts\restart_bridge.ps1
 #
-# 注意: 保持默认 watchGame 模式(游戏退出桥自动关闭), 不加 --no-watch。
+# 注意: 保持默认 watchGame 模式(桥只监视游戏进程, 2026-08-12 起游戏退出后
+# 桥常驻不退出), 不加 --no-watch。
 # ------------------------------------------------------------------
 $ErrorActionPreference = "Stop"
 

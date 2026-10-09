@@ -1,8 +1,9 @@
 @echo off
 rem ============================================================
 rem  Babel Tower - Install auto-start (double-click to run)
-rem  Registers the local bridge to start at Windows login and
-rem  exit automatically when Deadlock closes.
+rem  Registers the local bridge to start at Windows login.
+rem  The bridge stays resident: opening or closing the game does
+rem  not stop it (changed 2026-08-12).
 rem ============================================================
 cd /d "%~dp0"
 if not exist "%~dp0scripts\autostart.ps1" (
