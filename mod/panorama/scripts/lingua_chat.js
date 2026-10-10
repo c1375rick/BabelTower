@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.0.9-6726-btipc07d"; // 1.0.9 (2026-10-09) 发布 GitHub(tag v1.0.9) + GameBanana(前版 1.0.8 于 2026-10-04 发布 tag v1.0.8);升版时须同步 tests/lc_btipc_guard.test.js 的正则;1.0.9 内容:/tr 面板 660x600->580x520 + 关闭按钮从标题栏移到底部 footer(顶部被原版 HUD 遮挡点不到)+ 5 处文档口径改「点右下角 X 关闭」+ 7 项脚本缺陷修复;前版 1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏导致出站队列永久停摆);承 btipc05d 实车首验收口:op=config 读死线 35s→50s + op 忙等窗 37s→52s —— 05c 实车首验已验通(THREW 23→0、requeue 洪水 666→0、开机读 DONE frames=38 bytes=375、boot: config synced、回声 DONE frames=1 每 15s 稳定),但成功那读 total=30229ms 而另一次正好卡在 35025ms、帧只到 seq=22/38:首发起跑竞态(r=1 全404/混BUSY)白烧 5~6 轮 ×2.5s STORM 罚时 + 中途 CRC 重试,35s 余量仅 4.8s,约 1/3 概率超时白等再重试;50s 覆盖最坏 ≈43s。承 btipc05c:① 恢复被误删的 `} else {`(05b 里 op=config 掉进 if(test) → payload undefined → dispatch THREW ×23,test 被覆盖成 op=config)+ ② pumpQueue _btipcDeferred break(消 while 原地自旋刷 requeue 洪水 → 桥 tail 迟 7~24s → 回声超时 → CRC 风暴);承 btipc05b:读写死线分离 + 写应答瘦身 + 面板开读用开机 mask;承 btipc05:BTIPC v1 + ⑥上层整合(出站 TRQ/入站 chat/保存测试读配置 op/健应回声);前版 btipc04
+  const VERSION = "1.0.10-6726-btipc07d"; // 1.0.10 (2026-10-10) 发布 GitHub(tag v1.0.10) + GameBanana(前版 1.0.9 于 2026-10-09 发布 tag v1.0.9);升版时须同步 tests/lc_btipc_guard.test.js 的正则;1.0.10 内容:B1 安全修复(删 GET ?d= 写通道→410 + 跨站守卫三闸 + ACAO 10 处收敛,桥侧活体 5/5 验证)+ F6($.Schedule 取消改走 $.CancelScheduled/cancelSched 助手 + ctprobe-v2,修 clearTimeout 实测无效→双 finishJob 槽位超发)+ P0-2 doneFail/pumpQueue 双结算修复(settle 留痕,游戏内 E2E 实证)+ 统一测试入口 tests/run-tests.js(显式清单 24 项,决策 node:test)+ docs/compatibility.md 基线存档与冻结清单;前版 1.0.9 内容:/tr 面板 660x600->580x520 + 关闭按钮从标题栏移到底部 footer(顶部被原版 HUD 遮挡点不到)+ 5 处文档口径改「点右下角 X 关闭」+ 7 项脚本缺陷修复;前版 1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏导致出站队列永久停摆);承 btipc05d 实车首验收口:op=config 读死线 35s→50s + op 忙等窗 37s→52s —— 05c 实车首验已验通(THREW 23→0、requeue 洪水 666→0、开机读 DONE frames=38 bytes=375、boot: config synced、回声 DONE frames=1 每 15s 稳定),但成功那读 total=30229ms 而另一次正好卡在 35025ms、帧只到 seq=22/38:首发起跑竞态(r=1 全404/混BUSY)白烧 5~6 轮 ×2.5s STORM 罚时 + 中途 CRC 重试,35s 余量仅 4.8s,约 1/3 概率超时白等再重试;50s 覆盖最坏 ≈43s。承 btipc05c:① 恢复被误删的 `} else {`(05b 里 op=config 掉进 if(test) → payload undefined → dispatch THREW ×23,test 被覆盖成 op=config)+ ② pumpQueue _btipcDeferred break(消 while 原地自旋刷 requeue 洪水 → 桥 tail 迟 7~24s → 回声超时 → CRC 风暴);承 btipc05b:读写死线分离 + 写应答瘦身 + 面板开读用开机 mask;承 btipc05:BTIPC v1 + ⑥上层整合(出站 TRQ/入站 chat/保存测试读配置 op/健应回声);前版 btipc04
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -808,6 +808,18 @@
     try {
       $.Msg(LOG_PREFIX + " " + msg);
     } catch (e) {}
+  }
+
+  // F6 修复(2026-10-10 游戏内实测):当前 Panorama 无 clearTimeout/setTimeout 全局
+  // (ctprobe 实测 typeof 均 undefined),$.Schedule 句柄的官方取消器是 $.CancelScheduled
+  // (diag-globals 枚举证实存在)。取消失败的后果:旧通道 outgoing 20s 超时回调晚到 →
+  // 双 finishJob → 槽位超发(MAX_ACTIVE_REQUESTS=1 被击穿)。
+  function cancelSched(h) {
+    if (!h) return;
+    try {
+      if (typeof $.CancelScheduled === "function") $.CancelScheduled(h);
+    } catch (e) {}
+    try { clearTimeout(h); } catch (e2) {} // 双保险:若某版本以 clearTimeout 实现
   }
 
   // djb2 哈希:用于生成稳定的译文 Label id(滚动回收后重建用)
@@ -1960,6 +1972,14 @@ function injectTranslation(row, sig, text, fragment) {
               job.done({ ok: false, error: "dispatch_threw:" + _err.slice(0, 80) });
             } else if (job.kind === "chat" && job.sig) {
               try { State.seen.delete(job.sig); } catch (e2) {}
+              // 与 doneFail 同因:只放开 seen 不够,inflight 僵尸组会让同文本永远不再翻译
+              if (job.group && !job.group.settled) {
+                try { deliverError(job.group, "dispatch_threw"); }
+                catch (e5) {
+                  try { job.group.settled = true; } catch (e6) {}
+                  try { if (State.inflight.get(job.group.key) === job.group) State.inflight.delete(job.group.key); } catch (e7) {}
+                }
+              }
             }
           } catch (e3) {
             log("settlement threw: " + String((e3 && (e3.message || e3)) || e3).slice(0, 120));
@@ -2130,7 +2150,7 @@ function injectTranslation(row, sig, text, fragment) {
     if (job.kind === "outgoing") {
       // 已超时:done+finishJob 已由超时回调完成,这里直接退出
       if (job._timedOut) return;
-      if (job._timeout) { try { clearTimeout(job._timeout); } catch (e) {} job._timeout = null; }
+      if (job._timeout) { cancelSched(job._timeout); job._timeout = null; }
       if (payload && payload.ok && payload.translation) {
         // 还原占位符(英雄/物品名)
         let translation = job.nameMap ? restoreGameNames(payload.translation, job.nameMap) : payload.translation;
@@ -2510,9 +2530,31 @@ function injectTranslation(row, sig, text, fragment) {
       }
       let settled = false;
       // op 任务失败必须交 {ok:false,error}(旧通道语义,状态栏能显示具体错误);
-      // chat/outgoing 仍 done(null,null) → 发原文/显示原行。
+      // outgoing 仍 done(null,null) → 发原文(job.done 有 once 防重)。
+      // chat 没有 done 回调(job.done 为 undefined,调用只会被 try/catch 静默吞掉)——
+      // 必须就地结算 group,否则 State.inflight 留下 settled=false 的僵尸组:
+      // 同文本的新行会永远合并进僵尸组、seen 也不释放,桥恢复后该文本整个会话不再翻译
+      // (审查 2026-10-10;旧通道此路径走 handleBridgePayload→failJob→deliverError,BTCPIC 化时漏掉)。
       const doneFail = function (errCode) {
         if (isOp) { try { job.done({ ok: false, error: errCode }); } catch (e) {} }
+        else if (job.kind === "chat") {
+          if (job.group && !job.group.settled) {
+            // 可观测性(游戏内实测 2026-10-10):结算点必须留痕,否则 E2E 无法区分
+            // "走了 deliverError" 与 "静默吞掉"(修复前的样子)
+            log(tag + ": settle chat group err=" + String(errCode || "btipc_fail") +
+                " text=" + String((job.record && job.record.text) || "").slice(0, 40));
+            try { deliverError(job.group, String(errCode || "btipc_fail")); }
+            catch (e) {
+              // deliverError 自身异常也要保证不留僵尸组(settled/inflight 二态必须收敛)
+              try { job.group.settled = true; } catch (e2) {}
+              try { if (State.inflight.get(job.group.key) === job.group) State.inflight.delete(job.group.key); } catch (e3) {}
+              try { State.seen.delete(job.sig); } catch (e4) {}
+            }
+          } else {
+            // group 已被别的路径结算(如 settle_threw 兜底):只放开行级去重
+            try { State.seen.delete(job.sig); } catch (e) {}
+          }
+        }
         else { try { job.done(null, null); } catch (e) {} }
       };
       const settleOriginal = function (why, errCode) {
@@ -7161,6 +7203,39 @@ function injectTranslation(row, sig, text, fragment) {
       healthCheck();
       $.Schedule(5.0, healthLoop);
     });
+    // clearTimeout 语义探针(一次性,审查 F6 游戏内实测):$.Schedule 返回的句柄能否被
+    // clearTimeout 取消,决定旧面板通道 outgoing 超时(handleBridgePayload 里
+    // clearTimeout(job._timeout),句柄来自 $.Schedule)是否会晚到双结算 finishJob
+    // → 槽位超发(MAX_ACTIVE_REQUESTS=1 被击穿)。每次启动 1 行日志,两种结果互斥:
+    //   FIRED     = clearTimeout 对 $.Schedule 无效(风险实锤)
+    //   CANCELLED = 可取消(风险排除)
+    try {
+      let _ctFired = false;
+      const _ctH = $.Schedule(1.5, function () {
+        _ctFired = true;
+        log("ctprobe: FIRED (clearTimeout 不能取消 $.Schedule) typeof setTimeout=" +
+            typeof setTimeout + " clearTimeout=" + typeof clearTimeout);
+      });
+      try { clearTimeout(_ctH); } catch (e) { log("ctprobe: clearTimeout THREW " + expErr(e)); }
+      $.Schedule(3.5, function () {
+        if (!_ctFired) log("ctprobe: CANCELLED (clearTimeout 可取消 $.Schedule) typeof setTimeout=" +
+            typeof setTimeout + " clearTimeout=" + typeof clearTimeout);
+      });
+    } catch (e) { log("ctprobe: setup THREW " + expErr(e)); }
+    // v2(F6 修复采用的取消器):CancelScheduled 语义验证。1.6s 本该触发,先取消;
+    // 3.6s 时报结果 —— CANCELLED = 修复可用;FIRED = 该 API 无效,需回退方案。
+    try {
+      let _v2Fired = false;
+      const _ctH2 = $.Schedule(1.6, function () {
+        _v2Fired = true;
+        log("ctprobe2: FIRED (CancelScheduled 无效!)");
+      });
+      if (typeof $.CancelScheduled === "function") { $.CancelScheduled(_ctH2); }
+      else { log("ctprobe2: CancelScheduled 不存在(修复无效,需回退方案)"); }
+      $.Schedule(3.6, function () {
+        if (!_v2Fired) log("ctprobe2: CANCELLED (CancelScheduled 生效,F6 修复可用)");
+      });
+    } catch (e) { log("ctprobe2: THREW " + expErr(e)); }
     // 日志缓冲兜底冲刷(每 8 秒;确保不丢最后一小批)
     $.Schedule(8.0, function logLoop() {
       flushChatLog();

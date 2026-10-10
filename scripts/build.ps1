@@ -114,6 +114,32 @@ function Compile-File($compiler, $contentFile, $gameFile) {
   Write-Host "   ok: $([System.IO.Path]::GetFileName($gameFile))"
 }
 
+# ---------- 构建前护栏:JS 语法检查(node --check) ----------
+# resourcecompiler 对 .js 基本只做转封,不做语法校验 —— 语法错误的脚本会一路打进
+# vjs_c,直到游戏内加载才 SyntaxError 整段不执行(用户视角 = "装了没反应")。
+# 构建期用 node --check 拦截。node 优先取仓库自带 portable-node,其次 PATH;
+# 都没有则降级为警告跳过(构建不硬依赖 node,但发布铁律要求本护栏必须过)。
+function Find-Node {
+  $local = Join-Path $ProjectRoot "portable-node\node.exe"
+  if (Test-Path $local) { return $local }
+  $cmd = Get-Command node -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  return ""
+}
+
+function Test-JsSyntax($node, $dir) {
+  $jsFiles = Get-ChildItem $dir -Recurse -File -Filter *.js -ErrorAction SilentlyContinue
+  $bad = @()
+  foreach ($f in $jsFiles) {
+    & $node --check $f.FullName 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { $bad += $f.FullName }
+  }
+  if ($bad.Count -gt 0) {
+    Fail ("JS 语法错误(编译产物进游戏才会炸,构建期拦截):`n" + ($bad -join "`n"))
+  }
+  Write-Host "   node --check: $($jsFiles.Count) 个 .js 全部通过"
+}
+
 # ---------- 主流程 ----------
 Write-Step "Babel Tower build (Mode=$Mode, Addon=$AddonName)"
 
@@ -130,10 +156,23 @@ if (-not $compiler) {
   Fail "找不到 resourcecompiler.exe,请用 -Csdk12Root 指定 Reduced CSDK 12 根目录"
 }
 Write-Step "resourcecompiler: $compiler"
+try {
+  $cv = (Get-Item $compiler).VersionInfo.FileVersion
+  if ($cv) { Write-Step "resourcecompiler 版本: $cv(可复现性取证:同一 CSDK 才能复出同一产物)" }
+} catch {}
 
 # 0. 构建前护栏:源码非法控制字符扫描(必须在编译前)
 Test-SourceClean
 Write-Step "源码扫描通过(无非法控制字符)"
+
+# 0b. 构建前护栏:全部 .js 语法检查(必须在编译前;见 Test-JsSyntax 注释)
+$node = Find-Node
+if ($node) {
+  Write-Step "node: $node"
+  Test-JsSyntax $node $ModDir
+} else {
+  Write-Host "[build] 警告: 找不到 node(portable-node 或 PATH),跳过 JS 语法护栏 —— 发布构建必须带 node 重跑!" -ForegroundColor Yellow
+}
 
 $contentAddon = Join-Path $Csdk12Root "content\citadel_addons\$AddonName"
 $gameAddon = Join-Path $Csdk12Root "game\citadel_addons\$AddonName"

@@ -289,7 +289,9 @@ async function onBtipcTranslateReq(parsed) {
   }
 }
 
-// 窗口 GC(§6):END 帧服务后 10s,或 60s 无活动
+// 窗口 GC(§6):END 帧服务后 END_GC_MS(45s),或 60s 无活动。
+// 曾用 10s → 桥在客户端仍在重试时删窗 → 128 面板全 404 → 20 连发 4 次 crc_dead(2026-10-02 实车)。
+// 改动这两个常量前先看 tests/btipc/window_gc.test.js 钉的不变量。
 setInterval(function () {
   const n = btipcTable.gc();
   if (n > 0) log("info", "BTIPC GC removed=" + n + " remain=" + btipcTable.size());
@@ -616,7 +618,8 @@ function sendJson(res, status, obj) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // ACAO 收敛(B1 2026-10-10):本函数不再无条件发 `*`;跨源回显统一走 requestHandler
+  // 顶部的 applyCors(仅回显本地同源 Origin)。无 CORS 头 = 浏览器默认阻读。
   res.end(body);
 }
 
@@ -832,14 +835,12 @@ function bridgePage(query) {
 }
 
 // ---------- API 路由 ----------
-// GET 兼容:游戏侧 $.AsyncWebRequest 只能发 GET,请求体通过 ?d=<JSON> 传递;
-// 无 d 时 translate/test 用 query 参数(text/source/target/provider)构造。
+// GET 兼容:translate/test 无 body 时用 query 参数(text/source/target/provider)构造。
+// 2026-10-10 B1:?d=<JSON> 请求体通道整体删除 —— 那是 AsyncWebRequest 时代的无鉴权
+// 写面(config 保存可改 baseUrl/endpoint → 下一次翻译把 Key 发去攻击者服务器)。
+// 写操作只剩 POST 与 BTIPC op=config 两条受控路径。
 function bodyFromRequest(url, bodyObj) {
   if (bodyObj) return bodyObj;
-  const d = url.searchParams.get("d");
-  if (d) {
-    try { return JSON.parse(d); } catch (e) {}
-  }
   if (url.pathname === "/api/v1/translate") {
     return {
       text: url.searchParams.get("text") || "",
@@ -995,20 +996,12 @@ async function handleApi(req, res, url, bodyObj) {
 
   if (p === "/api/v1/config") {
     if (req.method === "GET") {
-      // GET + d 参数:游戏侧 AsyncWebRequest 保存配置(读配置保持无 d)
-      const d = url.searchParams.get("d");
-      if (d) {
-        let saveBody = null;
-        try { saveBody = JSON.parse(d); } catch (e) {}
-        if (saveBody && saveBody.config) {
-          const current = configStore.load();
-          const next = configStore.applyMaskedUpdate(current, saveBody.config || {});
-          configStore.save(next);
-          log("info", "config saved (GET)");
-          // 保存响应最小化:游戏侧只读 res.ok;但保持带精简 config 以兼容加载分支
-          sendJson(res, 200, { ok: true, config: configStore.maskCompact(next) });
-          return;
-        }
+      // 2026-10-10 B1:GET + ?d= 保存配置通道删除(无鉴权写 → 恶意网页可改 baseUrl
+      // 等端点,下一次翻译把 API Key 外泄)。保存走 POST 或 BTIPC op=config(游戏现用)。
+      if (url.searchParams.get("d")) {
+        log("warn", "B1 rejected legacy GET config write, host=" + String(req.headers.host || "-"));
+        sendJson(res, 410, { ok: false, error: "config_write_removed_use_post_or_op_config" });
+        return;
       }
       // 读取用精简 mask:完整 mask 约 700 字符会超出 title 通道(约 512)上限,
       // 导致游戏侧 JSON 解析失败(2026-08-14 保存失效根因)
@@ -1088,6 +1081,57 @@ function makeRgbPng(w, h) {
   return Buffer.concat([PNG_SIG, pngChunk("IHDR", ihdr), pngChunk("IDAT", idat), pngChunk("IEND", Buffer.alloc(0))]);
 }
 
+// B1 安全取证(游戏内实测 2026-10-10):每个 method+path+origin+host 组合首次落一行,
+// 上限 30 —— 目的是拿到游戏 Panorama 实际发出的 Origin/Host(决定端点校验与 ACAO 收敛
+// 怎么写),不是全量访问日志。去重后 /btipc/dl 高频轮询也只占 1 行。
+const REQ_HDR_SEEN = new Set();
+const REQ_HDR_CAP = 30;
+function logReqHdr(req, pathname) {
+  try {
+    const org = req.headers.origin || "-";
+    const hst = req.headers.host || "-";
+    const key = req.method + "|" + pathname + "|" + org + "|" + hst;
+    if (REQ_HDR_SEEN.has(key) || REQ_HDR_SEEN.size >= REQ_HDR_CAP) return;
+    REQ_HDR_SEEN.add(key);
+    log("info", "REQHDR method=" + req.method + " path=" + pathname + " origin=" + org + " host=" + hst);
+  } catch (e) {}
+}
+
+// B1(2026-10-10):跨站请求守卫。见 requestHandler 内的三道闸说明。
+const LOOPBACK_HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\]):\d+$/;
+function crossSiteBlockReason(req) {
+  try {
+    const host = String(req.headers.host || "");
+    if (!LOOPBACK_HOST_RE.test(host)) return "host:" + host.slice(0, 60);
+    const sfs = req.headers["sec-fetch-site"];
+    const org = req.headers.origin;
+    if (sfs == null && org == null) return null; // 游戏 / 本地工具:零浏览器元数据
+    if (sfs != null && sfs !== "same-origin" && sfs !== "none") {
+      return "sec-fetch-site:" + String(sfs).slice(0, 40);
+    }
+    if (org != null) {
+      const o = String(org);
+      const ok = o === "http://127.0.0.1:" + PORT || o === "http://localhost:" + PORT || o === "http://[::1]:" + PORT;
+      if (!ok) return "origin:" + o.slice(0, 80);
+    }
+    return null; // 同源元数据(未来复活的 bridgePage 场景):放行
+  } catch (e) {
+    return "guard_error";
+  }
+}
+// B1:ACAO 收敛 —— 只对本地同 Origin 回显,其余请求不发 CORS 头(浏览器默认阻读)。
+// 游戏不读跨域响应(实测零 Origin),回显仅服务于未来同源 bridgePage 复活。
+function applyCors(req, res) {
+  try {
+    const org = req.headers.origin;
+    if (org == null) return;
+    const o = String(org);
+    if (o === "http://127.0.0.1:" + PORT || o === "http://localhost:" + PORT || o === "http://[::1]:" + PORT) {
+      res.setHeader("Access-Control-Allow-Origin", o);
+    }
+  } catch (e) {}
+}
+
 const requestHandler = (req, res) => {
   let url;
   try {
@@ -1097,6 +1141,26 @@ const requestHandler = (req, res) => {
     res.end("bad request");
     return;
   }
+  logReqHdr(req, url.pathname);
+  // ---------- B1 安全边界(2026-10-10 游戏内实测取证后落地) ----------
+  // 实测(REQHDR):游戏 Panorama 请求不带 Origin / Sec-Fetch-* 元数据,Host 恒为
+  // 127.0.0.1:8791;游戏 HTTP 只打 /btipc/dl + /test.png + /dim.png。
+  // 恶意网页的 fetch/img 必带 Sec-Fetch-Site: cross-site(或跨源 Origin);
+  // DNS rebinding 则 Host 变成攻击者域名。三道闸:
+  //   ① Host 非回环前缀 → 拒(DNS rebinding);
+  //   ② 带浏览器元数据但非同源 → 拒(恶意网页);
+  //   ③ 无元数据 → 放行(游戏 / 本地工具,与实测一致)。
+  // 配套:GET ?d= 写通道整体删除(config 保存 → 410;translate/test/log 不再解析 ?d=),
+  // 写操作只剩 POST 与 BTIPC op=config 两条受控路径。
+  const _csReason = crossSiteBlockReason(req);
+  if (_csReason) {
+    log("warn", "B1 blocked: " + req.method + " " + url.pathname + " reason=" + _csReason);
+    res.statusCode = 403;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify({ ok: false, error: "forbidden_cross_site" }));
+    return;
+  }
+  applyCors(req, res);
 
   // EXP6729: 图片响应状态码差分 — 200/404/500/204 验证 ImageLoaded 是否只在成功时触发。
   // 若触发与状态码相关 = 响应状态即入站位元通道(事件驱动,J4 天然异步)。
@@ -1106,7 +1170,7 @@ const requestHandler = (req, res) => {
     log("info", "PROBE-IMG code=" + code + " n=" + n);
     res.statusCode = (code >= 200 && code < 600) ? code : 200;
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     if (code === 204) { res.end(); return; }
     if (code >= 200 && code < 300) {
       res.setHeader("Content-Type", "image/png");
@@ -1130,7 +1194,7 @@ const requestHandler = (req, res) => {
     res.statusCode = 200;
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.end(makeRgbPng(1, 1));
     return;
   }
@@ -1144,7 +1208,7 @@ const requestHandler = (req, res) => {
     const eRound = url.searchParams.get("round") || "-";
     const eCode = parseInt(url.searchParams.get("code") || "0", 10) || 0;
     log("info", "EIT id=" + eId + " round=" + eRound + " code=" + eCode);
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.setHeader("Cache-Control", "no-store, max-age=0");
     if (eCode >= 200 && eCode < 300) {
       res.statusCode = eCode;
@@ -1187,7 +1251,7 @@ const requestHandler = (req, res) => {
     res.statusCode = 200;
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.end(makeRgbPng(1, 1));
     return;
   }
@@ -1202,7 +1266,7 @@ const requestHandler = (req, res) => {
     res.statusCode = 200;
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.end(makeRgbPng(1, 1));
     return;
   }
@@ -1213,7 +1277,7 @@ const requestHandler = (req, res) => {
     res.statusCode = 200;
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.end(makeRgbPng(133, 77));
     return;
   }
@@ -1229,7 +1293,7 @@ const requestHandler = (req, res) => {
     res.statusCode = 200;
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.end(PNG1x1);
     return;
   }
@@ -1245,7 +1309,7 @@ const requestHandler = (req, res) => {
     });
     res.statusCode = out.status;
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     if (out.status === 200) {
       res.setHeader("Content-Type", "image/png");
       res.end(makeRgbPng(1, 1));
@@ -1259,7 +1323,7 @@ const requestHandler = (req, res) => {
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    /* ACAO 已收敛到 requestHandler 顶部 applyCors(B1 2026-10-10) */
     res.end(bridgePage(url.searchParams));
     return;
   }

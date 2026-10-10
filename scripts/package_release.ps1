@@ -16,8 +16,8 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Dist = Join-Path $Root "dist"
-$Stage = Join-Path $Dist "BabelTower-$Version-win64"
-$ZipOut = Join-Path $Dist "BabelTower-$Version-win64.zip"
+# 注意:$Stage/$ZipOut 不能在这里算 —— 此时 $Version 还是参数默认值(独立运行时为 ""),
+# 要等下方从 VERSION 读完再算(见版本单一来源节后的计算点)。
 
 function Fail($msg) { Write-Host "[package] 错误: $msg" -ForegroundColor Red; exit 1 }
 
@@ -27,6 +27,12 @@ if (-not $Version) {
   if (Test-Path $vfile) { $Version = (Get-Content $vfile -Raw -Encoding UTF8).Trim() }
 }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "版本号无效: '$Version'(传 -Version 或修正 VERSION 文件)" }
+
+# 2026-10-10 修:这两个必须在 VERSION 读取**之后**算。此前算点在读取前,独立运行
+# (不带 -Version,与 release.ps1 不同)时 $Version 还是 "" → 暂存目录成
+# BabelTower--win64、zip 名也错 —— 1.0.9 走 release.ps1 显式传参一直掩盖着这个顺序缺陷。
+$Stage = Join-Path $Dist "BabelTower-$Version-win64"
+$ZipOut = Join-Path $Dist "BabelTower-$Version-win64.zip"
 
 # ---- 检查必要输入 ----
 $vpk = Join-Path $Dist "pak01_dir.vpk"
@@ -114,7 +120,12 @@ if (-not $smokeOk) {
   Fail "冒烟测试失败: 打包产物的桥无法启动(缺文件或依赖错误,见上方日志)"
 }
 Stop-Process -Id $smokeProc.Id -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 500
+# 2026-10-10 修:固定 500ms 不保证进程真正退净,Compress-Archive 紧随其后就撞
+# "node.exe being used by another process"(1.0.10 独立打包时实炸)。轮询到句柄释放。
+for ($w = 0; $w -lt 40; $w++) {
+  Start-Sleep -Milliseconds 250
+  if (-not (Get-Process -Id $smokeProc.Id -ErrorAction SilentlyContinue)) { break }
+}
 # 清理冒烟测试产物,不随包发布
 # (quickchat.json 是桥启动时从游戏本地化重新生成的,每次启动都会覆盖,不该进包固化)
 Remove-Item (Join-Path $Stage "config\config.json") -Force -ErrorAction SilentlyContinue
@@ -131,6 +142,20 @@ Copy-Item (Join-Path $Root "LICENSE_NOTICE.md") (Join-Path $Stage "LICENSE_NOTIC
 # ---- 打包 ----
 Write-Host "==> 压缩..."
 if (Test-Path $ZipOut) { Remove-Item $ZipOut -Force }
+# 2026-10-10 修:新复制+被执行过的 node.exe 会被实时防护以写意图短暂独占(两次独立
+# 打包均实炸 "being used by another process",失败后数秒再探又是 FREE —— 典型扫描窗口)。
+# 压缩前按 ZipArchive 的打开方式(Read + Share Read)轮询到可读为止,最多 30s。
+$stageNode = Join-Path $Stage "portable-node\node.exe"
+$nodeReadable = $false
+for ($w = 0; $w -lt 60; $w++) {
+  try {
+    $probe = [System.IO.File]::Open($stageNode, 'Open', 'Read', 'Read')
+    $probe.Close()
+    $nodeReadable = $true
+    break
+  } catch { Start-Sleep -Milliseconds 500 }
+}
+if (-not $nodeReadable) { Fail "portable-node\node.exe 持续被占用(30s),拒绝在锁定状态出包" }
 Compress-Archive -Path "$Stage\*" -DestinationPath $ZipOut -CompressionLevel Optimal
 if (-not (Test-Path $ZipOut)) { Fail "压缩失败" }
 

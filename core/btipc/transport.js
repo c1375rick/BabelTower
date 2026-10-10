@@ -105,7 +105,7 @@ function serveDL(table, q) {
     idx = rN - tr.frameStartRound; // §4.0 现算,不存 nextFrameIdx
     frame = idx < tr.frames.length ? tr.frames[idx] : tr.frames[tr.frames.length - 1]; // §6.4 兜底末帧
     if (idx >= tr.frames.length - 1 && tr.endServedAt === null) {
-      tr.endServedAt = table.now(); // §6:END 首次被服务 → +10s GC
+      tr.endServedAt = table.now(); // §6:END 首次被服务 → +END_GC_MS(45s)GC,必须 > 客户端最坏重试跨度(见 window.js)
     }
   }
 

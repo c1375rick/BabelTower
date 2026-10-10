@@ -1,5 +1,8 @@
 {
   "license": "GPL-3.0",
+  "scripts": {
+    "test": "node tests/run-tests.js"
+  },
   "devDependencies": {
     "puppeteer-core": "^25.5.0"
   }
