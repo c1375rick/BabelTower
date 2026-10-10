@@ -116,18 +116,20 @@ $notesFile = Join-Path $env:TEMP "babeltower_notes_$Version.md"
 [System.IO.File]::WriteAllText($notesFile, $notes, (New-Object System.Text.UTF8Encoding($true)))
 if ($WhatIf) { Write-Host "  (WhatIf) 更新日志将写入: $notesFile" }
 
-# ---------- 版本号自增(先算出,供 WhatIf 展示) ----------
-$parts = $Version -split '\.'
-$next = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
-
-# ---------- 发布 ----------
+# ---------- 推送 ----------
+# 2026-10-10:停用原"VERSION 补丁号自动自增"步骤。原因:
+#  1) tests/lc_btipc_guard.test.js 锁 "const VERSION 主版本 == VERSION 文件",单边自增
+#     VERSION 会让测试当场转红(两处必须一起改,而 const 是打进 VPK 的,发布后不能单边动);
+#  2) §16.7 版本口径 = VERSION 文件即发布号(发完停在已发版本,下一窗口手动双处升 1.0.11);
+#  3) 1.0.8/1.0.9 实际均手动升版,从未走过这个自增 —— 此步是旧流程遗留。
 if ($WhatIf) {
-  Write-Host ""
-  Write-Host "===== WhatIf 演练结果 =====" -ForegroundColor Yellow
-  Write-Host "将执行: gh release create $Tag $Zip $Vpk --title 'Babel Tower v$Version' $(if($Draft){'--draft'})"
-  Write-Host "之后将: VERSION $Version -> $next 补丁号自增并提交推送"
+  Write-Host "  (WhatIf) 之后将: git push origin main(发布提交上远端;不自动自增 VERSION)"
   exit 0
 }
+
+Step "推送 main 到 origin..."
+git push origin main 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { Fail "git push 失败,请手动推送" }
 
 Step "创建 GitHub Release..."
 $args = @("release", "create", $Tag, $Zip, $Vpk, "--title", "Babel Tower v$Version", "--notes-file", $notesFile)
@@ -135,13 +137,7 @@ if ($Draft) { $args += "--draft" }
 gh @args 2>&1 | Select-Object -Last 2
 if ($LASTEXITCODE -ne 0) { Fail "gh release create 失败" }
 
-# ---------- 版本号自增 ----------
-Step "版本号自增: $Version -> $next"
-[System.IO.File]::WriteAllText((Join-Path $Root "VERSION"), $next + "`n", (New-Object System.Text.UTF8Encoding($false)))
-git add VERSION
-git commit -m "Bump version to $next" 2>&1 | Out-Null
-git push origin main 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) { Fail "git push 失败,请手动推送" }
-
+# ---------- 收尾 ----------
+# (原"版本号自增"段已于 2026-10-10 停用,见上方推送节说明;VERSION 停在已发版本)
 Write-Host ""
 Write-Host "发布完成: https://github.com/c1375rick/BabelTower/releases/tag/$Tag" -ForegroundColor Green
