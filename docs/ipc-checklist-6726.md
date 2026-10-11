@@ -579,10 +579,10 @@ if (record.quick) {
 
 | 位置 | 含义 | 当前值 |
 |---|---|---|
-| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.9-6726-btipc07d` |
-| `VERSION` 文件 | 发布号 | `1.0.9` |
-| GitHub Release tag | **已发布版** | `v1.0.9`(@ `8f54617`) |
-| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.0.9`(文件 `babeltower-109-win64.zip` / `File_1842856`) |
+| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.10-6726-btipc07d` |
+| `VERSION` 文件 | 发布号 | `1.0.10` |
+| GitHub Release tag | **已发布版** | `v1.0.10`(@ `a9846e1`) |
+| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.0.10`(文件 `babeltower-1010-win64.zip` / `File_1843493`) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
 > **1.0.8 起断言不再写死具体版本号**:原来 `/1\.0\.7-6726-btipc\d/` 每次升版都得手改一次、
@@ -651,11 +651,37 @@ if (record.quick) {
 > 中文字节会被重映射成 U+0080–U+00FF,`点右下角` **永远搜不到**,只会得出"文案没进包"的假结论
 > (ASCII 不受影响,所以自报串搜得到)。判据要成立,先确认搜法对中文成立。
 
+#### 1.0.10 发版记录(2026-10-10)
+
+**发版前查重(铁律,两渠道都查)**:`gh release list` 最新为 `v1.0.9`、
+`node scripts/gb_updates_probe.js 1.0.10` → `含[1.0.10]: false` → **两渠道均未消耗**,可发。
+
+| 渠道 | 落位结果 |
+|---|---|
+| GitHub | `v1.0.10` = **Latest**(@ `a9846e1`:release 提交 `5fb64cf` + 工具修复 `a9846e1` 同批推送),资产 `BabelTower-1.0.10-win64.zip`(37,031,023B,sha256 `a843c14c49…`)+ `pak01_dir.vpk`(462,012B,sha256 `a073799357ee604d…`),发布 `2026-10-10T03:08:22Z` |
+| GameBanana | 上传 `babeltower-1010-win64.zip`(`File_1843493`,37,031,023B,MD5 `8A7BBE9C3DC0C98E…`)→ 行版本 `1.0.10` + 全局版本 `1.0.9`→`1.0.10`;更新条目 5 条 changelog(4×Bugfix + 1×Improvement)+ blurb(377 字)+ 绑定 `File_1843493`,探针 `PUBLISH_OK` 复验 |
+| 包内自报 | `README.md` → `1.0.10 (2026-10-10)`;**游戏内活体** `loaded v1.0.10-6726-btipc07d`(比抠包更强的证据);Release vpk 资产 sha256 `a0737993…` 与装车槽位、构建产物逐字节同哈希 |
+| 装车 | 车上 `pak15_dir.vpk`(462,012B,SHA256 前缀 `A073799357EE604D`)== `dist/pak01_dir.vpk` == Release vpk 资产;备份 `pre-1.0.10-release-20261010-095837`(460,165B) |
+| 一致性 | `node scripts/version_check.js` ✅(VERSION / 代码常量 / tag / zip 四处对齐);全量 24/24 测试三轮、构建 `node --check` 4/4。**注**:gh 打的远端 tag 拉不回来时(GFW/代理断),可 `git tag v1.0.10 <sha>` 本地补打 —— `gh release create` 从当时远端 HEAD 打 tag,事实一致 |
+| 游戏内 | 冒烟五项 + 僵尸组 E2E 全绿:`ctprobe2: CANCELLED`(F6 机制实证)、停桥双通道 `FAIL kind=timeout` + `settle chat group err=timeout` 留痕、拉桥后 `translated …僵尸二号` 复活;`B1 blocked` 仅攻击探针 2 条、零误伤;JS 错 0 |
+
+**本版改动**:B1 安全修复(删 `GET ?d=` 写通道→410 + 跨站三闸 + ACAO 10 处收敛)、
+F6(`$.Schedule` 取消改走官方 `$.CancelScheduled` + `ctprobe-v2`)、P0-2 双结算修复
+(settle 留痕,E2E 实证);统一测试入口 `tests/run-tests.js`(显式清单 24 项)+
+`docs/compatibility.md`(发版快照 + BTIPC 冻结清单四显式路径);新增 `scripts/gb_add_update4.js`
+作为本版 GB 条目脚本(文件键 `babeltower-1010` 精确勾选,勾不到文件即中止,防发无绑定条目)。
+
+**本版顺手修的发版链路缺陷**:`release.ps1` 尾部"VERSION 补丁自增"只改单边 → 会打红
+`lc_btipc_guard` 的两处同步锁,已停用;`package_release.ps1` 三处 —— `$Stage/$ZipOut` 在读
+VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒烟进程固定等 500ms 句柄
+未释放、压缩撞实时防护扫描窗口(`node.exe` 短暂独占)→ 分别改为读取后重算、退出轮询、
+压缩前可读轮询。
+
 #### 口径纪律
 
 1. **发版前两个渠道的历史都要查**:`gh release list` **和** GB 的 `_aFiles` / 更新列表(`scripts/gb_files_probe.js`、`gb_updates_probe.js`)。版本号在**任一渠道**被用掉即视为已消耗。
 2. `README.md` 的版本行是**包内自报版本**,改版本必须连它一起改并重新打包,否则线上包自相矛盾。
-3. 只有在"包与页面必须一致"的窗口期内,才让 `const VERSION` 等于发布版;发布一结束立刻推到下一开发版。
+3. 只有在"包与页面必须一致"的窗口期内,才让 `const VERSION` 等于发布版;发布结束**不自动推**下一开发版 —— `release.ps1` 的单边自增已于 2026-10-10 停用(会打红 `lc_btipc_guard` 两处同步锁),升 1.0.11 时 `const VERSION` 与 `VERSION` 文件**两处一起改**。
 4. §16.5 实车日志那行是 `v1.0.7-6726-btipc05e`,因为当日 14:49 那次 `1.0.6` 对齐只发未装车,后已作废重发为 1.0.7。
 
 ### 16.8 快捷语音 16 条红 fixture:测试数据过期,不是功能回归(2026-10-03)
