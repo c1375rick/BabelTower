@@ -2442,7 +2442,7 @@ function injectTranslation(row, sig, text, fragment) {
       const isChat = job.kind === "chat";
       // btipc05:设置面板「保存/测试」+ 开机读配置(op=config/test)同路迁移 ——
       // 旧通道 6726 后必死,这三个操作是用户唯一能直接感知的「面板坏了」。
-      const isOp = job.kind === "bridge" && (job.op === "config" || job.op === "test");
+      const isOp = job.kind === "bridge" && (job.op === "config" || job.op === "test" || job.op === "log");
       tag = isOp ? job.op + " btipc" : (isChat ? "chat btipc" : "outgoing btipc");
       if (BTIPC.busy()) {
         // 旧通道 6726 后已死,忙时不立刻回落:短等重投(≤6 次 ×0.5s / 12s 死线;
@@ -2485,6 +2485,12 @@ function injectTranslation(row, sig, text, fragment) {
         if (job.op === "test") {
           payload = "op=test;tm=" + Math.max(4000, (State.cfg.timeoutMs || 15000) - 4000) + "\n" + raw;
           timeoutMs = Math.max(State.cfg.timeoutMs || 15000, 15000);
+        } else if (job.op === "log") {
+          // P2(2026-10-11):聊天日志迁 BTIPC —— 冻结信封白名单不含 log,首行 op=log 由桥侧
+          // 识别(bridge matchChatLogTrq);应答 {ok,written} 极小(1 帧),与 config 写同 8s
+          // 死线。载荷由 flushChatLog 按 600B 切批,必不顶 680B 行预算(顶了会落死旧通道)。
+          payload = "op=log\n" + raw;
+          timeoutMs = 8000;
         } else {
           // btipc05b:读/写死线分离。读应答 maskCompact ≈400B=40 帧 × 真机 600ms/帧
           // ≈24s —— 原 8s 必超时(实车 config FAIL 34 连败的根因);写应答已瘦到
@@ -3346,13 +3352,43 @@ function injectTranslation(row, sig, text, fragment) {
     pushEntry(buildLogEntry(record));
   }
 
+  // P2(2026-10-11):BTIPC TRQ 载荷上限 680B(spec §9 行预算)—— 旧面板通道无上限,50 条
+  // 一批可能超限(超限会落死通道,日志照丢)。按 UTF-8 字节切批:信封体 + 全部行 ≤600B;
+  // 剩余留在缓冲,本批发出成功后 1s 继续排空(慢滴灌,不与翻译抢队列)。
+  const LOG_BATCH_MAX_BYTES = 600;
   function flushChatLog() {
     State.logFlushing = false;
     flushPendingLogs(); // 超时的挂起条目先兜底进缓冲,一并发送
-    const lines = State.logBuffer.splice(0, 50);
+    const lines = [];
+    const overhead = btipcUtf8Bytes(JSON.stringify({ matchId: getMatchId(), lines: [] })).length;
+    let bytes = overhead;
+    while (State.logBuffer.length && lines.length < 50) {
+      const one = State.logBuffer[0];
+      let oneBytes = btipcUtf8Bytes(JSON.stringify(one)).length + 1; // + ","
+      let entry = one;
+      if (bytes + oneBytes > LOG_BATCH_MAX_BYTES && lines.length === 0) {
+        // 单条即超批(超长消息):截断 text 到 300 字符仍超才丢(旧通道单条上限本就 2000 字符)
+        entry = Object.assign({}, one, { text: String(one.text || "").slice(0, 300) });
+        oneBytes = btipcUtf8Bytes(JSON.stringify(entry)).length + 1;
+        if (overhead + oneBytes > LOG_BATCH_MAX_BYTES) {
+          State.logBuffer.shift();
+          log("chat log: entry too large, dropped");
+          continue;
+        }
+      } else if (bytes + oneBytes > LOG_BATCH_MAX_BYTES) {
+        break; // 填满本批,剩余等下一批
+      }
+      State.logBuffer.shift();
+      lines.push(entry);
+      bytes += oneBytes;
+    }
     if (!lines.length) return;
     bridgePost("log", { matchId: getMatchId(), lines: lines }, function (res) {
-      if (res && !res.ok) {
+      if (res && res.ok && State.logBuffer.length) {
+        // P2:缓冲还有剩余 → 1s 后继续排空(每批独立走队列,不阻塞翻译)
+        State.logFlushing = true;
+        $.Schedule(1.0, flushChatLog);
+      } else if (res && !res.ok) {
         // 失败重放一次,避免丢日志;仍失败则丢弃(不阻塞翻译)
         if (lines.length && !State.logBuffer.__retried) {
           State.logBuffer.__retried = true;

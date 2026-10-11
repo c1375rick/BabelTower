@@ -221,17 +221,48 @@ async function runBtipcOp(op, body, timeoutMs) {
       return { ok: false, error: (e && e.message) || "unknown_error" };
     }
   }
+  if (op === "log") {
+    // P2(2026-10-11):与 POST /api/v1/log 逐字段同语义(bad_json / skipped / written /
+    // chat_log_write_failed),复用 appendChatLog —— 迁移只换通道,不换契约。
+    // 注意:形参名是 body(env.text 传入的 JSON 字符串),不得再 let body 遮蔽(05c 教训:
+    // 同名遮蔽 + 引用不存在的变量,strict 下 ReferenceError 被 catch 吞成 bad_json 假象)。
+    let bodyObj = null;
+    try { bodyObj = JSON.parse(body || ""); } catch (e) { return { ok: false, error: "bad_json" }; }
+    const cfgL = configStore.load();
+    if (!(cfgL.chatLog && cfgL.chatLog.enabled)) return { ok: true, skipped: "chat_log_disabled" };
+    try {
+      const n = appendChatLog(cfgL, bodyObj);
+      log("info", "chat log written (btipc): " + n + " lines");
+      return { ok: true, written: n };
+    } catch (e) {
+      log("warn", "chat log write failed (btipc): " + (e && e.message ? e.message : String(e)));
+      return { ok: false, error: "chat_log_write_failed" };
+    }
+  }
   return { ok: false, error: "unknown_op" };
 }
 
 // ⑥ 翻译请求:窗口先存在(frames=null → 客户端拿 BUSY),数据帧后填充。
 // 翻译耗时(100ms~8s/超时)完全落在窗口等待期,不污染 BTIPC 传输状态机。
+// P2(2026-10-11):op=log 聊天日志迁 BTIPC(旧面板 HTTP 通道 6726 后死,日志静默丢失)。
+// 冻结信封白名单只有 config|test(transport.js 冻结,不为 log 开口),日志载荷由桥侧按首行
+// 形状识别:首行恰为 "op=log"(6 字符 + 换行)。聊天/出站文本单行无换行,不存在误吞;
+// 形状不符 → false → 照旧按裸文本翻译(向后兼容)。
+function matchChatLogTrq(raw) {
+  if (typeof raw !== "string") return false;
+  const nl = raw.indexOf("\n");
+  if (nl !== 6) return false;
+  return raw.slice(0, nl) === "op=log";
+}
+
 async function onBtipcTranslateReq(parsed) {
   const win = parsed.win;
   const raw = parsed.payload.toString("utf8");
   // ⑥-整合信封(checklist §14):首行 t=<target>[;tm=<ms>] 携带出站目标语言与翻译超时。
   // 无信封(/bt6737 冒烟、E2E 裸文本)→ undefined,回退 config 默认(向后兼容)。
-  const env = btipcCh.parseTrqEnvelope(raw);
+  let env = btipcCh.parseTrqEnvelope(raw);
+  // P2:op=log 合成 env —— 复用 op 通道全链路(BUSY 窗/应答帧/异常收敛),text = 信封体(JSON)。
+  if (!env.op && matchChatLogTrq(raw)) env = { text: raw.slice(7), target: undefined, timeoutMs: undefined, op: "log" };
   const text = env.text;
   const targetLanguage = env.target;
   const tReq = Date.now();

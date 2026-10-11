@@ -31,6 +31,7 @@ const files = [
   "tests/btipc/frame.test.js",
   "tests/btipc/index_surface_guard.test.js",
   "tests/btipc/line_budget_guard.test.js",
+  "tests/btipc/op_log_guard.test.js",
   "tests/btipc/simulator.test.js",
   "tests/btipc/translate.test.js",
   "tests/btipc/window_gc.test.js",

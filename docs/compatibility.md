@@ -107,5 +107,5 @@
 | ID | 现象 | 状态 |
 |---|---|---|
 | 幽灵异常 | `pumpQueue dispatchJob(job)` 调用点空消息抛出,两 catch 未留痕(引擎行号=编译行−4 已标定) | 间歇性,报告级;暂不改码,靠 settle 留痕 + 槽位健康观察 |
-| `op=log` 聊天日志上传 | 仍走死面板通道,6726 起静默丢失 | 迁 BTIPC 列为架构 P2 验收用例 |
+| `op=log` 聊天日志上传 | ~~仍走死面板通道,6726 起静默丢失~~ **已迁 BTIPC**(2026-10-11 P2:桥侧 `matchChatLogTrq` 首行识别 + `runBtipcOp` log 分支镜像旧端点语义;客户端并入 BTIPC op 通道 + 600B 切批;旧 `/api/v1/log` 端点保留未删) | ✅ E2E 4/4(written=1/落盘/bad_json/裸文本兼容;护栏 `op_log_guard` 5 断言) |
 | GET `/api/v1/translate?...` 零元数据 GET 付费面 | 旧浏览器(无 Sec-Fetch)残余面 | 残余风险接受(B1 主洞已堵);如需彻底可后续同样删除 |
