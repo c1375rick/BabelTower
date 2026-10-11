@@ -29,6 +29,7 @@ const files = [
   // BTIPC 协议层(冻结区行为钉)
   "tests/btipc/crc.test.js",
   "tests/btipc/frame.test.js",
+  "tests/btipc/index_surface_guard.test.js",
   "tests/btipc/line_budget_guard.test.js",
   "tests/btipc/simulator.test.js",
   "tests/btipc/translate.test.js",

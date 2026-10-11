@@ -84,26 +84,27 @@ const syncData = require("./sync_data.js");
 //   REQ(③/⑤)回声 conformance —— 同步 setFrames(原文),/bt6736 走这条,不碰翻译 API。
 //   TRQ(⑥)翻译            —— 先建窗(frames=null → BUSY),翻译完成后异步 setFrames。
 // 翻译层只见 BTIPC 的 window/frames,不见 Image panel、200/404、round、CRC、STORM。
-const btipcWin = require("./btipc/window.js");
-const btipcXfer = require("./btipc/transport.js");
-const btipcFramer = require("./btipc/framer.js");
-const btipcTable = new btipcWin.WindowTable();
+// P1(2026-10-11):耦合面收口 —— 桥业务只经 GameChannel 壳触达 BTIPC(壳零逻辑转发,
+// 四个冻结模块与线上帧格式不变;契约钉 tests/btipc/index_surface_guard.test.js)。
+// 壳内只许转发;发现 btipc 内部缺陷 → 记独立问题 + 申请解冻,禁止在壳里绕改。
+const { GameChannel } = require("./transport/game_channel.js");
+const btipcCh = new GameChannel();
 
 // 翻译失败时的信号:空 END 帧(len=0)。协议零改动(§3 无新位段),客户端 translate 模式下
 // 收到空串即判定 translate_error。回声模式不做此判定 —— "" 是合法回声。
 const btipcTrqInflight = new Set();
 
 function onBtipcGameLine(line) {
-  const parsed = btipcXfer.parseGameLine(line);
+  const parsed = btipcCh.parseGameLine(line);
   if (!parsed.ok) {
     if (parsed.skip) return; // 普通 [LCT] 行,与 BTIPC 无关
     log("warn", "BTIPC drop (" + parsed.reason + ")"); // §14.1:静默 drop + 一行 WARN
     return;
   }
   if (parsed.cmd === "REQ") {
-    const tr = btipcTable.acceptReq(parsed.win, parsed.id, parsed.payload);
+    const tr = btipcCh.acceptReq(parsed.win, parsed.id, parsed.payload);
     try {
-      tr.frames = btipcFramer.encode(parsed.id, parsed.payload);
+      tr.frames = btipcCh.encode(parsed.id, parsed.payload);
       log("info", "BTIPC REQ w=" + parsed.win + " id=" + parsed.id + " len=" + parsed.len + " echo frames=" + tr.frames.length);
     } catch (e) {
       log("warn", "BTIPC encode failed: " + e.message);
@@ -112,7 +113,7 @@ function onBtipcGameLine(line) {
     onBtipcTranslateReq(parsed);
   } else if (parsed.cmd === "CAN") {
     btipcTrqInflight.delete(parsed.win);
-    btipcTable.cancel(parsed.win);
+    btipcCh.cancel(parsed.win);
     log("info", "BTIPC CAN w=" + parsed.win);
   }
 }
@@ -230,12 +231,12 @@ async function onBtipcTranslateReq(parsed) {
   const raw = parsed.payload.toString("utf8");
   // ⑥-整合信封(checklist §14):首行 t=<target>[;tm=<ms>] 携带出站目标语言与翻译超时。
   // 无信封(/bt6737 冒烟、E2E 裸文本)→ undefined,回退 config 默认(向后兼容)。
-  const env = btipcXfer.parseTrqEnvelope(raw);
+  const env = btipcCh.parseTrqEnvelope(raw);
   const text = env.text;
   const targetLanguage = env.target;
   const tReq = Date.now();
   // acceptReq 建窗;frames 保持 null → serveDL 返 BUSY。setFrames 失败(窗口已 GC)时静默丢弃。
-  const tr = btipcTable.acceptReq(win, parsed.id, parsed.payload);
+  const tr = btipcCh.acceptReq(win, parsed.id, parsed.payload);
   tr.translate = true;
   btipcTrqInflight.add(win);
   log("info", "BTIPC TRQ w=" + win + " id=" + parsed.id + " len=" + parsed.len +
@@ -272,12 +273,12 @@ async function onBtipcTranslateReq(parsed) {
   let frames;
   try {
     // 失败也 setFrames:空 END 帧让客户端走到 Promise 结算,而不是耗到 REQ_TIMEOUT。
-    frames = btipcFramer.encode(parsed.id, out == null ? "" : out);
+    frames = btipcCh.encode(parsed.id, out == null ? "" : out);
   } catch (e) {
     log("warn", "BTIPC TRQ encode failed w=" + win + ": " + e.message);
     return; // 留在 BUSY,由客户端 REQ_TIMEOUT 兜底
   }
-  if (!btipcTable.setFrames(win, frames)) {
+  if (!btipcCh.setFrames(win, frames)) {
     log("info", "BTIPC TRQ w=" + win + " dropped: window gone (GC/CAN)");
     return;
   }
@@ -293,8 +294,8 @@ async function onBtipcTranslateReq(parsed) {
 // 曾用 10s → 桥在客户端仍在重试时删窗 → 128 面板全 404 → 20 连发 4 次 crc_dead(2026-10-02 实车)。
 // 改动这两个常量前先看 tests/btipc/window_gc.test.js 钉的不变量。
 setInterval(function () {
-  const n = btipcTable.gc();
-  if (n > 0) log("info", "BTIPC GC removed=" + n + " remain=" + btipcTable.size());
+  const n = btipcCh.gc();
+  if (n > 0) log("info", "BTIPC GC removed=" + n + " remain=" + btipcCh.size());
 }, 10000);
 // 首次运行生成词典文件;桥启动后自动落盘高频词(自适应学习)
 // (顶部 for 循环已逐个 require 过五个模块,这里直接拿句柄用,不重复 require)
@@ -1301,7 +1302,7 @@ const requestHandler = (req, res) => {
   // BTIPC v1 下行(规格 docs/btipc-v1.md §3.1/§6):每面板一位 —— 位=1 → 200 PNG,位=0 → 404。
   // 帧号只由轮号现算 idx = r - frameStartRound(§4.0 幂等),未知窗口 → 404。
   if (url.pathname === "/btipc/dl") {
-    const out = btipcXfer.serveDL(btipcTable, {
+    const out = btipcCh.serveDL({
       w: url.searchParams.get("w") || "",
       r: url.searchParams.get("r") || "",
       p: url.searchParams.get("p") || "",
