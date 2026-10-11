@@ -43,9 +43,13 @@ ok(/function enqueueBridge\(op, data, done, isRead\)/.test(lc), "enqueueBridge �
 ok(/read: !!isRead/.test(lc), "job.read 记录在 job 上");
 ok(/const isRead = !!job\.read \|\|/.test(lc),
   "outgoingViaBtipc 用 job.read 决定 50s 读死线(get 应答可能比分片还大)");
-// 折进 config 后,原有三个 viaBtipc 判定点不用改;钉住它们仍然只认 config/test
-ok(/\(job\.kind === "bridge" && \(job\.op === "config" \|\| job\.op === "test"\)\)/.test(lc),
-  "viaBtipc 判定点保持 config|test(get 已折叠,不该出现新 op 名)");
+// 折进 config 后,原有三个 viaBtipc 判定点不用改;钉住它们只认 config/test
+// (+ P2 受控例外 log:log 不进冻结信封白名单,靠桥侧 matchChatLogTrq 首行识别,
+//   属侧信道;health/gamenames/quickchat 仍禁止当独立 op,见下方断言)。
+// 2026-10-11:漏补 log 会让 log op 落 dispatchViaPanel 死通道(实车抓获:真实聊天
+//   日志 11 天未落盘),故此处放宽为「恰好多一个 log」;加 log 之外的 op 仍会打红。
+ok(/\(job\.kind === "bridge" && \(job\.op === "config" \|\| job\.op === "test"( \|\| job\.op === "log")?\)\)/.test(lc),
+  "viaBtipc 判定点保持 config|test(允许受控例外 log,不得新增其它信封 op)");
 ok(!/job\.op === "health"|job\.op === "gamenames"|job\.op === "quickchat"/.test(lc),
   "没有把 health/gamenames/quickchat 当独立 op 塞进信封(会被 transport 白名单拒)");
 

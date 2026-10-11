@@ -77,6 +77,24 @@ test("客户端:isOp 含 log + payload=op=log\\n + 8s 写死线(链尾 config �
   assert.ok(/timeoutMs = 8000;/.test(logSlice), "log 写死线 8s(应答 {ok,written} 1 帧)");
 });
 
+test("客户端:所有 config|test op 谓词都同步含 log(防 op 集合漂移)", () => {
+  // 客户端把 op 走 BTIPC 的判断散在多处:isOp(载荷构造)、dispatchJob 的
+  // viaBtipc 路由谓词、outgoingViaBtipc 的 dispatch-threw 兜底。2026-10-11 实车
+  // 抓获:2445 isOp 认 log(测试也钉了它),但 2655 viaBtipc 路由谓词漏补 log ——
+  // log op 不满足 viaBtipc → 落 dispatchViaPanel 死通道 → 真实聊天日志 11 天
+  // 从未落盘。任何一处漏补都会让 log 掉死旧通道,故钉:凡出现
+  // `job.op === "config" || job.op === "test"` 的谓词,其后必须紧跟 `|| job.op === "log"`。
+  const re = /job\.op === "config" \|\| job\.op === "test"/g;
+  let m; let n = 0;
+  while ((m = re.exec(lcSrc)) !== null) {
+    n += 1;
+    const tail = lcSrc.slice(m.index, m.index + m[0].length + 40);
+    assert.ok(/\|\| job\.op === "log"/.test(tail),
+      "第 " + n + " 处 config|test 谓词未同步含 log(会让 log 掉死旧通道),上下文:" + tail.slice(0, 60));
+  }
+  assert.ok(n >= 3, "至少 3 处 config|test op 谓词(isOp/dispatch-threw/viaBtipc 路由),实测 " + n);
+});
+
 test("客户端:flushChatLog 按 600B 切批 + 成功续排 + 失败重放 + 超批截断", () => {
   const batch = /const LOG_BATCH_MAX_BYTES = (\d+);/.exec(lcSrc);
   assert.ok(batch && Number(batch[1]) <= 600, "批预算 ≤600B(680B 行预算留余量)");

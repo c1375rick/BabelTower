@@ -107,7 +107,7 @@
 | ID | 现象 | 状态 |
 |---|---|---|
 | 幽灵异常 | `pumpQueue dispatchJob(job)` 调用点空消息抛出,两 catch 未留痕(引擎行号=编译行−4 已标定) | 间歇性,报告级;暂不改码,靠 settle 留痕 + 槽位健康观察 |
-| `op=log` 聊天日志上传 | ~~仍走死面板通道,6726 起静默丢失~~ **已迁 BTIPC**(2026-10-11 P2:桥侧 `matchChatLogTrq` 首行识别 + `runBtipcOp` log 分支镜像旧端点语义;客户端并入 BTIPC op 通道 + 600B 切批;旧 `/api/v1/log` 端点保留未删) | ✅ E2E 4/4(written=1/落盘/bad_json/裸文本兼容;护栏 `op_log_guard` 5 断言) |
+| `op=log` 聊天日志上传 | ~~仍走死面板通道,6726 起静默丢失~~ **已迁 BTIPC**(2026-10-11 P2:桥侧 `matchChatLogTrq` 首行识别 + `runBtipcOp` log 分支镜像旧端点语义;客户端并入 BTIPC op 通道 + 600B 切批;旧 `/api/v1/log` 端点保留未删)。**1.0.11 装车窗实车抓获并修复客户端路由漏点**:客户端 op 集合谓词写了 4 处(isOp/payload/viaBtipc 路由/dispatch-threw 兜底),前两处含 log 而 `dispatchJob` 的 viaBtipc 路由谓词漏补 → log op 不满足路由条件、落 `dispatchViaPanel` 死通道静默死(btipc08 起 11 天真实聊天日志从未落盘;E2E 直写 console.log 绕过客户端派发,故只验桥侧未暴露)。修复:2655 viaBtipc + 2631 兜底谓词补 log;新增 `op_log_guard` op 集合漂移护栏(凡 `config\|\|test` 谓词必须同步含 log) | ✅ E2E 4/4 + **真机实弹端到端**(17:36:11 `logs/chat/session_1791711175.jsonl` 落盘字段齐全,客户端 `log btipc: ok dt=7318ms`) |
 | GET `/api/v1/translate?...` 零元数据 GET 付费面 | 旧浏览器(无 Sec-Fetch)残余面 | 残余风险接受(B1 主洞已堵);如需彻底可后续同样删除 |
 
 ## 7. 桥侧收口审计(P1-P3 完成,2026-10-11;1.0.11 窗口变更清单底稿)
@@ -135,4 +135,5 @@
 | P1 | 新增 `core/btipc/index.js`(统一门)+ `core/transport/game_channel.js`(零逻辑壳);`bridge_server` 3 require + 12 处引用换址 | 契约钉 `index_surface_guard`(同源/行为等价/源码锁);25/25;新桥活体 health/config 200 |
 | P2 | `op=log` 迁 BTIPC:桥侧首行识别 + `runBtipcOp` log 分支(镜像 `/api/v1/log` 语义);客户端并入 op 通道 + 600B 切批 + 成功续排 | 契约钉 `op_log_guard`(6 断言);活体 E2E 4/4(`scripts/btipc_op_log_e2e.js`);26/26 |
 | P2 顺手修 | 05c 同类缺陷:`runBtipcOp` 形参 `body` 被 `let body` 遮蔽 + 引用不存在的 `text`(strict ReferenceError 被 catch 伪装成 bad_json)—— E2E 实车抓获,形参已进护栏断言 | 活体 E2E 复跑 4/4 |
-| 遗留 | 游戏内打字剧本 E2E(含 log 实弹)随 1.0.11 装车窗复跑;客户端改动未上真车(源码钉 + 桥侧行为已验) | 阶段 C 必做 |
+| P2 实车修 | **viaBtipc 路由谓词漏 log**(2655)+ dispatch-threw 兜底漏 log(2631):op 集合谓词 4 处只补了 isOp/payload 两处,路由处漏 → log op 落死通道静默丢。E2E 直写 console.log 绕过客户端派发故未暴露;装车窗打字实弹抓获。护栏:`op_log_guard` 新增 op 集合漂移钉(凡 `config\|\|test` 谓词必须同步含 log);`lc_btipc07_guard` viaBtipc 断言放宽为「恰好多一个受控例外 log」 | 26/26;真机实弹落盘 `session_1791711175.jsonl` |
+| 僵尸组演练(1.0.11 实车) | 停桥:翻译作业 20s 超时 → `FAIL kind=timeout -> send original` settle 留痕 + 游戏内失败提示,聊天不卡死;拉桥:回声 15s 内自动判活,下一条消息翻译恢复(`chat btipc: ok`) | 游戏内实弹三步全过 |
