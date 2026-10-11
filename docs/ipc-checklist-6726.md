@@ -579,9 +579,9 @@ if (record.quick) {
 
 | 位置 | 含义 | 当前值 |
 |---|---|---|
-| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.10-6726-btipc07d` |
-| `VERSION` 文件 | 发布号 | `1.0.10` |
-| GitHub Release tag | **已发布版** | `v1.0.10`(@ `a9846e1`) |
+| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.11-6726-btipc08`(内部开发版,**未发布**) |
+| `VERSION` 文件 | 开发/发布号 | `1.0.11`(开发号;两渠道未消耗,但**不补发** —— 见 1.0.11 开发版记录) |
+| GitHub Release tag | **已发布版** | `v1.0.10`(@ `a9846e1`);下一发布版 = **1.1.0** |
 | GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.0.10`(文件 `babeltower-1010-win64.zip` / `File_1843493`) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
@@ -677,11 +677,25 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 未释放、压缩撞实时防护扫描窗口(`node.exe` 短暂独占)→ 分别改为读取后重算、退出轮询、
 压缩前可读轮询。
 
+#### 1.0.11 开发版记录(2026-10-11,未发版 —— 下一发布版 = 1.1.0)
+
+**用户决定(2026-10-11)**:1.0.11 不发 GitHub/GameBanana,作为内部开发版消耗;全部工作
+(含 P4 lingua_chat 分区等后续项)搞完后直接发 **1.1.0**。故未做 `gh release create`、未动 GB,
+两渠道最新仍为 1.0.10;`version_check.js` 在 1.1.0 发版前报 tag/zip 不齐**属预期**。
+
+| 项 | 内容 |
+|---|---|
+| 版本号 | `VERSION`=1.0.11、`const VERSION`=1.0.11-6726-btipc08(三点同步已完成并推送 @ `52b82f2`) |
+| 本版内容 | P1 桥侧耦合面收口(`core/btipc/index.js` 统一门 + `core/transport/game_channel.js` 零逻辑壳)+ P2 op=log 聊天日志迁 BTIPC(桥侧 `matchChatLogTrq` 首行识别 + `runBtipcOp` log 分支镜像旧端点)+ P3 收口审计(`compatibility.md` §7 端点面/耦合面清点) |
+| 实车抓获 | ① 05c 同类形参遮蔽(`runBtipcOp` 的 `body`);② **客户端 viaBtipc 路由谓词漏 log**(2655 路由 + 2631 兜底,op 集合谓词 4 处只补了 isOp/payload)—— 真机聊天日志自 btipc08 起 **11 天从未落盘**的根因;E2E 直写 console.log 绕过客户端派发故只验桥侧未暴露。修复 + `op_log_guard` op 集合漂移护栏(凡 `config\|\|test` 谓词必须同步含 log)+ `lc_btipc07_guard` viaBtipc 断言放宽为「恰好多一个受控例外 log」 |
+| 游戏内验证 | 僵尸组演练三步实车全过(停桥:20s 超时 `FAIL kind=timeout -> send original` settle 留痕、聊天不卡死;拉桥:回声 15s 内自动判活、翻译恢复);**真机实弹端到端** `logs/chat/session_1791711175.jsonl` 落盘字段齐全(客户端 `log btipc: ok dt=7318ms`);B1 探针 5/5;26/26 护栏 ×3 轮 |
+| 装车 | 槽位 `pak15_dir.vpk` == `dist/pak01_dir.vpk`(465,148B,SHA256 前缀 `94B7E58C0247790D`),备份 `bak-pre-targethero-20261011-152332`(462,012B = 1.0.10 车);发布包 `dist/BabelTower-1.0.11-win64.zip`(35.3MB)留 dist 备用,1.1.0 发版时会从届时源码重打 |
+
 #### 口径纪律
 
 1. **发版前两个渠道的历史都要查**:`gh release list` **和** GB 的 `_aFiles` / 更新列表(`scripts/gb_files_probe.js`、`gb_updates_probe.js`)。版本号在**任一渠道**被用掉即视为已消耗。
 2. `README.md` 的版本行是**包内自报版本**,改版本必须连它一起改并重新打包,否则线上包自相矛盾。
-3. 只有在"包与页面必须一致"的窗口期内,才让 `const VERSION` 等于发布版;发布结束**不自动推**下一开发版 —— `release.ps1` 的单边自增已于 2026-10-10 停用(会打红 `lc_btipc_guard` 两处同步锁),升 1.0.11 时 `const VERSION` 与 `VERSION` 文件**两处一起改**。
+3. 只有在"包与页面必须一致"的窗口期内,才让 `const VERSION` 等于发布版;发布结束**不自动推**下一开发版 —— `release.ps1` 的单边自增已于 2026-10-10 停用(会打红 `lc_btipc_guard` 两处同步锁),升版(如 1.1.0)时 `const VERSION` 与 `VERSION` 文件**两处一起改**。1.0.11 已于 2026-10-11 消耗为**未发布的内部开发版**(用户决定:全部搞完直接发 1.1.0),不补发。
 4. §16.5 实车日志那行是 `v1.0.7-6726-btipc05e`,因为当日 14:49 那次 `1.0.6` 对齐只发未装车,后已作废重发为 1.0.7。
 
 ### 16.8 快捷语音 16 条红 fixture:测试数据过期,不是功能回归(2026-10-03)
