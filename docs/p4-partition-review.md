@@ -116,7 +116,7 @@ function expCall(name, a, b) {          // 探针晚绑定:缺文件/内部异�
 | build.ps1 | ✅ 编译 8 个文件(新增 lingua_chat_exp.vjs_c);VPK 关键资产校验含新文件 |
 | 编译产物核验 | ✅ core vjs_c 266,297B(expCall/LCTNS 在,实验区横幅与 exp6734E 字符串零残留,VERSION 串在);exp vjs_c 103,078B(横幅齐/p6738/runExp6734E/别名导入在,无 VERSION 重复声明) |
 | 装车 | ✅ 游戏关闭时 install_when_closed;槽位 pak15_dir.vpk == dist,SHA256 前缀 3A26F6A69DBBC99F |
-| 游戏内冒烟 | ⏳ 待开游戏:loaded 自报 / 打字翻译链 / /bt6738 实弹走通 expCall→LCTNS→探针 晚绑定链(再 /bt6738 stop) |
+| 游戏内冒烟 | ✅ 实车全过(2026-10-12 17:03~17:08):`loaded v1.0.11-6726-btipc08`(17:03:17)/ `boot: config synced`(17:03:51)/ 双向翻译链(17:08:05 `outgoing btipc: ok dt=6648ms` + 17:08:08 `chat btipc: ok` + `translated [队伍] …: 翻译 翻译` 标签渲染)/ **`/bt6738` 晚绑定实弹**(expCall→LCTNS→探针:START 41 cands→BASELINE nodes=6001→STOP ticks=198,零 ReferenceError/TypeError)/ op=log 仍落盘(session_1791795797.jsonl 386B)/ 零 JS 错误。附带观察(非 P4,既有类):对局中 console.log 洪峰时健康回声间歇超时 + CRC RETRY/STORM,客户端 8s REQ_TIMEOUT 优雅回落,与已登记的「游戏同写 console.log 交错」同类,transport 加固另立窗口 |
 
 ## 7. P4b 全量分区为何不做(证据)
 
