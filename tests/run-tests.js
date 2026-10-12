@@ -13,6 +13,7 @@ const files = [
   "tests/bridge_paths_logs_guard.test.js",
   "tests/btipc07_sync.test.js",
   "tests/client_copy_sync.test.js",
+  "tests/config_atomic_write.test.js",
   "tests/launcher_condebug_guard.test.js",
   "tests/launcher_entry_guard.test.js",
   "tests/lc_btipc07_guard.test.js",

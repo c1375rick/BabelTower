@@ -104,6 +104,29 @@ function normalize(raw) {
   return cfg;
 }
 
+// B6(2026-10-12):原子写 —— 同目录写临时文件 + fsync + rename 覆盖。
+// 断电/崩溃时 config.json 要么旧完整、要么新完整,不会留半截 JSON。load() 虽有
+// 损坏回退默认值的兜底,但半截文件意味着用户 Key/偏好整段丢失,回退等同丢配置。
+// Windows 下 libuv rename = MoveFileEx(REPLACE_EXISTING),同卷覆盖原子;
+// 目标被占用(杀软扫描等)rename 报 EPERM 时降级为直写(旧行为),保住保存成功底线。
+// 附:留 stale tmp 无害(load 只认 config.json),下次保存 rename 时自然收走。
+function writeFileAtomic(file, data) {
+  const tmp = file + ".tmp";
+  let fd = null;
+  try {
+    fd = fs.openSync(tmp, "w");
+    fs.writeSync(fd, data);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    if (fd !== null) { try { fs.closeSync(fd); } catch (e2) {} }
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (e2) {}
+    fs.writeFileSync(file, data, "utf8");
+  }
+}
+
 function load() {
   try {
     if (fs.existsSync(configPath())) {
@@ -116,14 +139,14 @@ function load() {
   const defaults = normalize({});
   try {
     fs.mkdirSync(configDir(), { recursive: true });
-    fs.writeFileSync(configPath(), JSON.stringify(defaults, null, 2), "utf8");
+    writeFileAtomic(configPath(), JSON.stringify(defaults, null, 2));
   } catch (e) {}
   return defaults;
 }
 
 function save(cfg) {
   fs.mkdirSync(configDir(), { recursive: true });
-  fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2), "utf8");
+  writeFileAtomic(configPath(), JSON.stringify(cfg, null, 2));
 }
 
 // 返回给游戏面板的配置(apiKey 打码,绝不回传明文)
@@ -312,4 +335,4 @@ function applyMaskedUpdate(current, incoming) {
   return cfg;
 }
 
-module.exports = { load, save, mask, maskCompact, applyMaskedUpdate, configPath, examplePath, DEFAULTS };
+module.exports = { load, save, mask, maskCompact, applyMaskedUpdate, configPath, examplePath, DEFAULTS, writeFileAtomic /* 测试钩子 */ };

@@ -110,6 +110,7 @@
 | 幽灵异常 | `pumpQueue dispatchJob(job)` 调用点空消息抛出,两 catch 未留痕(引擎行号=编译行−4 已标定) | 间歇性,报告级;暂不改码,靠 settle 留痕 + 槽位健康观察 |
 | `op=log` 聊天日志上传 | ~~仍走死面板通道,6726 起静默丢失~~ **已迁 BTIPC**(2026-10-11 P2:桥侧 `matchChatLogTrq` 首行识别 + `runBtipcOp` log 分支镜像旧端点语义;客户端并入 BTIPC op 通道 + 600B 切批;旧 `/api/v1/log` 端点保留未删)。**1.0.11 装车窗实车抓获并修复客户端路由漏点**:客户端 op 集合谓词写了 4 处(isOp/payload/viaBtipc 路由/dispatch-threw 兜底),前两处含 log 而 `dispatchJob` 的 viaBtipc 路由谓词漏补 → log op 不满足路由条件、落 `dispatchViaPanel` 死通道静默死(btipc08 起 11 天真实聊天日志从未落盘;E2E 直写 console.log 绕过客户端派发,故只验桥侧未暴露)。修复:2655 viaBtipc + 2631 兜底谓词补 log;新增 `op_log_guard` op 集合漂移护栏(凡 `config\|\|test` 谓词必须同步含 log) | ✅ E2E 4/4 + **真机实弹端到端**(17:36:11 `logs/chat/session_1791711175.jsonl` 落盘字段齐全,客户端 `log btipc: ok dt=7318ms`) |
 | GET `/api/v1/translate?...` 零元数据 GET 付费面 | 旧浏览器(无 Sec-Fetch)残余面 | 残余风险接受(B1 主洞已堵);如需彻底可后续同样删除 |
+| 对局中 BTIPC 回声间歇超时 + CRC RETRY/STORM | P4 冒烟实弹抓获(2026-10-12 17:09~17:11):对局 console.log 洪峰撕行 → 健康回声 timeout、下行帧解析失败重试风暴;客户端 8s REQ_TIMEOUT 优雅回落、聊天主链不阻塞 | 既有同类(「游戏同写 console.log 交错」);与 P4 正交,transport 加固另立窗口 |
 
 ## 7. 桥侧收口审计(P1-P3 完成,2026-10-11;1.0.11 窗口变更清单底稿)
 
@@ -150,3 +151,15 @@
 | 护栏 | 新 `tests/lc_p4_partition.test.js`(入清单,26→27):边界/LCTNS 双向对账/6 派发入口/装载与构建链/晚绑定 |
 | 验证 | 27/27 首轮全绿;simtest 41/27 与 HEAD 基线同环境完全一致(既有 harness TRQ 回程缺口,非回归);build 8 文件;编译产物核验 core 零实验区残留/exp 横幅齐;装车 slot==dist(3A26F6A6…) |
 | 证据 | `docs/p4-partition-review.md`(耦合量化 6+27/机制先例/纯搬移保证/回滚路径) |
+
+---
+
+## 9. B6 原子写(1.1.0 窗口;2026-10-12)
+
+| 项 | 内容 |
+|---|---|
+| 问题 | `core/config.js` 两处落盘(save + load 首次自动生成)直 `writeFileSync` → 断电/崩溃留半截 config.json;load 损坏回退默认值 = 用户 API Key/偏好整段丢失(回退兜底救不了数据) |
+| 变更 | 新 `writeFileAtomic(file, data)`:同目录 tmp 写入 → `fsyncSync` → `renameSync` 覆盖(Windows libuv = MoveFileEx REPLACE_EXISTING,同卷原子);rename 失败(目标被占用 EPERM 类)降级直写保保存成功底线;失败路径清 tmp。两处落盘全部换用 |
+| 授权面 | B6 记录面 = `core/config.js`。同类相邻面**只登记不动**:`core/dictionary.js`(322 全量重写,带 .bak 兜底)、`core/name_protect.js`(CONFIG_PATH 写);append 型日志写不在半截危害类 |
+| 护栏 | 新 `tests/config_atomic_write.test.js`(入清单,27→28):①源码钉(零直写 configPath,恰好 2 处 atomic)②实现钉(tmp+fsync+rename+降级+清 tmp)③沙箱功能(新建/覆盖无残留/stale tmp 收走)③b 降级底线(rename 注入 EPERM 保存仍成功) |
+| 验证 | 28/28 首轮全绿;真实路径冒烟:桥重启 health 200 → POST `/api/v1/config {config:{}}` 纯重写 → 值 before/after 递归深等(零语义变更零丢值)、无 .tmp 残留 |
