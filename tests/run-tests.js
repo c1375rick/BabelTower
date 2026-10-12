@@ -19,6 +19,7 @@ const files = [
   "tests/lc_btipc_guard.test.js",
   "tests/lc_chat_settle_guard.test.js",
   "tests/lc_hud_quick_guard.test.js",
+  "tests/lc_p4_partition.test.js",
   "tests/lc_panel_nav_guard.test.js",
   "tests/loc_parser.test.js",
   "tests/providers.test.js",

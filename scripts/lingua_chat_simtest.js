@@ -19,6 +19,8 @@ let imageLoadedHandler = null;
 const nativeSetTimeout = setTimeout;
 
 const SCRIPT = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
+// P4a(2026-10-12):实验探针区独立文件 —— 与游戏 include 顺序对齐(主脚本先行)
+const SCRIPT_EXP = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_exp.js");
 
 // ---------------- Mock 面板 ----------------
 // 环境隔离(2026-09-17):真实引擎里 UI 重载会销毁整个 JS 上下文,旧轮询链/挂起回调随之死亡;
@@ -120,6 +122,7 @@ function freshEnv(cfg) {
   for (const tid of envTimers) { try { clearTimeout(tid); } catch (e) {} }
   envTimers = [];
   delete require.cache[require.resolve(SCRIPT)];
+  delete require.cache[require.resolve(SCRIPT_EXP)];
 
   const contextPanel = new MockPanel("ContextPanel");
   const chatPanel = contextPanel.addChild(new MockPanel("Chat"));
@@ -216,6 +219,7 @@ function freshEnv(cfg) {
   }
 
   require(SCRIPT);
+  require(SCRIPT_EXP); // 探针文件:依赖核心先求值发布的 LCTNS,顺序不可倒
 
   return {
     contextPanel, messagesPanel, hudMessages, hudMessages2, settingsPanel, dispatchLog,

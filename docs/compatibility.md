@@ -31,8 +31,9 @@
   禁止把内部行为"顺手修在适配层"再当成普通重构。
 - 解冻申请须附:① 冻结模块已知缺陷清单;② 当前版本测试结果;③ 无法通过适配层解决的证据;
   ④ 具体文件/函数/行为;⑤ 协议兼容性与回滚路径评估。
-- **P4(lingua_chat 分区解冻)当前不授权**,记为待评审事项,1.1.0 窗口凭证据单独决策。
-  若问题能在冻结边界外解决,继续保持冻结。
+- **P4(lingua_chat 分区)已执行 P4a(2026-10-12 用户授权)**:EXP6727~6738 探针区(2,124 行,28%)
+  纯搬移至 `lingua_chat_exp.js`,核心 7,583→5,505 行;证据/设计/验证见 `docs/p4-partition-review.md`;
+  契约钉 `lc_p4_partition`(LCTNS 双向对账/装载顺序/晚绑定/边界)。P4b(核心再分区)未授权,凭证据增量另议。
 
 ---
 
@@ -88,7 +89,7 @@
 
 **明确不做(等评审)**
 - B6 原子写(`core/config.js` 保存):未获本窗授权,留保护名单;
-- P4 `lingua_chat.js` 分区:1.1.0 单独评审(见 §1)。
+- P4 `lingua_chat.js` 分区:P4a(探针区分家)已于 2026-10-12 执行(见 §8);P4b 核心再分区未授权。
 
 ---
 
@@ -137,3 +138,15 @@
 | P2 顺手修 | 05c 同类缺陷:`runBtipcOp` 形参 `body` 被 `let body` 遮蔽 + 引用不存在的 `text`(strict ReferenceError 被 catch 伪装成 bad_json)—— E2E 实车抓获,形参已进护栏断言 | 活体 E2E 复跑 4/4 |
 | P2 实车修 | **viaBtipc 路由谓词漏 log**(2655)+ dispatch-threw 兜底漏 log(2631):op 集合谓词 4 处只补了 isOp/payload 两处,路由处漏 → log op 落死通道静默丢。E2E 直写 console.log 绕过客户端派发故未暴露;装车窗打字实弹抓获。护栏:`op_log_guard` 新增 op 集合漂移钉(凡 `config\|\|test` 谓词必须同步含 log);`lc_btipc07_guard` viaBtipc 断言放宽为「恰好多一个受控例外 log」 | 26/26;真机实弹落盘 `session_1791711175.jsonl` |
 | 僵尸组演练(1.0.11 实车) | 停桥:翻译作业 20s 超时 → `FAIL kind=timeout -> send original` settle 留痕 + 游戏内失败提示,聊天不卡死;拉桥:回声 15s 内自动判活,下一条消息翻译恢复(`chat btipc: ok`) | 游戏内实弹三步全过 |
+
+---
+
+## 8. P4a 探针区分家(1.1.0 窗口;2026-10-12)
+
+| 项 | 内容 |
+|---|---|
+| 变更 | `lingua_chat.js` EXP6727~6738 探针区(2,124 行,28%)纯搬移 → `lingua_chat_exp.js`(自有 IIFE);核心 7,583→5,505 行;6 处 /bt* 派发改 `expCall` 晚绑定(探针文件缺失/异常降级无操作);`expErr` 移入核心工具区;settle/boot 路径零变化 |
+| 接线 | 核心尾部发布 `globalThis.LCTNS`(27 绑定,与探针头部别名导入同一份计算生成);chat.xml/hudchat.xml 主脚本后 include 探针;simtest 双文件 require;build VPK 关键资产 +exp |
+| 护栏 | 新 `tests/lc_p4_partition.test.js`(入清单,26→27):边界/LCTNS 双向对账/6 派发入口/装载与构建链/晚绑定 |
+| 验证 | 27/27 首轮全绿;simtest 41/27 与 HEAD 基线同环境完全一致(既有 harness TRQ 回程缺口,非回归);build 8 文件;编译产物核验 core 零实验区残留/exp 横幅齐;装车 slot==dist(3A26F6A6…) |
+| 证据 | `docs/p4-partition-review.md`(耦合量化 6+27/机制先例/纯搬移保证/回滚路径) |

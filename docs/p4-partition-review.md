@@ -106,9 +106,17 @@ function expCall(name, a, b) {          // 探针晚绑定:缺文件/内部异�
 5. 装车 + 游戏冒烟:loaded 自报、boot synced、翻译链 E2E、**实弹一条 `/bt*` 命令走通晚绑定链路**(核心 expCall → LCTNS → 探针 → 日志回显)
 6. 回滚路径:单 commit revert + `install_when_closed.ps1` 装回上一 VPK(备份 `bak-pre-targethero-*` 在)
 
-## 6. 验证结果
+## 6. 验证结果(2026-10-12)
 
-(执行后回填)
+| 步骤 | 结果 |
+|---|---|
+| node --check 双文件 | ✅ 通过 |
+| 27/27 护栏(停桥→checkout quickchat→跑→拉桥) | ✅ 首轮全绿:新 lc_p4_partition(5 test 组:边界/LCTNS 双向对账/6 派发入口/装载与构建链/晚绑定)+ 既有 26 项零损伤 |
+| simtest(双文件 require 后) | 41 PASS / 27 FAIL —— **与 HEAD 基线同环境对照完全一致(41/27)**:27 败全为翻译链(标签注入/中文/折叠),定性为既有 harness 对 BTIPC TRQ 应答回程未适配(btipc07 健康/翻译迁 TRQ 后的 mock 缺口);直连 POST /api/v1/translate 实测此刻正常(`{"ok":true,"translation":"你好，你能推中路吗"}`)→ 桥与上游健康,**非 P4 回归**;补齐 simtest TRQ 回程记为独立后续小项 |
+| build.ps1 | ✅ 编译 8 个文件(新增 lingua_chat_exp.vjs_c);VPK 关键资产校验含新文件 |
+| 编译产物核验 | ✅ core vjs_c 266,297B(expCall/LCTNS 在,实验区横幅与 exp6734E 字符串零残留,VERSION 串在);exp vjs_c 103,078B(横幅齐/p6738/runExp6734E/别名导入在,无 VERSION 重复声明) |
+| 装车 | ✅ 游戏关闭时 install_when_closed;槽位 pak15_dir.vpk == dist,SHA256 前缀 3A26F6A69DBBC99F |
+| 游戏内冒烟 | ⏳ 待开游戏:loaded 自报 / 打字翻译链 / /bt6738 实弹走通 expCall→LCTNS→探针 晚绑定链(再 /bt6738 stop) |
 
 ## 7. P4b 全量分区为何不做(证据)
 

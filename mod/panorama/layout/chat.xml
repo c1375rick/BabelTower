@@ -22,6 +22,8 @@
 		<!-- 名称保护配对名单(自动生成,勿手改):全量 EN->ZH + 指纹,btipc07 握手用 -->
 		<include src="s2r://panorama/scripts/lingua_chat_gamenames_pairs_fallback.vjs_c" />
 		<include src="s2r://panorama/scripts/lingua_chat.vjs_c" />
+		<!-- P4a 实验探针区(2026-10-12 分家):必须晚于 lingua_chat.vjs_c —— 核心先发布 LCTNS -->
+		<include src="s2r://panorama/scripts/lingua_chat_exp.vjs_c" />
 	</scripts>
 	<snippets>
 		<snippet name="ChatMessageSource">
