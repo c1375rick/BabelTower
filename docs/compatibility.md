@@ -191,4 +191,4 @@
 | 变更 | ① `State.btipcLastStormAt`:STORM enter 盖时间戳;② 回声 catch:`kind∈{timeout, crc_dead}` 且风暴发生在 `BTIPC_ECHO_STORM_WINDOW_MS(15000)` 内 → 降为拥塞日志 `...during congestion (recent storm), not treated as down`,**不调 onBridgeDown**;③ 真掉线(无近期风暴)路径原样不动 |
 | 不动 | 8s 回声死线不拉长(单槽早释放给排队翻译——拉长会让排队 op 更易烧完 12s busy 预算掉死通道);STORM 常数不动(实测 ~3s 自愈,宽收口工作正常);`core/btipc/*` 冻结面零触碰 |
 | 护栏 | 新 `tests/btipc_echo_storm_guard.test.js`(入清单,28→29):①状态钉(声明+STORM enter 盖章)②判断钉(豁免先于 onBridgeDown、分支 return、窗 ≥ 回声死线)③底线钉(死线仍 8000ms、真掉线日志+判红原样) |
-| 验证 | 29/29 首轮全绿(停桥铁律);实弹验证待下次对局日志(`during congestion` 行出现 = 生效)。装车:客户端改动需 build+VPK,随下次装车带走 |
+| 验证 | 29/29 首轮全绿(停桥铁律)。**实弹(2026-10-12 22:41 局,新车 sha 4EB39D6)**:① 生效行命中 —— 23:11:31 STORM → 23:11:36 回声 8s 超时 → `23:11:37 during congestion (recent storm), not treated as down`(零 grace)→ 23:11:42 DONE 恢复;**对照组** 22:52:11 无风暴超时 → 正确走原判红路径 `grace started`(双路径均对);③ 全场 6 次 STORM 全恢复(第 6 次随请求死亡符合设计),echo 102/102 全达、15s 节律稳定。②④ 翻译链样本 0(全场中文聊天,目标语言免翻规则正确;采集侧 2 条聊天经 op=log 落盘 `chat log written (btipc): 1 lines` ×2)—— 翻译链不丢不重不乱序验收待外语样本 |
