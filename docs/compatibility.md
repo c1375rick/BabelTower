@@ -163,3 +163,17 @@
 | 授权面 | B6 记录面 = `core/config.js`。同类相邻面**只登记不动**:`core/dictionary.js`(322 全量重写,带 .bak 兜底)、`core/name_protect.js`(CONFIG_PATH 写);append 型日志写不在半截危害类 |
 | 护栏 | 新 `tests/config_atomic_write.test.js`(入清单,27→28):①源码钉(零直写 configPath,恰好 2 处 atomic)②实现钉(tmp+fsync+rename+降级+清 tmp)③沙箱功能(新建/覆盖无残留/stale tmp 收走)③b 降级底线(rename 注入 EPERM 保存仍成功) |
 | 验证 | 28/28 首轮全绿;真实路径冒烟:桥重启 health 200 → POST `/api/v1/config {config:{}}` 纯重写 → 值 before/after 递归深等(零语义变更零丢值)、无 .tmp 残留 |
+
+---
+
+## 10. simtest TRQ 回程补齐(1.1.0 窗口;2026-10-12;纯测试基建,零产品码)
+
+| 项 | 内容 |
+|---|---|
+| 问题 | `scripts/lingua_chat_simtest.js` 长期 41/27(与 P4 分家正交,HEAD 基线同败),27 败全是翻译类场景 0 标签;桥侧取证:sim 时段零条 translate TRQ —— 请求根本没发出来 |
+| 根因①(回程串行饿死,主因) | boot 的 `op=config` 是 BTIPC 单槽首个在途作业(38 帧 × ~600ms ≈ 24s 实测),场景在同步完成前动作:入站 chat 只肯等 6×0.5s/12s → 掉死旧通道 settle → 0 标签;出站排队 >15s → 丢弃发原文 |
+| 根因②(sync 冲配置) | 同步完成后 `syncBridgeConfig` 以桥端真机偏好覆盖场景配置(displayMode/outgoingTarget/force)→ translation_only 不折叠、出站英译英、中文免翻失守 |
+| 根因③(陈旧断言) | test20 旧句式"我看到 McGinnis"已不在现行 loc(与 `tests/quickchat_match.test.js` 注释同口径:游戏不再产生的形态一律送翻译;语料指纹 fnv1a-197a3523 与兜底 fnv1a-f9ec2bc3 也印证换代) |
+| 修法 | 纯 harness 三件:`waitBootSync(env)`(等 `State.cfgSynced` + 队列排空 + 无在途 + BTIPC 槽空闲,12 个翻译场景)+ `applyScenarioCfg(env)`(同步后场景配置回写 `State.cfg`)+ test20 换现行语料真模板 `Stun {s:hero_name}` → "Stun McGinnis"(纯拉丁+已知英雄参数,中文规则救不了,只有模板白名单命中才零标签;matcher 离线实证 SKIP)。另留 test3 失败态诊断快照钩子(仅失败时打印) |
+| 验证 | run1(只修①)59/9 → run2(+②)64/4 → run3(+③)**68/0 exit=0**(361s);桥侧 translate TRQ 实证发出(chat ×11 + outgoing ×4,target=zh-Hans) |
+| 口径 | simtest **不入** `run-tests.js` 清单(需实桥 + 真实翻译,与"停桥跑测试"铁律异环境),手动跑:`node scripts/lingua_chat_simtest.js`(桥须 8791 在线)。环境寿命 < 首个空闲健康 tick(≈32s) → echo→onBridgeAlive→quickchat 握手链在 sim 从不发生(登记为既有环境特性,非缺陷) |

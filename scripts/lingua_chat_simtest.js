@@ -222,6 +222,7 @@ function freshEnv(cfg) {
   require(SCRIPT_EXP); // 探针文件:依赖核心先求值发布的 LCTNS,顺序不可倒
 
   return {
+    cfg, // 场景配置快照:waitBootSync 后回写 State.cfg(桥同步会以真机偏好覆盖)
     contextPanel, messagesPanel, hudMessages, hudMessages2, settingsPanel, dispatchLog,
     setFocusedPanel(p) { focusedPanel = p; },
     addRow(kind, sender, text, opts) {
@@ -317,10 +318,60 @@ async function waitFor(cond, timeoutMs) {
   return false;
 }
 
+// TRQ 应答回程补齐(2026-10-12):boot 的 op=config 是 BTIPC 单槽的首个在途作业
+// (maskCompact 38 帧 x ~600ms/帧 ~= 24s 实测,实车最坏 43s;btipc05d 读死线 50s)。
+// 翻译类场景若在同步完成前动作:入站 chat 只肯等 6x0.5s/12s -> 掉死旧通道 settle
+// -> 0 标签;出站排队 >15s -> 丢弃发原文。这是此前 27 败的主因(与 P4 正交,HEAD
+// 基线同败);另两根因由同窗一并治掉:syncBridgeConfig 以真机偏好覆盖场景配置
+// (displayMode/outgoingTarget/force -> applyScenarioCfg 同步后回写)、test20 旧句式
+// "我看到 McGinnis" 已不在现行 loc(与 tests/quickchat_match.test.js 同口径:游戏不再
+// 产生的形态一律送翻译 -> 换现行语料真模板 "Stun {s:hero_name}")。
+// 等条件:配置同步完成 + 队列排空 + 无在途 + BTIPC 槽空闲,计时窗才起。
+function applyScenarioCfg(env) {
+  try {
+    const L = globalThis.LCTNS, S = L && L.State;
+    if (!S || !S.cfg || !env || !env.cfg) return;
+    // boot 的 op=config 同步会以桥端(真机)偏好覆盖这些字段(displayMode/outgoingTarget/force 等),
+    // 场景语义必须以场景配置为准 —— 否则 translation_only 折叠、zh-Hans 出站、中文免翻全部失效
+    const c = env.cfg;
+    const keys = ["enabled", "displayMode", "targetLanguage", "force", "outgoing",
+      "outgoingTarget", "provider", "timeoutMs", "translateOwn", "chatLog"];
+    for (const k of keys) if (c[k] !== undefined) S.cfg[k] = c[k];
+  } catch (e) { console.log("[LCT-sim][dbg] applyScenarioCfg ERR " + e.message); }
+}
+
+async function waitBootSync(env, timeoutMs) {
+  const t0 = Date.now();
+  const snap = () => {
+    try {
+      const L = globalThis.LCTNS, S = L && L.State;
+      return "synced=" + !!(S && S.cfgSynced) + " syncing=" + !!(S && S.cfgSyncing) +
+        " q=" + ((S && S.queue && S.queue.length) || 0) +
+        " act=" + ((S && S.activeRequests) || 0) +
+        " busy=" + !!(L && L.BTIPC && L.BTIPC.busy && L.BTIPC.busy());
+    } catch (e) { return "LCTNS-read-ERR " + e.message; }
+  };
+  const ok = await waitFor(() => {
+    try {
+      const L = globalThis.LCTNS, S = L && L.State;
+      if (!S || !S.cfgSynced || S.cfgSyncing) return false;
+      if (S.queue && S.queue.length > 0) return false;
+      if (S.activeRequests > 0) return false;
+      if (L.BTIPC && L.BTIPC.busy && L.BTIPC.busy()) return false;
+      return true;
+    } catch (e) { return false; }
+  }, timeoutMs || 75000);
+  applyScenarioCfg(env);
+  console.log("[LCT-sim][dbg] waitBootSync " + (ok ? "ok" : "TIMEOUT") +
+    " t=" + (Date.now() - t0) + "ms " + snap());
+  return ok;
+}
+
 // ---------------- 场景 ----------------
 async function test1_injectAndCollapse() {
   console.log("\n[1] translation_only: english text -> label injected + original collapsed");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   const row = env.addRow("text", "Alice", "hello can you push mid");
   const ok = await waitFor(() => labelsOf(row).length > 0, 10000);
   await sleep(300);
@@ -334,6 +385,7 @@ async function test1_injectAndCollapse() {
 async function test2_recycleToChineseQuickChat() {
   console.log("\n[2] CORE FIX: row recycled to Chinese quick chat -> visibility restored + no stale label (no vanishing)");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   const row = env.addRow("text", "Alice", "hello can you push mid");
   await waitFor(() => labelsOf(row).length > 0, 10000);
   await sleep(300);
@@ -348,10 +400,23 @@ async function test2_recycleToChineseQuickChat() {
 async function test3_recycleToAnotherEnglish() {
   console.log("\n[3] row recycled to another english msg -> new translation replaces old, no residue");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   const row = env.addRow("text", "Alice", "hello can you push mid");
   await waitFor(() => labelsOf(row).length > 0, 10000);
   env.recycleRow(row, "text", "Alice", "retreat please");
-  await waitFor(() => labelsOf(row).length > 0, 10000);
+  const got2 = await waitFor(() => labelsOf(row).length > 0, 10000);
+  if (!got2) {
+    // 二次翻译静默诊断:行级状态 + 队列/在途快照(复用行重处理链哪一环断了一目了然)
+    try {
+      const L = globalThis.LCTNS, S = L.State;
+      console.log("[LCT-sim][dbg] test3 diag: sig=" + JSON.stringify(row.__lctSig) +
+        " processed=" + !!row.__lctProcessed +
+        " seen=" + S.seen.size + " q=" + S.queue.length + " act=" + S.activeRequests +
+        " inflight=" + S.inflight.size + " cache=" + S.cache.size +
+        " busy=" + L.BTIPC.busy() + " cfg.force=" + S.cfg.force +
+        " cfg.target=" + S.cfg.targetLanguage + " cfg.outgoing=" + S.cfg.outgoing);
+    } catch (e) { console.log("[LCT-sim][dbg] test3 diag ERR " + e.message); }
+  }
   await sleep(300);
   const labels = labelsOf(row);
   assert("exactly 1 label (no residue)", labels.length === 1, labels.length + " labels");
@@ -362,6 +427,7 @@ async function test3_recycleToAnotherEnglish() {
 async function test4_bilingualNoCollapse() {
   console.log("\n[4] bilingual mode: original not collapsed");
   const env = freshEnv(CFG.bilingual);
+  await waitBootSync(env);
   const row = env.addRow("text", "Bob", "gg wp");
   const ok = await waitFor(() => labelsOf(row).length > 0, 10000);
   const labels = labelsOf(row);
@@ -394,6 +460,7 @@ async function test6_ownMessageSkipped() {
 async function test7_consecutiveOutgoing() {
   console.log("\n[7] BUG FIX: rapid consecutive distinct outgoing messages -> ALL translated (no supersede)");
   const env = freshEnv(CFG.outgoingTranslation);
+  await waitBootSync(env);
   // 模拟输入框(ChatInput) + 捕获 stock submit 事件
   const input = env.contextPanel.FindChildTraverse("ChatInput") ||
     env.contextPanel.addChild(new MockPanel("ChatInput"));
@@ -426,6 +493,7 @@ async function test7_consecutiveOutgoing() {
 async function test8_consecutiveIncoming() {
   console.log("\n[8] rapid consecutive incoming messages -> both translated, no cross-contamination");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   const row1 = env.addRow("text", "Alice", "hello can you push mid");
   const row2 = env.addRow("text", "Bob", "gg wp");
   const ok = await waitFor(() => labelsOf(row1).length > 0 && labelsOf(row2).length > 0, 20000);
@@ -439,6 +507,7 @@ async function test8_consecutiveIncoming() {
 async function test9_hudTopBarTranslation() {
   console.log("\n[9] HUD top bar chat: english bubble -> translation injected inside bubble");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   const row = env.addHudRow("hello can you push mid");
   const ok = await waitFor(() => row.FindChildrenWithClassTraverse("LCTTranslationHud").length > 0, 10000);
   await sleep(300);
@@ -467,6 +536,7 @@ async function test10_hudOwnMessageSkipped() {
 async function test11_hudBothTeamsFoundById() {
   console.log("\n[11] HUD both Team1Chat + Team2Chat discovered by id (not class)");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   // Team1Chat 已由 addHudRow 使用;现在往 Team2Chat 也加一条英文消息
   const row2 = new MockPanel(null).setClass("ChatMessage");
   const contents2 = row2.addChild(new MockPanel("MessageContents"));
@@ -484,6 +554,7 @@ async function test11_hudBothTeamsFoundById() {
 async function test12_lcttestCommand() {
   console.log("\n[12] !lcttest command: injects HUD test row -> translation appears");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   const input = env.contextPanel.FindChildTraverse("ChatInput") ||
     env.contextPanel.addChild(new MockPanel("ChatInput"));
   input.text = "!lcttest hello world test";
@@ -513,6 +584,7 @@ async function test12_lcttestCommand() {
 async function test13_outgoingWithoutGlobalSetTimeout() {
   console.log("\n[13] REGRESSION (8/6 crash): outgoing translate works WITHOUT global setTimeout");
   const env = freshEnv(CFG.outgoingTranslation);
+  await waitBootSync(env);
   const input = env.contextPanel.FindChildTraverse("ChatInput") ||
     env.contextPanel.addChild(new MockPanel("ChatInput"));
   const submitted = [];
@@ -631,6 +703,7 @@ async function test17_entryEscReleasesFocusThenClosesPanel() {
 async function test18_mixedMessageFragmentTranslation() {
   console.log("\n[18] CORE FIX: mixed message (Chinese + English name) -> only fragment translated, original kept");
   const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
   // 非模板混合文本(真人打字含英文名):中文部分原样保留,只把非中文片段送去翻译
   // (不能用快捷语音模板文本如 "我看到 X",那会被白名单拦截,见 test20)
   const row = env.addRow("text", "Dave", "\u8fd9\u6ce2 McGinnis \u6253\u5f97\u4e0d\u9519\u554a");
@@ -654,12 +727,17 @@ async function test19_pureChineseStillSkipped() {
   assert("original visible", row.FindChildTraverse("MessageContents").style.visibility === "visible");
 }
 
-// 新:快捷语音模板白名单——游戏本地化渲染的快捷语音(中文模板+英文参数)精确命中即跳过,
+// 新:快捷语音模板白名单——游戏本地化渲染的快捷语音(模板+已知参数)精确命中即跳过,
 // 零 API 调用、零译文标签(这是"英文英雄名设置下快捷语音被误翻译"的最终修复)
 async function test20_quickchatWhitelistSkip() {
-  console.log("\n[20] CORE FIX: quick chat template render (我看到 McGinnis) -> whitelist skip, zero API");
+  console.log("\n[20] CORE FIX: quick chat template render (Stun McGinnis) -> whitelist skip, zero API");
   const env = freshEnv(CFG.translationOnly);
-  const row = env.addRow("text", "Fay", "\u6211\u770b\u5230 McGinnis");
+  await waitBootSync(env);
+  // 2026-10-12 换语料真模板:旧句式"我看到 McGinnis"已不在现行 quickchat 语料(游戏更新后
+  // 该 chatwheel 句式消失;现行指纹 fnv1a-197a3523 与兜底 fnv1a-f9ec2bc3 也印证语料已换代),
+  // 跳过只能靠中文规则、模板规则测不到。改用现行语料 "Stun {s:hero_name}"(纯拉丁 + 已知
+  // 英雄参数):中文规则救不了它,只有模板白名单命中才零 API 零标签。
+  const row = env.addRow("text", "Fay", "Stun McGinnis");
   await sleep(3000);
   assert("no translation label (whitelist hit)", labelsOf(row).length === 0, labelsOf(row).length + " labels");
   assert("original visible", row.FindChildTraverse("MessageContents").style.visibility === "visible");
