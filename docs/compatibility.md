@@ -110,7 +110,7 @@
 | 幽灵异常 | `pumpQueue dispatchJob(job)` 调用点空消息抛出,两 catch 未留痕(引擎行号=编译行−4 已标定) | 间歇性,报告级;暂不改码,靠 settle 留痕 + 槽位健康观察 |
 | `op=log` 聊天日志上传 | ~~仍走死面板通道,6726 起静默丢失~~ **已迁 BTIPC**(2026-10-11 P2:桥侧 `matchChatLogTrq` 首行识别 + `runBtipcOp` log 分支镜像旧端点语义;客户端并入 BTIPC op 通道 + 600B 切批;旧 `/api/v1/log` 端点保留未删)。**1.0.11 装车窗实车抓获并修复客户端路由漏点**:客户端 op 集合谓词写了 4 处(isOp/payload/viaBtipc 路由/dispatch-threw 兜底),前两处含 log 而 `dispatchJob` 的 viaBtipc 路由谓词漏补 → log op 不满足路由条件、落 `dispatchViaPanel` 死通道静默死(btipc08 起 11 天真实聊天日志从未落盘;E2E 直写 console.log 绕过客户端派发,故只验桥侧未暴露)。修复:2655 viaBtipc + 2631 兜底谓词补 log;新增 `op_log_guard` op 集合漂移护栏(凡 `config\|\|test` 谓词必须同步含 log) | ✅ E2E 4/4 + **真机实弹端到端**(17:36:11 `logs/chat/session_1791711175.jsonl` 落盘字段齐全,客户端 `log btipc: ok dt=7318ms`) |
 | GET `/api/v1/translate?...` 零元数据 GET 付费面 | 旧浏览器(无 Sec-Fetch)残余面 | 残余风险接受(B1 主洞已堵);如需彻底可后续同样删除 |
-| 对局中 BTIPC 回声间歇超时 + CRC RETRY/STORM | P4 冒烟实弹抓获(2026-10-12 17:09~17:11):对局 console.log 洪峰撕行 → 健康回声 timeout、下行帧解析失败重试风暴;客户端 8s REQ_TIMEOUT 优雅回落、聊天主链不阻塞 | 既有同类(「游戏同写 console.log 交错」);与 P4 正交,transport 加固另立窗口 |
+| 对局中 BTIPC 回声间歇超时 + CRC RETRY/STORM | P4 冒烟实弹抓获(2026-10-12 17:09~17:11):对局 console.log 洪峰下 128 位组装丢位 → CRC 连败进风暴 → 回声 1 帧 8s 死线先到 → timeout 误判掉线;取证:上行 REQ 32/32、TRQ 11/11 全达桥(上行无撕行),翻译全成功 | **已加固(§11)**:风暴窗内 timeout/crc_dead 判拥塞不判掉线;CRC RETRY/STORM 自身按设计工作(~3s 自愈),常数不动 |
 
 ## 7. 桥侧收口审计(P1-P3 完成,2026-10-11;1.0.11 窗口变更清单底稿)
 
@@ -177,3 +177,16 @@
 | 修法 | 纯 harness 三件:`waitBootSync(env)`(等 `State.cfgSynced` + 队列排空 + 无在途 + BTIPC 槽空闲,12 个翻译场景)+ `applyScenarioCfg(env)`(同步后场景配置回写 `State.cfg`)+ test20 换现行语料真模板 `Stun {s:hero_name}` → "Stun McGinnis"(纯拉丁+已知英雄参数,中文规则救不了,只有模板白名单命中才零标签;matcher 离线实证 SKIP)。另留 test3 失败态诊断快照钩子(仅失败时打印) |
 | 验证 | run1(只修①)59/9 → run2(+②)64/4 → run3(+③)**68/0 exit=0**(361s);桥侧 translate TRQ 实证发出(chat ×11 + outgoing ×4,target=zh-Hans) |
 | 口径 | simtest **不入** `run-tests.js` 清单(需实桥 + 真实翻译,与"停桥跑测试"铁律异环境),手动跑:`node scripts/lingua_chat_simtest.js`(桥须 8791 在线)。环境寿命 < 首个空闲健康 tick(≈32s) → echo→onBridgeAlive→quickchat 握手链在 sim 从不发生(登记为既有环境特性,非缺陷) |
+
+---
+
+## 11. transport 加固:回声拥塞豁免(1.1.0 窗口;2026-10-12;客户端判断逻辑,零协议改动)
+
+| 项 | 内容 |
+|---|---|
+| 取证 | 对局窗 17:03-17:12 桥日志:上行 **100% 可靠**(REQ 32/32、TRQ 11/11 全达桥);CRC RETRY ×35、STORM ×20、echo FAIL ×3 **全部集中于对局洪峰**。死亡序列实证:17:09:36 回声 r=1 连败 ×2 → STORM enter(tClose=2500)→ 17:09:40 风暴轮 dt=2523 仍败 → 17:09:42 REQ_TIMEOUT(8s 死线先到)→ `echo FAIL kind=timeout` → onBridgeDown。同期翻译全成功(outgoing dt=6648ms 吸收风暴)——**拥塞不是掉线** |
+| 危害链 | 误判 down → grace 过期 → `canHttp` 复位 → 死通道 nav 重探测(`diag-nav` ×N → `panel dead` 刷屏,现场 17:09:37-45 实证)——一个拥塞超时级联出整段垃圾 |
+| 变更 | ① `State.btipcLastStormAt`:STORM enter 盖时间戳;② 回声 catch:`kind∈{timeout, crc_dead}` 且风暴发生在 `BTIPC_ECHO_STORM_WINDOW_MS(15000)` 内 → 降为拥塞日志 `...during congestion (recent storm), not treated as down`,**不调 onBridgeDown**;③ 真掉线(无近期风暴)路径原样不动 |
+| 不动 | 8s 回声死线不拉长(单槽早释放给排队翻译——拉长会让排队 op 更易烧完 12s busy 预算掉死通道);STORM 常数不动(实测 ~3s 自愈,宽收口工作正常);`core/btipc/*` 冻结面零触碰 |
+| 护栏 | 新 `tests/btipc_echo_storm_guard.test.js`(入清单,28→29):①状态钉(声明+STORM enter 盖章)②判断钉(豁免先于 onBridgeDown、分支 return、窗 ≥ 回声死线)③底线钉(死线仍 8000ms、真掉线日志+判红原样) |
+| 验证 | 29/29 首轮全绿(停桥铁律);实弹验证待下次对局日志(`during congestion` 行出现 = 生效)。装车:客户端改动需 build+VPK,随下次装车带走 |

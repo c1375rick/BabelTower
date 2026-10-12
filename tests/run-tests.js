@@ -12,6 +12,7 @@ const files = [
   // 主链与护栏(平文件 assert / node:test 混合)
   "tests/bridge_paths_logs_guard.test.js",
   "tests/btipc07_sync.test.js",
+  "tests/btipc_echo_storm_guard.test.js",
   "tests/client_copy_sync.test.js",
   "tests/config_atomic_write.test.js",
   "tests/launcher_condebug_guard.test.js",

@@ -337,6 +337,7 @@
     panelActivated: false, // EXP-6726b:面板已置可见/激活标记
     canHttp: null, // 直连通道(AsyncWebRequest)可用性,启动后探测一次;null=未探测
     canHttpLastProbe: 0, // 最近一次直连通道探测时间(nowMs()),给离线复探限流用
+    btipcLastStormAt: 0, // 最近一次 STORM enter 时间(nowMs())——回声失败的拥塞豁免判据(2026-10-12)
     logBuffer: [], // 聊天日志缓冲(批量推送到桥)
     logFlushing: false,
     matchId: null, // 当前比赛 ID(缓存)
@@ -3481,7 +3482,18 @@ function injectTranslation(row, sig, text, fragment) {
           BTIPC.request({ windowId: BTIPC.newWindowId(), text: "health", translate: false, timeoutMs: 8000 })
             .then(function () { onBridgeAlive("btipc echo"); })
             .catch(function (err) {
-              log("btipc health echo FAIL kind=" + ((err && err.kind) || "unknown"));
+              const kind = (err && err.kind) || "unknown";
+              // 2026-10-12 transport 加固:对局 console.log 洪峰下 128 位组装丢位 -> 连败进风暴,
+              // 回声 1 帧卡在风暴里 8s 死线先到(实证 17:09:36 连败 -> STORM -> 17:09:42 TIMEOUT,
+              // 桥侧 REQ 32/32 全收到、翻译全成功 —— 拥塞不是掉线)。风暴窗内的 timeout/crc_dead
+              // 降为拥塞日志不判 down,免去 grace 级联(canHttp 复位 -> 死通道 nav 重探测刷屏);
+              // 真掉线(无近期风暴)路径不变。8s 死线不拉长:早释放单槽让排队翻译先走。
+              if ((kind === "timeout" || kind === "crc_dead") &&
+                  State.btipcLastStormAt && nowMs() - State.btipcLastStormAt <= BTIPC_ECHO_STORM_WINDOW_MS) {
+                log("btipc health echo FAIL kind=" + kind + " during congestion (recent storm), not treated as down");
+                return;
+              }
+              log("btipc health echo FAIL kind=" + kind);
               onBridgeDown();
             });
           return;
@@ -3958,6 +3970,7 @@ function injectTranslation(row, sig, text, fragment) {
   const BTIPC_T_HARD_MS = 12000; // 轮级强制闭合兜底(§4)
   const BTIPC_REQ_TIMEOUT_MS = 30000; // 消息级死线(§9)
   const BTIPC_CRC_DEAD = 8; // 同帧累计 fail 上限(§7)
+  const BTIPC_ECHO_STORM_WINDOW_MS = 15000; // 回声拥塞豁免窗:失败前此窗内进过风暴 -> 判拥塞不判掉线(2026-10-12)
   const BTIPC_REQ_MAX_PAYLOAD = 680; // §9:整行(引擎前缀+[LCT]+行头+b64 908)≤1000(J1);68 帧 ≤ seq7 上限
   const BTIPC_FIRST_SHOT_DELAY_MS = 1200; // 首拍延迟:桥 tail 轮询 1000ms,防首批全 404 误触风暴
   // 死线轮询步长。死线改由 Date.now() 锚定(见 BTIPC.request 内 pollDeadline):
@@ -4177,6 +4190,7 @@ function injectTranslation(row, sig, text, fragment) {
       if (st.consecutiveFails >= BTIPC_STORM_TRIGGER && st.stormRounds <= 0) {
         st.stormRounds = BTIPC_STORM_ROUNDS;
         entered = true;
+        State.btipcLastStormAt = nowMs(); // 拥塞时间戳:回声超时的豁免判据
         log("BTIPC: STORM enter consec=" + st.consecutiveFails + " tClose=" + BTIPC_STORM_TCLOSE_MS + " rounds=" + BTIPC_STORM_ROUNDS);
       }
       const stormNow = st.stormRounds > 0;
