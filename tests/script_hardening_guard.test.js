@@ -70,6 +70,28 @@ test("S1-④ 自启缺 node 中止注册", () => {
     "仍是只警告不中止的旧行为");
 });
 
+test("S1-④b 自启 vbs 引号闭合(2026-10-13 实锤语法错误)", () => {
+  // The template used to end the sh.Run argument with FIVE quotes. In VBScript
+  // that is an unterminated string constant: the whole vbs fails to compile, so
+  // every run of install-autostart.bat silently broke login-time autostart
+  // (Run key present, nothing starts, no error anywhere).
+  // Verified with cscript: 4 quotes -> ["node" "...\\bridge_server.js"],
+  // 5 quotes -> syntax error, and the committed (good) vbs has 4.
+  const runLine = /sh\.Run """" & node .*$/m.exec(autostart);
+  assert.ok(runLine, "autostart.ps1 缺模板 sh.Run 行");
+  const m = runLine[0].match(/& server & ("+)(\s*,\s*0)/);
+  assert.ok(m, "sh.Run 行形状变了,需人工复核引号闭合: " + runLine[0]);
+  assert.strictEqual(m[1].length, 4,
+    "server 后必须 4 个引号(=1 个字面引号);现为 " + m[1].length + " 个(5 个 = VBScript 语法错误)");
+  // 生成物本身也要钉住:模板输出必须与生产在用的已知良好文件一致
+  const vbs = rd("scripts/babel_bridge_autostart.vbs");
+  const vm = /sh\.Run """" & node .*$/m.exec(vbs);
+  assert.ok(vm, "babel_bridge_autostart.vbs 缺 sh.Run 行");
+  const qm = vm[0].match(/& server & ("+)(\s*,\s*0)/);
+  assert.ok(qm && qm[1].length === 4,
+    "已生成的 vbs 引号不闭合(重新跑 autostart.ps1 -Action Install 生成)");
+});
+
 test("S1-⑤ bat 入口失败可见", () => {
   for (const f of ["install-autostart.bat", "remove-autostart.bat"]) {
     const src = rd(f);

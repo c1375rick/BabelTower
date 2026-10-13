@@ -70,7 +70,7 @@ node = root & "\portable-node\node.exe"
 server = root & "\core\bridge_server.js"
 If Not fso.FileExists(node) Then node = "node"
 If fso.FileExists(server) Then
-  sh.Run """" & node & """ """ & server & """"", 0, False
+  sh.Run """" & node & """ """ & server & """", 0, False
 End If
 '@ + "`r`n"
   [System.IO.File]::WriteAllText($VbsPath, $vbs, (New-Object System.Text.UTF8Encoding($false)))

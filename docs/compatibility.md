@@ -192,3 +192,19 @@
 | 不动 | 8s 回声死线不拉长(单槽早释放给排队翻译——拉长会让排队 op 更易烧完 12s busy 预算掉死通道);STORM 常数不动(实测 ~3s 自愈,宽收口工作正常);`core/btipc/*` 冻结面零触碰 |
 | 护栏 | 新 `tests/btipc_echo_storm_guard.test.js`(入清单,28→29):①状态钉(声明+STORM enter 盖章)②判断钉(豁免先于 onBridgeDown、分支 return、窗 ≥ 回声死线)③底线钉(死线仍 8000ms、真掉线日志+判红原样) |
 | 验证 | 29/29 首轮全绿(停桥铁律)。**实弹完整验收(新车 sha 4EB39D6;2026-10-12 22:41 局 + 13 日 07:20 打字样本)**:① **6 次回声超时 6 次分类全对** —— 5 次风暴相邻全部豁免(23:11:37 / 23:22:14 / 23:27:12 / 23:31:56 / 07:21:31 `during congestion, not treated as down`,零 grace);1 次无风暴(22:52:11)正确走原判红路径 `grace started`;豁免实例含完整链(STORM → 8s 超时 → 豁免 → 5s 后 DONE 恢复)。② 3/3 链不丢不重不乱序(hello→你好 / test→测试 / push mid please→请推进中路,发送序 = 显示序)。③ 全场 10+ 次 STORM 全恢复,echo 102/102。④ E2E 打字实弹 3 链过;僵尸组演练经评审豁免(settle 路径零改动 + 1.0.10/1.0.11 两次实车已录)。观察项:22:50:28→22:52:18 95s 回声空窗(零 RETRY,形态似加载屏卡 JS 主线程,单次,已恢复) |
+
+
+---
+
+## 12. 脚本层加固:装车 / 重启桥 / 自启(1.1.0 窗口;2026-10-13;零产品码)
+
+| 项 | 内容 |
+|---|---|
+| 起因 | 用户要求审查安装脚本与启动脚本。逐行审计 + 实机探针:2 个【中】风险 + 1 个**审查过程中新发现的自启致命 bug**(靠“重跑安装后与仓库生成物比对”暴露) |
+| 装车原子性 | `Move-Item -Force`(PS 5.1 = 清属性+删+移,非原子,崩溃留空槽)换 **`[IO.File]::Replace`**(单次 ReplaceFileW = 原子换 + 旧车自动进备份,与 B6 同一套 tmp→原子提交纪律);探针实证三条边界:`Replace(src,dst,$null)` 抛“路径的形式不合法”(PS 把 $null 绑成空串,**必须传真实备份路径**)、只读目标抛 UnauthorizedAccess(须先清 ReadOnly)、目标不存在抛 FileNotFound(须 File.Move 分支)。另:备份改由交换本身产出(独立 Copy 可能与换入不同源)、交换瞬间复查游戏进程、外层 catch 让逃逸异常也落 ABORT 日志、日志加日期前缀、`-Tag` 默认由 `pre-targethero` 改 `install` |
+| 重启不误报 | 旧行为:`Stop-Process` 失败被静默吞 + 新桥秒死时健康检查照打 → 拿到**旧实例的 200** 输出“重启完成 OK”,实际没换血。补:杀净复查(杀不掉即中止)、`$proc.HasExited` 验尸、并发 Mutex(**必须早于杀进程**,否则并发者互相杀掉对方刚启的桥)、健康通过后比对监听 PID;15s 死线改真死线(原 15×(1s+2s)=最坏 45s,注释是假的) |
+| 端口读法 | `restart_bridge.ps1` / `bridge_health.ps1` 由“正则取全文第一个 port”改 `ConvertFrom-Json` 读顶层 `cfg.port`(与 `core/bridge_server.js` 的 `Number(cfg.port) || 8791` 同口径);现机 config 只有一个 port(实测),但嵌套 provider 端口排在前面即会读错 |
+| 自启致命 bug | **`autostart.ps1` 模板里 `sh.Run` 行收尾是 5 个引号** —— VBScript 判为“未结束字符串常量”,整个 vbs **编译失败**(cscript 实证);仓库那份(4 个引号)是好的 ⇒ **每跑一次 `install-autostart.bat` 就把开机自启打坏**(Run 键在、登录时静默不起、零报错)。修模板 → 重新生成与生产在用文件零差异。另:缺 node 由“警告仍注册”改 `throw` 中止 |
+| bat 入口 | `install-autostart.bat` / `remove-autostart.bat` 补 `if errorlevel 1`(原先失败也显示 “Done.”) |
+| 护栏 | 新 `tests/script_hardening_guard.test.js`(入清单,29→30):①装车原子性(Replace/禁 Move-Item 覆盖/清只读/交换瞬间复查/File.Move 分支/外层 catch)②重启不误报(验尸/互斥/杀净复查/互斥早于杀进程)③端口 JSON 解析禁正则 + 顶层 port 存在 ④自启缺 node 中止 ④b **vbs 引号恰好 4 个**(模板与生成物双钉防复发)⑤bat errorlevel 可见 |
+| 验证 | 30/30 首轮全绿(停桥铁律);实测:装车 exit=0(新旧 sha 一致、备份由 ReplaceFileW 产出、零 `.new`/`.swapbak` 残留)、restart_bridge 正常路径 OK + 并发互斥实测拦住第二个、autostart 重装 exit=0 且生成 vbs 与仓库零差异、cscript 实证 4 引号可用 / 5 引号语法错误 |
