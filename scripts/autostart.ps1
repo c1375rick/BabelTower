@@ -40,8 +40,12 @@ if ($Action -eq "Install") {
   $Node = Join-Path $Root "portable-node\node.exe"
   $Server = Join-Path $Root "core\bridge_server.js"
   if (-not (Test-Path $Server)) { throw "找不到桥服务器: $Server" }
+  # 2026-10-13: was a warning only, so the Run key got registered anyway and the
+  # failure showed up as "bridge never starts at login" with zero trace (the vbs
+  # also silently falls back to a PATH "node" that may not exist). Refuse to
+  # register a boot entry that cannot work.
   if (-not (Test-Path $Node) -and -not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "警告: 缺少 portable-node\node.exe 且系统 PATH 里没有 node,桥将无法启动。" -ForegroundColor Yellow
+    throw "缺少 portable-node\node.exe 且系统 PATH 里没有 node —— 注册开机自启只会在登录时静默失败,已中止。请补齐 portable-node 后重试。"
   }
 
   # 生成无窗口启动脚本(第 2 个参数 0 = 隐藏窗口)

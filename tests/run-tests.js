@@ -27,6 +27,7 @@ const files = [
   "tests/providers.test.js",
   "tests/quickchat_handshake.test.js",
   "tests/quickchat_match.test.js",
+  "tests/script_hardening_guard.test.js",
   "tests/security_boundary_guard.test.js",
   "tests/umm_integration.test.js",
   // BTIPC 协议层(冻结区行为钉)

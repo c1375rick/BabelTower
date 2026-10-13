@@ -6,7 +6,12 @@
 param(
   [string]$Src = "F:\BabelTower\dist\pak01_dir.vpk",
   [string]$Dst = "F:\SteamLibrary\steamapps\common\Deadlock\game\citadel\addons\pak15_dir.vpk",
-  [string]$Tag = "pre-targethero",
+  # 备份名标签。默认值 2026-10-13 起从 "pre-targethero" 改为 "install":
+  #   backups accumulate with this tag forever; the old default named one specific
+  #   past fix ("targethero"), so every install since then produced misleading
+  #   backup names. Callers passing -Tag explicitly (e.g. "t1-echo-guard") are
+  #   unaffected -- that is the preferred style.
+  [string]$Tag = "install",
   [int]$PollSec = 5,
   [int]$StableSec = 15,
   [string]$Log = "F:\BabelTower\logs\install_when_closed.log"
@@ -20,7 +25,9 @@ $ErrorActionPreference = "Stop"
 function W($m) {
   $dir = Split-Path -Parent $Log
   if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-  Add-Content -Path $Log -Value ((Get-Date).ToString('HH:mm:ss') + "  " + $m) -Encoding UTF8
+  # 2026-10-13: date prefix added. The log spans days (install runs are rare and
+  # months apart), so HH:mm:ss alone made cross-day entries indistinguishable.
+  Add-Content -Path $Log -Value ((Get-Date).ToString('yyyy-MM-dd HH:mm:ss') + "  " + $m) -Encoding UTF8
 }
 
 function Test-GameRunning {
@@ -52,20 +59,33 @@ function Install-Once {
   $srcLen = (Get-Item $Src).Length
   $ts = Get-Date -Format 'yyyyMMdd-HHmmss'
 
-  # Fresh install: no pak at the slot yet -> nothing to back up, still proceed.
-  if (Test-Path $Dst) {
-    $bk = "$Dst.bak-$Tag-$ts"
-    Copy-Item -Path $Dst -Destination $bk -Force
-    if (-not (Test-Path $bk)) { W "ABORT: backup failed"; return 1 }
-    # NOTE: W takes a single argument; without the parentheses PowerShell parses the
-    # "+" as a bare argument and everything after it lands in $args, silently
-    # dropping the byte count from the log (reproduced 2026-10-09).
-    W ("backup -> $bk  (" + (Get-Item $bk).Length + " B)")
-  } else {
-    W "no existing mod at dest - first install, no backup needed"
-  }
+  # Backup is produced BY the atomic swap itself (ReplaceFileW moves the previous
+  # pak into the backup path we hand it), so there is no separate Copy-Item here:
+  # a separate copy could diverge from the pre-swap bytes if anything else touches
+  # the slot in between, and the atomic op cannot diverge by construction.
+  # NOTE: W takes a single argument; without the parentheses PowerShell parses the
+  # "+" as a bare argument and everything after it lands in $args, silently
+  # dropping the byte count from the log (reproduced 2026-10-09).
+  $hadOld = Test-Path $Dst
+  $bk = "$Dst.bak-$Tag-$ts"
+  if (Test-Path $bk) { Remove-Item $bk -Force }  # same tag + same second rerun
 
-  # 4) copy to a temp file first, then rename - never leave a partial VPK
+  # 4) copy to a temp file first, then atomic swap - never leave a partial VPK
+  # 2026-10-13 (same doctrine as B6 in core/config.js: tmp -> fsync-ish -> rename):
+  # Move-Item -Force in PS 5.1 clears the destination's attributes and may copy
+  # across volumes; when volumes match it renames, but the destination delete is
+  # NOT guaranteed atomic with the rename -> a crash in between leaves the slot
+  # empty (only the .bak survives). [IO.File]::Replace is a single ReplaceFileW:
+  # atomic swap AND the previous file lands in the backup path we pass it.
+  # Verified by probe 2026-10-13:
+  #   * Replace(src, dst, realPath) -> OK, dst=new, backup=old, src gone
+  #   * Replace(src, dst, $null)    -> ArgumentException ("路径的形式不合法")
+  #     PowerShell binds $null to the string overload as "", and ReplaceFileW
+  #     rejects an empty backup path. Must pass a real path.
+  #   * dest readonly              -> UnauthorizedAccessException
+  #     (unlike Move-Item -Force). Steam-installed pak slots can carry the
+  #     read-only bit, so clear it right before the swap.
+  #   * dest missing               -> FileNotFoundException -> File.Move branch.
   $tmp = "$Dst.new"
   try {
     if (Test-Path $tmp) { Remove-Item $tmp -Force }
@@ -74,7 +94,27 @@ function Install-Once {
       W "ABORT: temp copy size mismatch"
       return 1
     }
-    Move-Item -Path $tmp -Destination $Dst -Force
+    if ($hadOld) {
+      # Re-check AT the swap moment. The earlier final check sits before the copy
+      # loop; a game launched in between must not meet a slot being swapped.
+      if (Test-GameRunning) { W "ABORT: game running right before atomic swap"; return 1 }
+      $dstItem = Get-Item $Dst -Force
+      if ($dstItem.IsReadOnly) {
+        $dstItem.IsReadOnly = $false
+        W "cleared read-only bit on dest before atomic swap"
+      }
+      [System.IO.File]::Replace($tmp, $Dst, $bk)
+      if (-not (Test-Path $bk)) {
+        W "ABORT: atomic swap succeeded but swap-backup vanished"
+        return 1
+      }
+      W ("backup -> $bk  (" + (Get-Item $bk).Length + " B)")
+    } else {
+      # fresh install, no previous pak: plain same-dir rename is already atomic
+      if (Test-GameRunning) { W "ABORT: game running right before first install"; return 1 }
+      [System.IO.File]::Move($tmp, $Dst)
+      W "no existing mod at dest - first install, no backup needed"
+    }
   } catch {
     W ("ABORT: install failed - " + $_.Exception.Message)
     return 1
@@ -106,6 +146,14 @@ try {
   catch [System.Threading.AbandonedMutexException] { $owns = $true }  # owner died holding it
   if (-not $owns) { W "ABORT: another install_when_closed instance is running"; exit 1 }
   $rc = Install-Once
+} catch {
+  # 2026-10-13: with $ErrorActionPreference=Stop, a throwing cmdlet outside the
+  # inner try (backup copy, Get-Item, Get-FileHash, log writes) escaped this whole
+  # script, so logs\*.log ended at "armed:" with no ABORT line at all -- the one
+  # thing an operator greps for. Any escaping error now gets logged and turned
+  # into a non-zero exit.
+  W ("ABORT: unexpected error - " + $_.Exception.Message)
+  $rc = 1
 } finally {
   if ($owns) { try { $mutex.ReleaseMutex() } catch { } }
   $mutex.Dispose()

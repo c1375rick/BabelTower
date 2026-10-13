@@ -17,10 +17,14 @@ $Root = Split-Path -Parent $PSScriptRoot
 $port = 8791
 $cfgPath = Join-Path $Root "config\config.json"
 if (Test-Path $cfgPath) {
+  # 2026-10-13: JSON parse, not a regex over raw text. A regex takes the FIRST
+  # "port": N it finds anywhere; bridge_server.js reads the top-level cfg.port,
+  # so a nested provider "port" appearing earlier would desync this check.
   try {
-    $raw = [System.IO.File]::ReadAllText($cfgPath)
-    $m = [regex]::Match($raw, '"port"\s*:\s*(\d+)')
-    if ($m.Success) { $port = [int]$m.Groups[1].Value }
+    $cfg = [System.IO.File]::ReadAllText($cfgPath) | ConvertFrom-Json
+    if ($cfg.PSObject.Properties.Name -contains "port" -and $cfg.port) {
+      $port = [int]$cfg.port
+    }
   } catch { }
 }
 

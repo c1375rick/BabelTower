@@ -16,6 +16,12 @@ if not exist "%~dp0scripts\autostart.ps1" (
 )
 echo [BabelTower] Installing auto-start...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\autostart.ps1" -Action Install
+if errorlevel 1 (
+    echo.
+    echo [LCT] FAILED - see the error above. Nothing was registered.
+    pause
+    exit /b 1
+)
 echo.
 echo Done. Now you can just launch Deadlock from Steam.
 echo Uninstall anytime with remove-autostart.bat
