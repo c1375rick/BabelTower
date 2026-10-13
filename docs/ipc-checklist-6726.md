@@ -579,10 +579,10 @@ if (record.quick) {
 
 | 位置 | 含义 | 当前值 |
 |---|---|---|
-| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.0.11-6726-btipc08`(内部开发版,**未发布**) |
-| `VERSION` 文件 | 开发/发布号 | `1.0.11`(开发号;两渠道未消耗,但**不补发** —— 见 1.0.11 开发版记录) |
-| GitHub Release tag | **已发布版** | `v1.0.10`(@ `a9846e1`);下一发布版 = **1.1.0** |
-| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.0.10`(文件 `babeltower-1010-win64.zip` / `File_1843493`) |
+| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.1.0-6726-btipc08`(已发布;构建标沿用 btipc08 —— 本版无新 btipc 批次,前例 1.0.9→1.0.10 同样沿用 btipc07d) |
+| `VERSION` 文件 | 开发/发布号 | `1.1.0`(已发布) |
+| GitHub Release tag | **已发布版** | `v1.1.0`(@ `5f0c4ea`,Latest,2026-10-13T11:58:40Z) |
+| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.1.0`(文件 `babeltower-110-win64.zip` / `File_1847137`;更新条目 `463796`) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
 > **1.0.8 起断言不再写死具体版本号**:原来 `/1\.0\.7-6726-btipc\d/` 每次升版都得手改一次、
@@ -690,6 +690,30 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 | 实车抓获 | ① 05c 同类形参遮蔽(`runBtipcOp` 的 `body`);② **客户端 viaBtipc 路由谓词漏 log**(2655 路由 + 2631 兜底,op 集合谓词 4 处只补了 isOp/payload)—— 真机聊天日志自 btipc08 起 **11 天从未落盘**的根因;E2E 直写 console.log 绕过客户端派发故只验桥侧未暴露。修复 + `op_log_guard` op 集合漂移护栏(凡 `config\|\|test` 谓词必须同步含 log)+ `lc_btipc07_guard` viaBtipc 断言放宽为「恰好多一个受控例外 log」 |
 | 游戏内验证 | 僵尸组演练三步实车全过(停桥:20s 超时 `FAIL kind=timeout -> send original` settle 留痕、聊天不卡死;拉桥:回声 15s 内自动判活、翻译恢复);**真机实弹端到端** `logs/chat/session_1791711175.jsonl` 落盘字段齐全(客户端 `log btipc: ok dt=7318ms`);B1 探针 5/5;26/26 护栏 ×3 轮 |
 | 装车 | 槽位 `pak15_dir.vpk` == `dist/pak01_dir.vpk`(465,148B,SHA256 前缀 `94B7E58C0247790D`),备份 `bak-pre-targethero-20261011-152332`(462,012B = 1.0.10 车);发布包 `dist/BabelTower-1.0.11-win64.zip`(35.3MB)留 dist 备用,1.1.0 发版时会从届时源码重打 |
+
+#### 1.1.0 发版记录(2026-10-13)
+
+**发版前查重(铁律,两渠道都查)**:`gh release list` 最新为 `v1.0.10`、
+`node scripts/gb_updates_probe.js 1.1.0` → `含[1.1.0]: false` → **两渠道均未消耗**,可发。
+
+**发版前提醒义务(用户许可 2026-10-13「发版吧」)**:1.1.0 含 B6(低)+ transport(中)双加固 —— 一版两种主要风险,超出「一版只引入一种」默认口径;两项各自护栏记档(`config_atomic_write` / `btipc_echo_storm_guard`)且 transport 经实弹验收(§11),risk_register 发布落位注记已标。
+
+| 渠道 | 落位结果 |
+|---|---|
+| GitHub | `v1.1.0` = **Latest**(@ `5f0c4ea` 三点同步提交),资产 `BabelTower-1.1.0-win64.zip`(37,039,481B)+ `pak01_dir.vpk`(470,586B,sha256 前缀 `CDE25E3552AC0FD3`),发布 `2026-10-13T11:58:40Z` |
+| GameBanana | 上传 `babeltower-110-win64.zip`(`File_1847137`,37,039,481B)→ 行版本 `1.1.0` + 全局版本 `1.0.10`→`1.1.0`;更新条目 `463796`:5 条 changelog(3×Bugfix + 1×Improvement + 1×Adjustment)+ blurb(365 字)+ 绑定 `File_1847137`;回读复验:列表页 `含[1.1.0]: true`、条目页逐行核对(5 类型行 + blurb + Files 全落) |
+| 包内自报 | `README.md` → `1.1.0 (2026-10-13)`;抠包核验 zip 内 README 版本行 / `安装使用说明.txt` 含 `-condebug` / vpk(470,586B)按字节含 `1.1.0-6726-btipc08`;车上 VPK 同串(活体待下次开局 `loaded v1.1.0-6726-btipc08` 自证) |
+| 装车 | 车上 `pak15_dir.vpk` == `dist/pak01_dir.vpk` == Release vpk 资产(均 470,586B,SHA256 前缀 `CDE25E3552AC0FD3`);备份 `bak-pre-1.1.0-release-20261013-194904`(470,789B);**首次走 1.1.0 窗口新装车脚本**([IO.File]::Replace 原子换,§12:零 `.new`/`.swapbak` 残留) |
+| 一致性 | 30/30 全链(停桥铁律)+ `lc_btipc_guard` 12/12 + `version_check` ✅;构建 `build.ps1` 重编(10-13 源码) |
+
+**本版内容**:#1 B6 配置原子写(`86eaac0`)+ #2 simtest TRQ 回程补齐(`e576d4f`,68/0)+
+#3 transport 回声拥塞豁免(`bcdd0a0`,实弹验收完)+ 脚本层加固(`9208a5c`/`9069d63`:装车原子换、
+重启验尸+互斥、**autostart vbs 模板 5 引号语法错误**——重装自启即打坏的隐性致命 bug)+ risk_register(`44ce671`);
+1.0.11 原内容(P1/P2/P3)并入。**发版过程新获事实**:① GB changelog 类型全集无 `Note`
+(Addition/Removal/Overhaul/Adjustment/Amendment/Improvement/Optimization/Tweak/Suggestion/Feature/Refactor/Bugfix),
+填 `Note` select 不接受、落库为无类型(显示 `-`),已改 `Adjustment` 并在 `gb_add_update5.js` 注记;
+② PS5.1 下 `[IO.File]::Replace($src,$dst,$null)` 的 `$null` 绑成空串抛「路径的形式不合法」,必须传真实备份路径(§12 探针);
+③ `package_release.ps1` 压缩撞实时防护扫描窗口重试即过(已知窗口,1.0.10 记录同源);新增 `scripts/gb_add_update5.js`。
 
 #### 口径纪律
 
