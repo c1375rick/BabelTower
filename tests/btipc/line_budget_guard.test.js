@@ -82,6 +82,8 @@ test("REQ_MAX_PAYLOAD 不得超过真实前缀下的可装上限", () => {
 
 test("console.log 若存在，则实测引擎前缀不得超过护栏采用的长度", () => {
   const candidates = [
+    (process.env.DEADLOCK_ROOT || "C:/SteamLibrary/steamapps/common/Deadlock") +
+      "/game/citadel/console.log",
     "F:/SteamLibrary/steamapps/common/Deadlock/game/citadel/console.log",
     "C:/Program Files (x86)/Steam/steamapps/common/Deadlock/game/citadel/console.log",
   ];
@@ -91,8 +93,35 @@ test("console.log 若存在，则实测引擎前缀不得超过护栏采用的�
   const idx = txt.indexOf("[LCT] BTIPC ");
   if (idx === -1) return; // 还没跑过 BTIPC 上行 → 跳过
   const lines = txt.split(/\r?\n/).filter(l => l.indexOf("[LCT] BTIPC ") !== -1);
-  const maxPrefix = Math.max.apply(null, lines.map(l => l.indexOf("[LCT] BTIPC ")));
-  assert.ok(maxPrefix <= ENGINE_PREFIX.length,
-    "实测引擎前缀 " + maxPrefix + " 字符 > 护栏采用的 " + ENGINE_PREFIX.length +
+  // 2026-10-15 实测新事实:引擎自己会喷「超长且行尾不带换行」的 [Panorama] 行
+  //   ("Invalid content width (flChildWidth = -nan(ind)) ..." —— 同一时刻还有
+  //    VRAM/纹理流式告警、9 次 STORM、2 次 REQ_TIMEOUT),
+  // 我们的标记被追加到那条巨型行行尾,前缀高达 38372(292 行里 1 行)。
+  // 这类「合并行」的前缀与 payload 预算无关(整行超 LINE_MAX 是引擎文本超的,不是我们的 b64),
+  // 不能让它把前缀断言整体顶掉(否则真出现"引擎前缀变长"反而没人管);
+  // 它另有自己的风险:parseGameLine 按整行长度收口,38KB 的行会被判 line_too_long 静默 drop,
+  // 客户端只能等死线回落 —— 那是独立待办,不在本护栏射程内。
+  // 故拆成两类分别断言:干净行守住 payload 预算;合并行守住「我们自己的片段未被截断 + 占比极低」。
+  const clean = [], merged = [];
+  for (const l of lines) {
+    const i = l.indexOf("[LCT] BTIPC ");
+    if (i <= LINE_MAX) clean.push(i); else merged.push(l);
+  }
+  assert.ok(clean.length > 0,
+    "console.log 里没有一行「干净前缀」的 [LCT] 行(" + lines.length + " 行全是合并行),护栏无法校准");
+
+  const maxClean = Math.max.apply(null, clean);
+  assert.ok(maxClean <= ENGINE_PREFIX.length,
+    "实测引擎前缀 " + maxClean + " 字符 > 护栏采用的 " + ENGINE_PREFIX.length +
     ",真实最坏行会越过 " + LINE_MAX + ",需重算 REQ_MAX_PAYLOAD");
+
+  if (merged.length) {
+    const maxSeg = Math.max.apply(null, merged.map(l => l.length - l.indexOf("[LCT] BTIPC ")));
+    assert.ok(maxSeg <= LINE_MAX,
+      "合并行里 [LCT] 段长 " + maxSeg + " > " + LINE_MAX + ":我们自己的片段被截断,该上行消息必然丢失");
+    const ratio = merged.length / lines.length;
+    assert.ok(merged.length <= 1 || ratio <= 0.02,
+      "引擎合并行 " + merged.length + "/" + lines.length + "(" + (ratio * 100).toFixed(1) +
+      "%) 偏高:实测为 1/292 的零星事件,偏高先查是不是我们自己的日志写入没带换行");
+  }
 });

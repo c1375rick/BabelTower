@@ -208,3 +208,18 @@
 | bat 入口 | `install-autostart.bat` / `remove-autostart.bat` 补 `if errorlevel 1`(原先失败也显示 “Done.”) |
 | 护栏 | 新 `tests/script_hardening_guard.test.js`(入清单,29→30):①装车原子性(Replace/禁 Move-Item 覆盖/清只读/交换瞬间复查/File.Move 分支/外层 catch)②重启不误报(验尸/互斥/杀净复查/互斥早于杀进程)③端口 JSON 解析禁正则 + 顶层 port 存在 ④自启缺 node 中止 ④b **vbs 引号恰好 4 个**(模板与生成物双钉防复发)⑤bat errorlevel 可见 |
 | 验证 | 30/30 首轮全绿(停桥铁律);实测:装车 exit=0(新旧 sha 一致、备份由 ReplaceFileW 产出、零 `.new`/`.swapbak` 残留)、restart_bridge 正常路径 OK + 并发互斥实测拦住第二个、autostart 重装 exit=0 且生成 vbs 与仓库零差异、cscript 实证 4 引号可用 / 5 引号语法错误 |
+
+---
+
+## 13. 环境迁移:游戏安装根 F:\(外置机械盘)→ C:\(NVMe)(2026-10-15;零产品码)
+
+| 项 | 内容 |
+|---|---|
+| 起因 | 私人局反复"卡死→断开"。日志取证:断线全部是 `closed by peer (2029) NETWORK_DISCONNECT_TIMEDOUT`(签到 FULL 后精确 +29~30s 被对端掐)+ 断前 `high frame misdelivery` + `0ms ping` / `-1ms peak jitter`(回程测量缺失)。5 台不同服务器(同 51897 端口池)同死法 → 不是单台/单池故障。客户端侧同期指纹:`Audio device starved`(主循环停摆)、`Excessive frame time of 434.17ms clamped`、`Frame Time >17.5ms 46.5%`、翻译心跳往返(主线程停摆代理)峰值 **39.4 秒** |
+| 根因 | 游戏装在 `F:\SteamLibrary\steamapps\common\Deadlock` = **WD Elements 2621 外置 USB 机械盘(SMR)**,游戏 98.54 GB / **170,890 个文件**;其中 `Reduced_CSDK_12` 138,821 + `CSwin64` 27,566 = 塞在游戏目录里的开发工具链死重(占 81% 文件数),游戏本体仅 4,440 文件 / 53.78 GB(327 个 ~100MB 分块 `pak01_XXX.vpk`)。切关卡/切局要在该盘上随机命中几百个分块 → 主线程停摆 4–40 秒,**超过 30 秒即被对端按 netchan 超时掐线**。反向排除:ICMP 到两个 SDR 继点 POP 0% 丢包 / 53–55ms,UDP 出口正常(8.8.8.8:53 有回包)→ 网络路径干净,VPN / ping 保活类方案不对症 |
+| 处置①(死重外移) | `Reduced_CSDK_12` + `CSwin64` 移出游戏目录 → `F:\dev-tools\`(同卷改名;23ms / 70s)。游戏目录 **98.54 GB / 170,890 文件 → 55.63 GB / 4,504 文件**。CSDK 仍被发版构建使用,`scripts/release.ps1` 默认 `-Csdk12Root` 与 `docs/development.md`、`LEARNINGS.md` 命令行已同步。游戏目录另设 Windows 属性"内容不编入索引"(SearchIndexer 原在啃这 17 万文件) |
+| 处置②(主体迁移) | Steam 内建"移动"把游戏迁至 `C:\SteamLibrary\steamapps\common\Deadlock`(NVMe BC901 512GB;独立库目录,同属 Steam)。**游戏根权威口径 = 环境变量 `DEADLOCK_ROOT`**(已 `setx` 持久化),仓内 12 处路径(装车 `install_when_closed.ps1`、6 个 e2e/探针脚本、`bridge_server.js` 兜底库列表、`game_names.js` 兜底、`line_budget_guard` 实测探针)统一改为「env 优先 + 新根兜底」 |
+| 实测对照 | 关卡加载 `dl_hideout`:**13s(F:)→ 6s(C:,首次冷盘)**;主线程停摆代理(BTIPC 心跳往返):搬家前 平均 2.5s / 峰值 **39.4s** / 31 个 ≥2.5s 样本 → 暖机后**连续 6 次 1803–1825ms 基线、零尖刺**;帧时间:预热期 46.5% 帧 >17.5ms → 3 分钟内 **16.3%**(Avg Run 1.0,孤立单帧)。**私人局终验(2026-10-15 15:03–16:03,60 分钟)**:2 次远程 SDR 连接全稳定,**`2029` / `REMOTE_TIMEOUT` / `high frame misdelivery` / `Disconnection during connection` 四项全 0**;关卡加载暖态 **3s**(冷启 6s);全程 **0 次** 400ms 级单帧超时;心跳最近 8 次 1803–1812ms 基线,唯一长尖峰是开局冷启 **25.2s**(低于 30s 掐线线 ⇒ 不致断线;建议重启后首局避开远程私人局) |
+| 副作用①(Steam) | Steam 搬运/校验会把 `game\citadel\gameinfo.gi` 与 `cfg\video.txt` **还原成原版**(实测 sha `CDDBD1B321023823`(OptiLock 装车值)→ `1037523D910F8FF2`(原版))。**切勿对 Deadlock 点"验证文件完整性"**,否则配置与 `*.bak-pre-optilock-*` 备份一并丢失;重装按 OptiLock 官方两步(源包永久件 `F:\download\星露谷mod\optilock_fps_configs_7a7bc.zip`) |
+| 副作用②(DMM) | DMM 启停 mod 会**重写 gameinfo.gi**(两次实证:2026-10-14 22:42:58、2026-10-15 14:48:17,后者早于游戏启动 4 秒)。本次写入的是 GB 版 mod **OptiLock / QoL Lite(690233)自带**的 73.8 KB gameinfo(sha `F2DB5F02225EBB19`),与 zip 版 Recommended(75.8 KB)**不是同一构建,不得混用**。⇒「我装好的配置」≠「游戏实际跑的配置」,一律以 sha 复核归属 |
+| 未完成/待办 | ① Defender 排除项(`Add-MpPreference -ExclusionPath "C:\SteamLibrary\steamapps\common\Deadlock"`)与 USB 选择性暂停关闭**需用户以管理员执行,尚未确认落地**;② OptiLock 现为**混搭态**(GB 版 gameinfo + 用户自有 video.txt:`mip_bias=1` / `viewportscale=0.667` / `upscaling=4`),官方要求两件成对,是否收敛待定;③ 私人局迁移后**已复测通过**(2026-10-15 15:03–16:03 两局,SDR 四项异常全 0,详见「实测对照」行);④ `F:\$RECYCLE.BIN` 堆 12.42 GB 可清(未清);⑤ F: 可用空间未如预期回收 55 GB(fsutil 确认仍 538.9 GB,SMR 删除回收延迟,非故障) |

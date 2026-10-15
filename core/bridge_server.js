@@ -1424,8 +1424,9 @@ function startGameLogTail() {
       c = [];
       (head || []).forEach(function (p) { if (p) c.push(p); });
     }
-    // 放最后而不是最前:注册表/vdf 意外读不到时保底,又不会让残留的旧安装目录挤掉新装
-    ["F:/SteamLibrary", "D:/SteamLibrary", "C:/Program Files (x86)/Steam", "C:/Program Files/Steam"]
+    // 放最后而不是最前:注册表/vdf 意外读不到时保底,又不会让残留的旧安装目录挤掉新装。
+    // 2026-10-15:本机游戏迁到 C:\SteamLibrary(NVMe),补进兜底;旧 F: 留作历史兼容。
+    ["C:/SteamLibrary", "F:/SteamLibrary", "D:/SteamLibrary", "C:/Program Files (x86)/Steam", "C:/Program Files/Steam"]
       .forEach(function (lib) {
         const p = lib + "/steamapps/common/Deadlock/" + GAME_LOG_REL;
         if (c.indexOf(p) === -1) c.push(p);
@@ -1444,13 +1445,21 @@ function startGameLogTail() {
     log("game", line.replace(/\r$/, ""));
   }
 
+  // console.log tail 轮询间隔 = 上行 RTT 的主要来源(游戏写行 → 这里扫到)。
+  // 1000ms 时期实测上行 RTT 均值 0.57s(秒级量化;理论均 0.5s)。
+  // tail 是增量读(只读 size-filePos),提频只多几次 statSync,IO 成本可忽略:
+  // 1Hz 实测桥 CPU 0.47% 单核 / 65MB(2026-10-15),4Hz 预期 <2%。
+  // 250ms → 理论上行均值 ~0.125s。注意 FIRST_SHOT_DELAY_MS(客户端 1200ms)仍按
+  // 1Hz 时代的假设保留,两者要联动下调必须各自单独实测(一次只改一个变量)。
+  const GAME_LOG_TAIL_INTERVAL_MS = 250;
+  const TAIL_PROBE_RESCAN_TICKS = Math.round(60000 / GAME_LOG_TAIL_INTERVAL_MS); // 保住"每 60s 重扫候选"语义,不随提频被加速
   setInterval(function () {
     try {
       if (!foundPath) {
         // 库是后来才加的 / 注册表当时读不到:没找到就每 60s 重扫一次候选,
         // 免得启动时机不对就永远停在第一份候选上。
         probeTicks += 1;
-        if (probeTicks % 60 === 0) candidates = buildCandidates();
+        if (probeTicks % TAIL_PROBE_RESCAN_TICKS === 0) candidates = buildCandidates();
         for (let i = 0; i < candidates.length; i += 1) {
           const c = candidates[i];
           try {
@@ -1499,7 +1508,7 @@ function startGameLogTail() {
     } catch (e) {
       // 尾随失败不能影响桥本体
     }
-  }, 1000);
+  }, GAME_LOG_TAIL_INTERVAL_MS);
 
   // ---------- -condebug 缺失告警 ----------
   // 游戏必须带 -condebug 启动才会写 game/citadel/console.log;没有它,BTIPC 上行
@@ -1553,6 +1562,15 @@ function makeServer(host) {
   });
   return s;
 }
+
+// 隐藏 HTML 面板的 https 通道**不在本进程内开监听**,而是交给独立进程
+// core/bridge_https.js(TLS 终结 + 反代到本进程 8791)。三个理由:
+//   ① 本文件的安全护栏要求"整个桥只有一处 listen 调用,且形如 (PORT, host)",
+//      不许出现内联绑定地址的第二个监听;
+//   ② 证书缺失/过期/TLS 握手失败**绝不能连带 BTIPC 一起死** —— 独立进程才有这个隔离;
+//   ③ 面板页面同源 fetch('/api/v1/…') 由代理原样转发,桥的路由与状态零改动。
+// 证书:scripts\gen_bridge_cert.ps1 生成;首次需 -Trust 并**完全退出重启 Steam**
+// (信任库由 Steam 宿主缓存,只重启游戏不生效 —— 2026-10-15 实测)。
 
 // 先绑 IPv4,再绑 IPv6(任一成功即可服务;两者都成功则双栈可达)
 makeServer(HOST_V4);

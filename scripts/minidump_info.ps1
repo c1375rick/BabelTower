@@ -1,4 +1,4 @@
-# 读 minidump:异常码 + 出错模块 + 贫民版栈回溯(不解符号)
+﻿# 读 minidump:异常码 + 出错模块 + 贫民版栈回溯(不解符号)
 # 用法: . scripts\minidump_info.ps1 -Path @(dir\of\dumps)  [-Stack]
 param(
   [Parameter(Mandatory = $true)][string[]]$Path,

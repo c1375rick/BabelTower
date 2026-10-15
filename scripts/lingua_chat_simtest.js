@@ -11,7 +11,10 @@ const fs = require("fs");
 // 必须落盘桥才收得到;MockPanel 另补 SetImage(真 HTTP GET /btipc/dl),200 → 触发
 // ImageLoaded 置位。缺这两处时 128 位恒 0 → 全零轮 → CRC 必败,表现为 frameFails
 // 风暴 + "bridge offline" + 翻译全灭(属仿真环境缺口,非产品 bug)。
-const GAME_LOG = "F:/SteamLibrary/steamapps/common/Deadlock/game/citadel/console.log";
+// 2026-10-15:游戏迁到 C:\SteamLibrary;DEADLOCK_ROOT 优先,兜底写新安装根。
+const GAME_LOG =
+  (process.env.DEADLOCK_ROOT || "C:/SteamLibrary/steamapps/common/Deadlock") +
+  "/game/citadel/console.log";
 let imageLoadedHandler = null;
 
 // node 原生 setTimeout 引用:mock 基础设施必须用它,不查全局

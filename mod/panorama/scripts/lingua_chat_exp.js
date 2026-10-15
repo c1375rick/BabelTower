@@ -2129,6 +2129,188 @@
   }
 
 
+  // ============= EXP6739:隐藏 HTML 面板 https 导航可行性(2026-10-15)=============
+  // 问题:exp6729 判死矩阵只覆盖 file:// 与 http://(含 localhost/127.0.0.1),
+  //       **https:// 全家从未测过**;而市面上一款同类实现把整套低延迟通道押在
+  //       https://localhost + 自签证书(还带 Trust-Local-Https.ps1 塞信任库)。
+  // 判据一字不改沿用 6729:src="" = 引擎压根没开始加载(硬死签名);
+  //       panel.title / GetAttributeString("title") 读回复;最终以服务端 HIT 日志为最硬判据。
+  // 三臂共用 chat.xml 里已声明的 LCTBridgePanel —— 运行时 $.CreatePanel("HTML") 无效(见核心注释),
+  // 所以本探针绝不自己造面板,只复用已声明的那一个,顺序执行避免 supersede 竞争。
+  // 服务端:node scripts\probe_https_server.js(http 对照 8792 / https 实验 8793,同一页面同一判据)
+  var EXP6739_ARMS = [
+    { id: "A1-http-localhost", url: "http://localhost:8792/bridge?id=exp6739a1&t=lct-alive" },
+    { id: "B1-https-localhost", url: "https://localhost:8793/bridge?id=exp6739b1&t=lct-alive" },
+    { id: "A2-http-ip", url: "http://127.0.0.1:8792/bridge?id=exp6739a2&t=lct-alive" }
+  ];
+  var EXP6739_AT = [600, 1500, 3000, 4500]; // ms 采样点
+  var EXP6739_ARM_MS = 6000; // 每臂总时长
+
+  // ============= EXP6740:公网 https 对照(2026-10-15)=============
+  // 上一轮把"引擎不认用户信任库证书"当成了定论,但用户质疑得对:那套 X509_STORE 是 Valve
+  // 校验自身模块签名用的,与用户证书无关。于是根因仍有三种可能,而它们对产品的影响天差地别:
+  //   (a) 信任锚为空        -> 一切 https 都死(含公网),本地 https 结案
+  //   (b) 只认内嵌 DigiCert 根 -> 只有 DigiCert 签发的公网证书能用
+  //   (c) 读 Windows 机器级 store -> LocalMachine\Root + 管理员可能有救(未测)
+  // 用公网站点把 (a)/(b) 分开:P1 是 DigiCert 根(与二进制内嵌的唯一公共根同源),
+  // P2 是 ISRG 根(不同根)。P1 通而 P2 不通 => 坐实 (b)。P3 是公网 http 对照,
+  // 用来区分"scheme 门只针对 loopback"还是"全面封 http"。
+  // 判读:src 变非空 = 导航真的开始了(这比 title 更硬,公网页面标题我们控制不了);
+  //       title/attrTitle 非空 = 页面连标题都读回来了。
+  // 说明:这三条只是让游戏向公开网站发一次普通 GET(只读探测),不带任何聊天内容或本机信息。
+  var EXP6740_ARMS = [
+    { id: "P1-https-digicert", url: "https://www.digicert.com/" },
+    { id: "P2-https-letsencrypt", url: "https://letsencrypt.org/" },
+    { id: "P3-http-example", url: "http://example.com/" },
+    { id: "P4-https-google", url: "https://www.google.com/generate_204" }
+  ];
+  var EXP6740_AT = [1200, 3000, 6000, 10000]; // 公网更慢,采样点拉长
+  var EXP6740_ARM_MS = 14000;
+
+  function exp6739Snap(panel) {
+    var src = "", ttype = "?", tval = "", attr = "";
+    try { src = panel.GetAttributeString ? String(panel.GetAttributeString("src", "") || "") : ""; } catch (e) {}
+    try { ttype = typeof panel.title; } catch (e) { ttype = "throw"; }
+    try { tval = String(panel.title || ""); } catch (e) {}
+    try { attr = panel.GetAttributeString ? String(panel.GetAttributeString("title", "") || "") : ""; } catch (e) {}
+    return "src=" + JSON.stringify(src.slice(0, 48)) +
+      " titleType=" + ttype + " title=" + JSON.stringify(tval.slice(0, 32)) +
+      " attrTitle=" + JSON.stringify(attr.slice(0, 32));
+  }
+
+  function expArmRun(panel, arms, at, armMs, idx, tag) {
+    if (idx >= arms.length) { log(tag + ": ALL ARMS DONE(" + arms.length + " 臂跑完)"); return; }
+    var a = arms[idx];
+    var threw = "";
+    log(tag + ": ARM " + a.id + " START url=" + a.url);
+    try { panel.SetURL(a.url); }
+    catch (e) { threw = expErr(e); log(tag + ": ARM " + a.id + " SetURL THREW " + threw); }
+    var last = "";
+    for (var s = 0; s < at.length; s++) {
+      (function (delay) {
+        try {
+          $.Schedule(delay / 1000, function () {
+            if (!isValid(panel)) { log(tag + ": ARM " + a.id + " panel invalid @" + delay + "ms"); return; }
+            var snap = exp6739Snap(panel);
+            var mark = (snap === last) ? " (same)" : " *CHANGED*";
+            last = snap;
+            log(tag + ": ARM " + a.id + " t=+" + delay + "ms " + snap + mark);
+          });
+        } catch (e) {}
+      })(at[s]);
+    }
+    try {
+      $.Schedule(armMs / 1000, function () {
+        var snap = isValid(panel) ? exp6739Snap(panel) : "panel-invalid";
+        var verdict = "UNKNOWN";
+        var titleSeen = "";
+        try {
+          var m = snap.match(/src=(".*?")/);
+          var src = m ? JSON.parse(m[1]) : "";
+          var tm = snap.match(/attrTitle=(".*?")/);
+          titleSeen = tm ? JSON.parse(tm[1]) : "";
+          if (snap.indexOf("lct-alive") >= 0) verdict = "LOADED-TITLE-OK(自家页面)";
+          else if (!src) verdict = "DEAD-src-empty(引擎压根没开始加载)";
+          else if (titleSeen) verdict = "NAV-STARTED+有标题(" + titleSeen.slice(0, 40) + ")";
+          else verdict = "NAV-STARTED(导航已开始,标题暂空)";
+        } catch (e) {}
+        log(tag + ": ARM " + a.id + " VERDICT=" + verdict + " | " + snap +
+          " | seturlThrew=" + (threw ? "yes" : "no") +
+          " | 本地臂交叉核对 logs\\probe_https.log 的 HIT / tlsClientError");
+        expArmRun(panel, arms, at, armMs, idx + 1, tag);
+      });
+    } catch (e) { log(tag + ": ARM " + a.id + " schedule THREW " + expErr(e)); }
+  }
+
+  function runExp6739() {
+    if (State.exp6739Running) { log("exp6739: already running, skip"); return; }
+    var panel = null;
+    try { panel = findChild(getRoot(), "LCTBridgePanel"); } catch (e) {}
+    if (!isValid(panel)) { log("exp6739: ABORT — chat.xml 里没找到 LCTBridgePanel(声明丢了?)"); return; }
+    State.exp6739Running = true;
+    State.exp6739Pass = (State.exp6739Pass || 0) + 1;
+    log("exp6739: START pass=" + State.exp6739Pass + " ver=" + VERSION +
+      " | SetURL=" + (typeof panel.SetURL === "function" ? "yes" : "NO") +
+      " | titleType=" + (typeof panel.title) +
+      " | 需先跑 node scripts\\probe_https_server.js");
+    expArmRun(panel, EXP6739_ARMS, EXP6739_AT, EXP6739_ARM_MS, 0, "exp6739");
+    try {
+      $.Schedule((EXP6739_ARMS.length * EXP6739_ARM_MS) / 1000 + 3, function () {
+        State.exp6739Running = false;
+        log("exp6739: FINISH(共用面板已复位,不影响核心 BTIPC)");
+      });
+    } catch (e) {}
+  }
+  // EXP6740:公网 https 对照。上一轮只测了本地臂,分不开"信任锚为空"与"只认内嵌 DigiCert 根",
+  // 所以这一轮直接拿公网站点分;这三条只是普通 GET(只读),不带任何聊天内容或本机信息。
+  function runExp6740() {
+    if (State.exp6740Running) { log("exp6740: already running, skip"); return; }
+    var panel = null;
+    try { panel = findChild(getRoot(), "LCTBridgePanel"); } catch (e) {}
+    if (!isValid(panel)) { log("exp6740: ABORT — chat.xml 里没找到 LCTBridgePanel"); return; }
+    State.exp6740Running = true;
+    log("exp6740: START ver=" + VERSION +
+      " | 读法:src 变非空 = 导航真的开始(硬判据);title/attrTitle 有值 = 页面标题都读回来了" +
+      " | 期望:P1(DigiCert根)通 ⇒ 信任锚含 DigiCert;P1通P2(ISRG根)不通 ⇒ 只认 DigiCert;全不通 ⇒ 信任锚为空");
+    expArmRun(panel, EXP6740_ARMS, EXP6740_AT, EXP6740_ARM_MS, 0, "exp6740");
+    try {
+      $.Schedule((EXP6740_ARMS.length * EXP6740_ARM_MS) / 1000 + 3, function () {
+        State.exp6740Running = false;
+        log("exp6740: FINISH(共用面板已复位,不影响核心 BTIPC)");
+      });
+    } catch (e) {}
+  }
+
+  // 2026-10-15 实验已收官(结论见 docs/ipc-checklist-6726.md 的 6739/6740 行):
+  // HTML 面板 SetURL 对所有 http/https 一律失效,BTIPC 位泵是唯一可用通道。
+  // **默认不自动跑**(免得每次开机白刷 8 条臂的日志)。需要复测时打开下面 3 行,
+  // 或在控制台直接调 globalThis.LCTNS.runExp6739() / runExp6740()。
+  // try {
+  //   $.Schedule(12, function () { runExp6739(); });
+  //   $.Schedule(42, function () { runExp6739(); });
+  //   $.Schedule(75, function () { runExp6740(); });
+  // } catch (e) {}
+  // 本地臂前置条件:先跑 node scripts\probe_https_server.js(需 probe_localhost.pfx;
+  // logs\probe_https.log 是最硬判据,务必先确认当次真的在监听再采信"全灭")。
+
+  // ============= EXP6742:我们自己的 https 面板通道验证(2026-10-15)=============
+  // 背景:实机对照证明"证书受信 + 完全重启 Steam"后隐藏 HTML 面板通道可用(参考实现侧
+  // 计数 786、errors 0)。现在把同一条配方用在我们自己的桥上验证:
+  //   桥侧已开 https://localhost:8792(证书 scripts\gen_bridge_cert.ps1 生成,含 IP SAN)。
+  // 判读:title 出现 lct-alive = 页面加载了;出现 LCT<id> = 拿到应答。
+  // H3 是 http 对照臂,预期仍然 DEAD(用来确认"只有 https 通",别把运气当结论)。
+  var EXP6742_ARMS = [
+    { id: "H1-https-localhost", url: "https://localhost:8792/bridge?op=health&id=exp6742a" },
+    { id: "H2-https-ip", url: "https://127.0.0.1:8792/bridge?op=health&id=exp6742b" },
+    { id: "H3-http-localhost", url: "http://localhost:8791/bridge?op=health&id=exp6742c" }
+  ];
+  var EXP6742_AT = [800, 2000, 4000];
+  var EXP6742_ARM_MS = 6000;
+
+  function runExp6742() {
+    if (State.exp6742Running) { log("exp6742: already running, skip"); return; }
+    var panel = null;
+    try { panel = findChild(getRoot(), "LCTBridgePanel"); } catch (e) {}
+    if (!isValid(panel)) { log("exp6742: ABORT — chat.xml 里没找到 LCTBridgePanel"); return; }
+    State.exp6742Running = true;
+    State.exp6742Pass = (State.exp6742Pass || 0) + 1;
+    log("exp6742: START pass=" + State.exp6742Pass +
+      " | 前置:已跑 gen_bridge_cert.ps1 -Trust 且**完全重启过 Steam**(只重启游戏无效)" +
+      " | 判读:title=lct-alive → 页面加载;title=LCT<id> → 拿到应答;H3 http 对照预期仍 DEAD");
+    expArmRun(panel, EXP6742_ARMS, EXP6742_AT, EXP6742_ARM_MS, 0, "exp6742");
+    try {
+      $.Schedule((EXP6742_ARMS.length * EXP6742_ARM_MS) / 1000 + 3, function () {
+        State.exp6742Running = false;
+        log("exp6742: FINISH(共用面板已复位,不影响核心 BTIPC)");
+      });
+    } catch (e) {}
+  }
+  // 两遍取双样本(第一遍可能在证书刚信任后仍被 Steam 缓存,第二遍确认)
+  try {
+    $.Schedule(12, function () { runExp6742(); });
+    $.Schedule(45, function () { runExp6742(); });
+  } catch (e) {}
+
   // ---- P4a:向核心 expCall 晚绑定派发口发布探针入口(/bt* 命令链路)----
   globalThis.LCTNS = globalThis.LCTNS || {};
   globalThis.LCTNS.exp6734cSubmitHook = exp6734cSubmitHook;
@@ -2137,4 +2319,7 @@
   globalThis.LCTNS.runExp6734D = runExp6734D;
   globalThis.LCTNS.runExp6734E = runExp6734E;
   globalThis.LCTNS.runExp6738 = runExp6738;
+  globalThis.LCTNS.runExp6739 = runExp6739;
+  globalThis.LCTNS.runExp6740 = runExp6740;
+  globalThis.LCTNS.runExp6742 = runExp6742;
 })();

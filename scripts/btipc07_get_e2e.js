@@ -22,7 +22,10 @@ const syncData = require("../core/sync_data.js");
 
 const HOST = "127.0.0.1";
 const PORT = 8791;
-const LOG = "F:/SteamLibrary/steamapps/common/Deadlock/game/citadel/console.log";
+// 2026-10-15:游戏迁到 C:\SteamLibrary;DEADLOCK_ROOT 优先,兜底写新安装根。
+const LOG =
+  (process.env.DEADLOCK_ROOT || "C:/SteamLibrary/steamapps/common/Deadlock") +
+  "/game/citadel/console.log";
 const T_CLOSE_MS = Number(process.env.BT_CLOSE_MS || 600);
 const MAX_ROUNDS = Number(process.env.BT_MAX_ROUNDS || 400);
 

@@ -28,6 +28,8 @@ function findDeadlockRoot() {
     ...discovered,
     "F:\\SteamLibrary\\steamapps\\common\\Deadlock",
     "D:\\SteamLibrary\\steamapps\\common\\Deadlock",
+    // 2026-10-15:本机游戏迁到 C:\SteamLibrary(NVMe),旧 F: 行仅作历史兜底。
+    "C:\\SteamLibrary\\steamapps\\common\\Deadlock",
     "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Deadlock",
   ];
   for (const c of candidates) {

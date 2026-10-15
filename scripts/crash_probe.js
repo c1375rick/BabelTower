@@ -15,8 +15,10 @@ const readLines = (p) => {
 };
 
 const bridge = readLines("logs/bridge.log");
+// 2026-10-15:游戏迁到 C:\SteamLibrary;DEADLOCK_ROOT 优先,兜底写新安装根。
 const cons = readLines(
-  "F:/SteamLibrary/steamapps/common/Deadlock/game/citadel/console.log"
+  (process.env.DEADLOCK_ROOT || "C:/SteamLibrary/steamapps/common/Deadlock") +
+    "/game/citadel/console.log"
 );
 
 // bridge.log lines are prefixed [YYYY-MM-DD HH:MM:SS]

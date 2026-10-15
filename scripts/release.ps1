@@ -19,7 +19,7 @@
 param(
   [string]$Version = "",
   [switch]$Build,
-  [string]$Csdk12Root = "F:\SteamLibrary\steamapps\common\Deadlock\Reduced_CSDK_12",
+  [string]$Csdk12Root = "F:\dev-tools\Reduced_CSDK_12",
   [switch]$Draft,
   [switch]$WhatIf,
   [switch]$Force

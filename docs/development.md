@@ -81,7 +81,7 @@ Bing 免 Key 与 Microsoft 双服务商均已实测,真实译文验证通过)。
 ## 3. 构建
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Csdk12Root "F:\SteamLibrary\steamapps\common\Deadlock\Reduced_CSDK_12"
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Csdk12Root "F:\dev-tools\Reduced_CSDK_12"
 ```
 
 - 编译:`resourcecompiler.exe -i <src> -o <dst>`(逐文件,输出扩展名自动规范化)

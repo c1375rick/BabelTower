@@ -110,6 +110,38 @@ if ($ok) {
 
 if ($ok) {
     Write-Host "[LCT] 健康检查通过: $HealthUrl (200)"
+
+    # 4.5 面板通道的 TLS 终结进程(2026-10-15)
+    #     隐藏 HTML 面板只接受证书有效的 https,游戏侧因此需要一个 https 入口。
+    #     做成**独立进程**(core\bridge_https.js,反代到上面这个 http 端口),理由:
+    #       · 证书缺失/过期/TLS 握手失败绝不能连带 BTIPC 一起死;
+    #       · bridge_server.js 的安全护栏要求整个桥只有一处 listen 调用。
+    #     这里**故意不因它失败而让重启失败** —— 没证书的用户继续走 BTIPC,零影响。
+    $Https = Join-Path $Root "core\bridge_https.js"
+    if (Test-Path $Https) {
+        Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and $_.CommandLine -match 'bridge_https' } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        try {
+            $hp = Start-Process -FilePath $Node -ArgumentList ('"' + $Https + '"') `
+                -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+            Start-Sleep -Milliseconds 1200
+            if ($hp.HasExited) {
+                if ($hp.ExitCode -eq 3) {
+                    Write-Host "[LCT] 面板 https 通道未启用(证书缺失,不影响 BTIPC)。" -ForegroundColor Yellow
+                    Write-Host "[LCT]   要启用: powershell -ExecutionPolicy Bypass -File scripts\gen_bridge_cert.ps1 -Trust"
+                    Write-Host "[LCT]   信任后必须**完全退出并重启 Steam**,只重启游戏不生效。"
+                } else {
+                    Write-Host ("[LCT] 面板 https 通道进程异常退出(exit={0}),不影响 BTIPC。" -f $hp.ExitCode) -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host ("[LCT] 面板 https 通道已启动 PID {0}(证书未受信时游戏侧会拒绝,属正常)" -f $hp.Id)
+            }
+        } catch {
+            Write-Host ("[LCT] 面板 https 通道启动失败(不影响 BTIPC): {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        }
+    }
+
     Write-Host "[LCT] 重启完成 OK"
     $rc = 0
 } else {

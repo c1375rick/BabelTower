@@ -145,9 +145,9 @@ mod 与游戏共用同一管线;V 社若封它需同时处理自家头像功能(
 
 ```bash
 # 解包(全部 layout + styles)
-tools/Source2Viewer-CLI.exe -i "F:/SteamLibrary/steamapps/common/Deadlock/game/citadel/pak01_dir.vpk" \
+tools/Source2Viewer-CLI.exe -i "C:/SteamLibrary/steamapps/common/Deadlock/game/citadel/pak01_dir.vpk" \
   -d -f "panorama/layout" -e "vxml_c" -o /tmp/dl6726 --threads 8
-tools/Source2Viewer-CLI.exe -i "F:/SteamLibrary/steamapps/common/Deadlock/game/citadel/pak01_dir.vpk" \
+tools/Source2Viewer-CLI.exe -i "C:/SteamLibrary/steamapps/common/Deadlock/game/citadel/pak01_dir.vpk" \
   -d -f "panorama/styles" -e "vcss_c" -o /tmp/dl6726 --threads 8
 
 # 确认 0 JS

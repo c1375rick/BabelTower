@@ -91,7 +91,15 @@ check("装包完整性自检把 steam_paths 算作必需模块", /"\.\/steam_pat
 check("不再把两条写死路径当唯一候选",
   !/const candidates = \[\];\s*\n\s*if \(cfg\.gameLogPath\) candidates\.push\(cfg\.gameLogPath\);\s*\n\s*candidates\.push\("F:\/SteamLibrary/.test(bridge));
 check("写死路径退为兜底(注册表/vdf 读不到时仍可用)", /F:\/SteamLibrary/.test(bridge));
-check("未找到时每 60s 重扫候选(库是后来才加的)", /probeTicks % 60 === 0/.test(bridge));
+// 2026-10-15:tail 提频到 250ms(降上行 RTT),重扫周期不能再写死 "60 tick"
+// —— 否则语义从"每 60s"变成"每 15s"。护栏改为盯住派生式本身 + 把间隔钉死。
+check("未找到时每 60s 重扫候选(库是后来才加的)",
+  /const TAIL_PROBE_RESCAN_TICKS = Math\.round\(60000 \/ GAME_LOG_TAIL_INTERVAL_MS\)/.test(bridge) &&
+  /probeTicks % TAIL_PROBE_RESCAN_TICKS === 0/.test(bridge));
+check("console.log tail 间隔钉在 250ms(改间隔必须重跑上行 RTT 基线)",
+  /const GAME_LOG_TAIL_INTERVAL_MS = 250;/.test(bridge) &&
+  /\}, GAME_LOG_TAIL_INTERVAL_MS\);/.test(bridge) &&
+  !/\}, 1000\);/.test(bridge));
 check("DEADLOCK_ROOT 环境变量也进候选", /process\.env\.DEADLOCK_ROOT/.test(bridge));
 
 // 构建工具同款问题一并修(否则 /gamenames 在非标准路径下静默为空)

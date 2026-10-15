@@ -1,11 +1,13 @@
-# Guarded installer: wait until deadlock.exe is fully gone and stable,
+﻿# Guarded installer: wait until deadlock.exe is fully gone and stable,
 # then back up the installed VPK and swap in the fresh build.
 # Rule: never install while the game is running. We re-check the process
 # right before the copy to avoid the "crash -> auto-restart" race that would
 # leave a half-written VPK on disk.
 param(
   [string]$Src = "F:\BabelTower\dist\pak01_dir.vpk",
-  [string]$Dst = "F:\SteamLibrary\steamapps\common\Deadlock\game\citadel\addons\pak15_dir.vpk",
+  # 2026-10-15:游戏从 F:\SteamLibrary(外置机械盘)迁到 C:\SteamLibrary(NVMe)。
+  # DEADLOCK_ROOT 为权威覆盖(桥同款口径),缺省写当前安装根;旧 F: 路径已不存在。
+  [string]$Dst = $(if ($env:DEADLOCK_ROOT) { Join-Path $env:DEADLOCK_ROOT "game\citadel\addons\pak15_dir.vpk" } else { "C:\SteamLibrary\steamapps\common\Deadlock\game\citadel\addons\pak15_dir.vpk" }),
   # 备份名标签。默认值 2026-10-13 起从 "pre-targethero" 改为 "install":
   #   backups accumulate with this tag forever; the old default named one specific
   #   past fix ("targethero"), so every install since then produced misleading
@@ -36,6 +38,25 @@ function Test-GameRunning {
 
 function Install-Once {
   W ("armed: waiting for game to close   src=" + $Src)
+  # 2026-10-15:静默 ABORT 取证。此前本脚本在 $Dst 为 null 时于 Split-Path -Parent $Dst
+  # 抛 "Path 参数是空值",而外层 catch 只记 Exception.Message,日志里只剩
+  # "armed:" + "ABORT: unexpected error - ..." 两行,既不说是谁、也不说哪一行 ——
+  # 白丢一次装车窗口(新包没进游戏,探针没跑,而日志看起来像"装过了")。
+  # 现在:① 自报 PowerShell 实际绑定的参数与各值类型,null 当场可见;
+  #       ② Dst 为空就地兜底并留痕,不静默中止。
+  # 注意:本文件注释里禁止出现反引号 —— PowerShell 5.1 里注释中的反引号会吃掉换行,
+  # 把后续行一起注释掉,表现为远端报"缺少右花括号"(2026-10-15 实踩)。
+  if (-not $Src) { W "ABORT: Src is null/empty"; return 1 }
+  # 原样自报 PowerShell 到底绑上了什么、$Dst 此刻是什么类型 —— 2026-10-15 定位用:
+  # 仿制脚本(同参数块形状)能绑上 -Dst,真脚本绑不上,且日志里看不出差异,只能让脚本自己说。
+  W ("bound=[" + (($PSBoundParameters.Keys | Sort-Object) -join ",") + "]" +
+     "  rawDst=[" + $Dst + "]  rawDstType=" + $(if ($null -eq $Dst) { "null" } else { $Dst.GetType().Name }) +
+     "  rawSrc=[" + $Src + "]  tag=[" + $Tag + "]")
+  if (-not $Dst) {
+    $Dst = "C:\SteamLibrary\steamapps\common\Deadlock\game\citadel\addons\pak15_dir.vpk"
+    W ("WARN: Dst default resolved to null/empty -> fallback used: " + $Dst)
+  }
+  W ("params: Src.len=" + $Src.Length + "  Dst.len=" + $Dst.Length + "  Tag=" + $Tag)
   if (-not (Test-Path $Src)) { W "ABORT: source missing"; return 1 }
   if (-not (Test-Path (Split-Path -Parent $Dst))) {
     # First run on a machine where citadel\addons was never created: the old
@@ -152,7 +173,12 @@ try {
   # script, so logs\*.log ended at "armed:" with no ABORT line at all -- the one
   # thing an operator greps for. Any escaping error now gets logged and turned
   # into a non-zero exit.
-  W ("ABORT: unexpected error - " + $_.Exception.Message)
+  # 2026-10-15: 再加行号与命令名。下一次再出现 null 入参类故障时,这一行就能直接
+  # 指到具体语句,不用再靠仿制脚本反推(Src.len/Dst.len 已在 Install-Once 入口留痕)。
+  $line = 0; $cmd = ""
+  try { $line = $_.InvocationInfo.ScriptLineNumber } catch {}
+  try { $cmd = $_.InvocationInfo.Line.Trim() } catch {}
+  W ("ABORT: unexpected error - " + $_.Exception.Message + "  @line " + $line + "  cmd=" + $cmd)
   $rc = 1
 } finally {
   if ($owns) { try { $mutex.ReleaseMutex() } catch { } }
