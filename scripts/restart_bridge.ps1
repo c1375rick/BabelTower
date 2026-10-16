@@ -117,6 +117,8 @@ if ($ok) {
     #       · 证书缺失/过期/TLS 握手失败绝不能连带 BTIPC 一起死;
     #       · bridge_server.js 的安全护栏要求整个桥只有一处 listen 调用。
     #     这里**故意不因它失败而让重启失败** —— 没证书的用户继续走 BTIPC,零影响。
+    #     通道设计与坑的来源见 docs/btipc-https-v1.md §2;启用流程(需 -Trust 且完全
+    #     重启 Steam)见该文 §4。
     $Https = Join-Path $Root "core\bridge_https.js"
     if (Test-Path $Https) {
         Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |

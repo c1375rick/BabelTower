@@ -85,11 +85,56 @@ Copy-Item (Join-Path $Root "restart_bridge.bat") (Join-Path $Stage "restart_brid
 Copy-Item (Join-Path $Root "scripts\restart_bridge.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "scripts\bridge_health.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "StartDeadlock.bat") (Join-Path $Stage "StartDeadlock.bat")
-# 双击即用的自启安装/卸载包装(内部自动处理路径)
-Copy-Item (Join-Path $Root "install-autostart.bat") (Join-Path $Stage "install-autostart.bat")
-Copy-Item (Join-Path $Root "remove-autostart.bat") (Join-Path $Stage "remove-autostart.bat")
+# 维护总入口(2026-10-16 精简:装/更/卸/检/自启开关 6 对 bat 合成 1 个,菜单分发;文件名自解释)
+Copy-Item (Join-Path $Root "BabelTower-维护菜单.bat") (Join-Path $Stage "BabelTower-维护菜单.bat")
 # 诊断启动器: 前台跑桥,崩溃不闪退,错误停留可见(StartDeadlock 活性检查失败时也指引到它)
 Copy-Item (Join-Path $Root "run-bridge.bat") (Join-Path $Stage "run-bridge.bat")
+
+# https 面板通道的两件套(2026-10-15):证书工具 + 一键安装入口。
+# 背景:隐藏 HTML 面板的 https 回程**唯一拦点是证书链**(引擎 neterror -202),而
+# scripts\gen_bridge_cert.ps1 此前**根本没进包** —— 下载版用户即使看得见通道也永远开不了它,
+# 只能退回 3~27s 的 BTIPC 位泵。install_babeltower.ps1 把「信任证书 + 起桥 + 验收 +
+# 下一步」串成一次双击,并在失败时明说"还剩什么能用"。
+Copy-Item (Join-Path $Root "scripts\gen_bridge_cert.ps1") (Join-Path $Stage "scripts\")
+Copy-Item (Join-Path $Root "scripts\install_babeltower.ps1") (Join-Path $Stage "scripts\")
+
+# 卸载侧(2026-10-15):此前只有 remove-autostart.bat(只删自启),"卸载"这件事散落五处
+# (mod 包 / 自启 / 常驻桥 / 信任库里的证书 / 状态目录),用户只能手动删文件,很容易留残件。
+# 默认保守:先列现状、逐项确认;删备份与删状态目录必须额外开关。
+Copy-Item (Join-Path $Root "scripts\uninstall_babeltower.ps1") (Join-Path $Stage "scripts\")
+
+# 更新 + 检测(2026-10-15):社区启动器(alloywr147/BabelTowerLauncher,MIT)已把
+# "只读官方 Releases + 校验体积与 sha256 + 游戏运行时只下载"这套做成了 GUI;
+# 我们用脚本提供同样的能力,GUI 用户的启动器与本脚本互不冲突(同源同校验)。
+Copy-Item (Join-Path $Root "scripts\update_babeltower.ps1") (Join-Path $Stage "scripts\")
+Copy-Item (Join-Path $Root "scripts\diagnose_babeltower.ps1") (Join-Path $Stage "scripts\")
+
+# VERSION 必须进包(2026-10-15 补),且必须落在下面的用户入口断言**之前** ——
+# 断言早于"复制文档与许可",放晚了会被断言当场拦下(第一次就踩了:出包直接失败)。
+# 为什么它关键:core/bridge_server.js 的 readLocalVersion() 读的是 core/../VERSION。
+# 历史上 1.0.9~1.2.0 **一个发行包都没带它**,于是用户装完 /api/v1/health 的 version 恒为
+# "unknown"、/api/v1/version-check 的 currentVersion 恒为 null —— 而后者正是
+# "有没有新版本"的比较基准,等于一直拿 null 在比。
+# 打包脚本以前只**读**VERSION 来命名 zip,从不**拷**它,漏的就是这一步。
+Copy-Item (Join-Path $Root "VERSION") (Join-Path $Stage "VERSION") -Force
+
+# 用户入口断言(2026-10-15):递归复制与通配复制都会**静默漏掉**某个新入口,而用户看到的
+# 症状是"双击没反应 / 功能少了" —— 没有任何报错能指向"打包时漏打"。
+# 因此这里显式点名每个用户会双击或被文档指引的文件,缺一个就拒绝出包。
+$requiredUserEntry = @(
+  "restart_bridge.bat", "StartDeadlock.bat", "run-bridge.bat",
+  "BabelTower-维护菜单.bat",
+  "scripts\restart_bridge.ps1", "scripts\bridge_health.ps1", "scripts\autostart.ps1",
+  "scripts\gen_bridge_cert.ps1", "scripts\install_babeltower.ps1",
+  "scripts\uninstall_babeltower.ps1", "scripts\update_babeltower.ps1",
+  "scripts\diagnose_babeltower.ps1",
+  "core\bridge_https.js",
+  # 桥的 readLocalVersion() 读 core/../VERSION;漏了它,用户侧 health 恒为 unknown
+  "VERSION"
+)
+foreach ($f in $requiredUserEntry) {
+  if (-not (Test-Path (Join-Path $Stage $f))) { Fail "发行包缺用户入口 $f(漏打;用户侧症状是双击没反应或功能缺失)" }
+}
 
 Write-Host "==> 复制内置 Node 运行时..."
 Copy-Item (Join-Path $Root "portable-node\node.exe") (Join-Path $Stage "portable-node\node.exe")

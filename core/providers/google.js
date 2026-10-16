@@ -110,7 +110,8 @@ async function translate(text, opts) {
 }
 
 module.exports = {
-  id: "google",
+  requiresKey: false,
+id: "google",
   label: "Google Cloud(需 Key)",
   translate,
 };

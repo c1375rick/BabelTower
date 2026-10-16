@@ -582,23 +582,45 @@ test("openai: 温度参数 400 自动去掉 temperature 重试并成功", async 
   assert.strictEqual(secondBody.temperature, undefined, "重试请求不应带 temperature");
 });
 
-// 6. Bing 429 限流: 指数退避重试(1s→2s),之后成功
-test("bing: 429 指数退避重试后成功", async () => {
+// 6. Bing 429 限流。
+// 2026-10-15 行为变更(实机驱动):原来是「1s→2s→4s 共 7 秒」的指数退避。那 7 秒里
+// provider 不抛错,桥的**回退链根本没机会接手**,用户的聊天也被一起饿死;而且限流提示
+// 走 console.log、桥是隐藏窗口启动,提示全部蒸发,现场只剩"慢了 8 秒"的黑盒。
+// 现在:短等一次(600ms)就放弃并抛 rateLimited,把回退机会让出去。
+// 因此测试也拆成两条 —— 「瞬时限流要能恢复」与「持续限流必须快速让出」,后者才是这次的重点。
+test("bing: 单次瞬时 429 → 短等一次后成功", async () => {
   let postCount = 0;
   mock.setHandler(() => {
     postCount++;
-    if (postCount <= 2) {
+    if (postCount === 1) {
       return httpErr(429, "");
     }
     return ok([{ translations: [{ text: "Hello" }], detectedLanguage: { language: "zh-Hans" } }]);
   });
-  const r = await bing.translate("你好", { targetLanguage: "en", timeoutMs: 2000 });
+  const t0 = Date.now();
+  const r = await bing.translate("你好", { targetLanguage: "en", timeoutMs: 5000 });
+  const ms = Date.now() - t0;
   assert.strictEqual(r.translation, "Hello");
-  assert.strictEqual(postCount, 3, "429 应退避重试,第三次成功");
-  assert.ok(
-    mock.requests.every((x) => x.path === "/translate/translatetext"),
-    "重试应发往同一 Edge 端点"
+  assert.strictEqual(postCount, 2, "429 应重试一次,第二次成功");
+  assert.ok(ms >= 400, "应确实等过那一小段时间(证明有退避),实测 " + ms + "ms");
+  assert.ok(ms < 3000, "但不该睡成秒级(旧实现是 7 秒),实测 " + ms + "ms");
+});
+
+test("bing: 持续 429 → 快速失败并交出回退机会(不再睡 7 秒)", async () => {
+  let postCount = 0;
+  mock.setHandler(() => {
+    postCount++;
+    return httpErr(429, "");
+  });
+  const t0 = Date.now();
+  await assert.rejects(
+    bing.translate("你好", { targetLanguage: "en", timeoutMs: 20000 }),
+    (e) => e.status === 429 && e.rateLimited === true,
+    "应抛带 status=429 与 rateLimited 标记的错误,让桥立刻走回退链"
   );
+  const ms = Date.now() - t0;
+  assert.strictEqual(postCount, 2, "只重试一次(1 次原请求 + 1 次重试)");
+  assert.ok(ms < 2500, "持续限流必须快速让出,实测 " + ms + "ms(旧实现要 7 秒)");
 });
 
 // 7. Microsoft region 头: opts.region 有值时请求头包含 Ocp-Apim-Subscription-Region

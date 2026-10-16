@@ -112,7 +112,8 @@ async function translate(text, opts) {
 }
 
 module.exports = {
-  id: "microsoft",
+  requiresKey: true,
+id: "microsoft",
   label: "Microsoft Translator",
   translate,
 };

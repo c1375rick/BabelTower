@@ -417,7 +417,10 @@ function log(level, msg) {
   const ts = localTimestamp();
   const line = "[" + ts + "] [" + level + "] " + msg;
   // 任何日志都不允许包含 apiKey;调用方自行保证
-  console.log(line);
+  // _capSuppress:log() 自己已落盘,别让下面的 console 捕获再写一遍(否则每行出现两次)
+  _capSuppress = true;
+  try { console.log(line); } catch (e) {}
+  _capSuppress = false;
   try {
     if (activeConfig && activeConfig.logFile) {
       const file = path.resolve(__dirname, "..", activeConfig.logFile);
@@ -426,6 +429,45 @@ function log(level, msg) {
     }
   } catch (e) {}
 }
+
+// ---------- console.* 捕获:让 provider 内部的诊断也进日志 ----------
+// 起因(2026-10-15 实机):各 provider 用 console.log 打自己的诊断(如 bing 命中 429 限流时的
+// 退避提示),而桥是**隐藏窗口**启动的,stdout 没有任何人接 → 这些日志全部蒸发。
+// 后果:游戏侧一次翻译慢了 8 秒,logs\bridge.log 里找不到"限流"二字,只能靠时间吻合反推,
+// 最后是读 provider 源码里"1s→2s→4s"的退避表才对上的。**缺这条,provider 内部问题永远是黑盒。**
+let _capSuppress = false;
+function captureConsoleToLog() {
+  for (const level of ["log", "warn", "error"]) {
+    const orig = console[level] ? console[level].bind(console) : function () {};
+    console[level] = function () {
+      const parts = [];
+      for (const a of arguments) {
+        try {
+          if (typeof a === "string") parts.push(a);
+          else if (a && a.stack) parts.push(String(a.stack));
+          else parts.push(JSON.stringify(a));
+        } catch (e) { parts.push(String(a)); }
+      }
+      const text = parts.join(" ");
+      try { orig(text); } catch (e) {}
+      if (_capSuppress) return;
+      try {
+        // 日志路径**不能依赖 activeConfig 是否已加载**:捕获装在文件前段(L460 附近),
+        // 而 activeConfig 到 L1400 多才赋值 —— 早期(配置解析、provider 注册阶段)的
+        // console 输出会因 activeConfig 为 null 被整段丢弃。实测踩过:自证标记打了,
+        // 日志里却没有,一度以为捕获没装上。回落用默认 logs/bridge.log。
+        const rel = (activeConfig && activeConfig.logFile) ? activeConfig.logFile : "logs/bridge.log";
+        const file = path.resolve(__dirname, "..", rel);
+        ensureLogDir(file);
+        fs.appendFileSync(file, "[" + localTimestamp() + "] [console." + level + "] " + text + "\n", "utf8");
+      } catch (e) {}
+    };
+  }
+}
+try { captureConsoleToLog(); } catch (e) {}
+// 自证标记:这一行走 console 而不是 log(),所以**它出现在 logs\bridge.log 里就说明捕获已装上**。
+// 用途:以后任何时候怀疑"provider 日志又丢了",先看这一行在不在 —— 不用再去猜。
+try { console.log("[bridge] console capture active (provider 诊断会进 logs/bridge.log)"); } catch (e) {}
 
 // ---------- 进程监视:记录游戏开关状态;桥常驻,不随游戏退出 ----------
 // 2026-08-12 修复(0.1.3-beta.5):原逻辑游戏退出后 process.exit(0) 自杀,
@@ -807,8 +849,10 @@ async function runTranslate(cfg, payload) {
     const fb = providerRegistry.getProvider(pid);
     if (!fb) continue;
     const fc = (cfg[pid] || {});
-    // 需要 Key 的服务商没配 Key 就跳过
-    if (pid !== "bing" && !fc.apiKey) continue;
+    // 需要 Key 的服务商没配 Key 就跳过。判据用 provider 自己声明的 requiresKey,
+    // 不再用 `pid !== "bing"` 硬编码 —— 2026-10-15 实机教训:google 同样免 Key,
+    // 被那条硬编码误判成"需要 Key",于是 bing 限流时回退链里唯一可用的免 Key 服务商被跳过。
+    if (fb.requiresKey !== false && !fc.apiKey) continue;
     try {
       const fbResult = await fb.translate(text, Object.assign({}, baseOpts, {
         apiKey: fc.apiKey,
@@ -1042,6 +1086,13 @@ async function handleApi(req, res, url, bodyObj) {
     }
     if (req.method === "POST") {
       if (!bodyObj) return sendJson(res, 400, { ok: false, error: "bad_json" });
+      // 2026-10-16 实车:B 方案后读经 https 进来,带 get 的握手被当普通读回
+      // maskCompact(无 fingerprint)→ 游戏侧 bad_handshake。与 runBtipcOp 的
+      // op=config 分支同序:get 优先、两者互斥;get 读不落盘。
+      if (bodyObj && typeof bodyObj.get === "string") {
+        sendJson(res, 200, runBtipcGet(bodyObj));
+        return;
+      }
       const current = configStore.load();
       const next = configStore.applyMaskedUpdate(current, bodyObj.config || {});
       configStore.save(next);
@@ -1131,6 +1182,28 @@ function logReqHdr(req, pathname) {
 
 // B1(2026-10-10):跨站请求守卫。见 requestHandler 内的三道闸说明。
 const LOOPBACK_HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\]):\d+$/;
+// 2026-10-15(https 面板通道实机):Origin 白名单**必须同时包含 TLS 终结进程自己的 https 源**。
+// 起因:面板页面由 https://localhost:8792 提供,它同源 fetch /api/v1/translate 时带
+// `Origin: https://localhost:8792`,而白名单当时只有 http 那三个 → B1 挡下,游戏侧表现为
+// "翻译不可用(timeout/error),发原文"。实测日志:`B1 blocked: POST /api/v1/translate
+// reason=origin:https://localhost:8792`,同一时刻 `https panel: ALIVE` —— 通道是通的,被自己的闸挡了。
+// 这类 bug 只有端到端实跑才暴露:单测里页面从不真的发 Origin。
+// 白名单只收**回环地址 + 本项目自己的监听端口**,不放宽成任意源。
+// 白名单必须在**PORT 定义之后**求值。PORT 定义在文件末尾附近(config 加载后),
+// 而本守卫在 requestHandler 之前 —— 写成模块级常量会在 PORT 初始化前被求值,
+// 抛 `ReferenceError: Cannot access 'PORT' before initialization`,桥直接崩。
+// 2026-10-15 自踩:第一次修这个 bug 时就是这么崩的,现象是"改完重启桥就起不来"。
+const PANEL_HTTPS_PORT = Number(process.env.BABEL_TOWER_HTTPS_PORT || 8792);
+function localOrigins() {
+  const hosts = ["127.0.0.1", "localhost", "[::1]"];
+  const out = new Set();
+  for (const h of hosts) {
+    out.add("http://" + h + ":" + PORT);
+    out.add("https://" + h + ":" + PANEL_HTTPS_PORT);
+  }
+  return out;
+}
+function isLocalOrigin(o) { return localOrigins().has(o); }
 function crossSiteBlockReason(req) {
   try {
     const host = String(req.headers.host || "");
@@ -1143,22 +1216,21 @@ function crossSiteBlockReason(req) {
     }
     if (org != null) {
       const o = String(org);
-      const ok = o === "http://127.0.0.1:" + PORT || o === "http://localhost:" + PORT || o === "http://[::1]:" + PORT;
-      if (!ok) return "origin:" + o.slice(0, 80);
+      if (!isLocalOrigin(o)) return "origin:" + o.slice(0, 80);
     }
-    return null; // 同源元数据(未来复活的 bridgePage 场景):放行
+    return null; // 同源元数据(bridgePage 场景):放行
   } catch (e) {
     return "guard_error";
   }
 }
-// B1:ACAO 收敛 —— 只对本地同 Origin 回显,其余请求不发 CORS 头(浏览器默认阻读)。
-// 游戏不读跨域响应(实测零 Origin),回显仅服务于未来同源 bridgePage 复活。
+// B1:ACAO 收敛 —— 只对本项目自己的本地源回显,其余请求不发 CORS 头(浏览器默认阻读)。
+// 游戏不读跨域响应(实测零 Origin),回显服务于同源 bridgePage(含 https 面板页面)。
 function applyCors(req, res) {
   try {
     const org = req.headers.origin;
     if (org == null) return;
     const o = String(org);
-    if (o === "http://127.0.0.1:" + PORT || o === "http://localhost:" + PORT || o === "http://[::1]:" + PORT) {
+    if (isLocalOrigin(o)) {
       res.setHeader("Access-Control-Allow-Origin", o);
     }
   } catch (e) {}
@@ -1440,9 +1512,49 @@ function startGameLogTail() {
   let partial = "";
   let probeTicks = 0;
 
+  // BTIPC 的上行载荷(含设置面板保存时的 API Key)以 base64 出现在游戏 console.log 里 ——
+  // 那不是"日志",那是**运输通道**:core/btipc/transport.js 的 REQ_RE 就从这一行里解析 b64。
+  // 所以**绝不能在这里改原文**,改了整个 BTIPC 会当场断。
+  //
+  // 正确的一层是"桥把游戏行抄进 logs\bridge.log"这一步:抄进我们自己的日志、
+  // 而随安装包"导出诊断"发出去的正是这个文件。所以抄的时候对 b64 打码,
+  // onBtipcGameLine 仍拿**原封不动**的那一行走协议。
+  // base64 不是加密 —— 不打码就等于把 Key 明文存进一个会被外发的文件。
+  // 注意判据用「取出来比对」而不是正则前瞻:前瞻里写 \*(星号)极易多写一层转义,
+  // 结果是 "Nothing to repeat" 的语法错(2026-10-15 踩过)。取值比对没有这个坑。
+  function redactBtipcPayload(line) {
+    // 分段步骤**照抄** core/btipc/transport.js 的解析顺序(先找 "[LCT] " → 去 "BTIPC " →
+    // 再对 rest 套 REQ_RE),这样两条路径永远看到同一段文本。
+    // 2026-10-15 踩过两次:
+    //   ① 正则写成"id= 前有两个 token" → 永远匹配不上,打码静默空转;
+    //   ② 用 ^ 锚在行首 → 真实行前面有时间戳和 [LCT] BTIPC,又一次匹配不上。
+    // 两次都是**假安全感**:看着有防护,实际一行都没遮。而明文 grep 验不出来 ——
+    // Key 在 base64 里,搜明文永远搜不到,于是"没搜到"被当成"已打码"。
+    // 所以校验必须**解码后比对**,不能对日志做明文搜索。
+    const s = String(line);
+    const at = s.indexOf("[LCT] ");
+    if (at === -1) return s;
+    const head = s.slice(0, at + 6);
+    const seg = s.slice(at + 6);
+    if (seg.indexOf("BTIPC ") !== 0) return s;
+    const rest = seg.slice(6);
+    if (rest.indexOf("REQ ") !== 0 && rest.indexOf("TRQ ") !== 0) return s;
+    const m = /^(?:REQ|TRQ) w=\S+ id=\S+ len=\d+ crc=\S+ b64=(\S+)/.exec(rest);
+    if (!m) return s;
+    const b64 = m[1];
+    let decoded;
+    try { decoded = Buffer.from(b64, "base64").toString("utf8"); } catch (e) { return s; }
+    const km = decoded.match(/"apiKey":"([^"]*)"/);
+    if (!km || !km[1]) return s;
+    // 占位符 ******** 是打码回传用的,不是机密 —— 留着它有排障价值(能看出"Key 没变")
+    if (/^\*+$/.test(km[1])) return s;
+    return head + seg.slice(0, 6) + rest.slice(0, rest.length - b64.length) +
+      "<redacted " + b64.length + "B,载荷含 apiKey>";
+  }
+
   function emit(line) {
     if (line.length > 4000) line = line.slice(0, 4000) + "...<truncated>";
-    log("game", line.replace(/\r$/, ""));
+    log("game", redactBtipcPayload(line).replace(/\r$/, ""));
   }
 
   // console.log tail 轮询间隔 = 上行 RTT 的主要来源(游戏写行 → 这里扫到)。

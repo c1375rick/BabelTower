@@ -12,7 +12,12 @@
   拉全量名单(292 条,随游戏更新刷新),拉不到时用打包内置的 60 条兜底名单
 - 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
-> 版本:1.1.0 (2026-10-13)
+> 版本:1.2.0 (2026-10-15)
+>
+> **1.2.0**:新增 **https 面板通道**并已转正 —— 翻译下行从位泵的 3.0–27.4s 降到 **1 秒以内**
+> (BTIPC 保留为兜底,证书未信任时体感与旧版一致);修掉"翻译慢 8 秒"的真因(bing 命中限流在
+> provider 内部睡 7 秒,且回退链是空的);provider 的诊断日志从此进 `logs/bridge.log`。
+> 详见 [docs/btipc-https-v1.md](docs/btipc-https-v1.md)。
 
 ---
 
@@ -34,10 +39,17 @@ BabelTower/
 ├── config/dictionary.json   词典数据(user 手动 + learned 自动学习)
 ├── scripts/build.ps1       编译 + 打包 VPK 脚本
 ├── scripts/autostart.ps1   开机自启安装/卸载
+├── scripts/gen_bridge_cert.ps1  本机 https 证书生成/信任/撤销(低延迟通道的唯一拦点)
+├── scripts/install_babeltower.ps1 一键安装:证书 + 起桥 + 验收 + 下一步指引
+├── scripts/update_babeltower.ps1  从官方 Releases 自更新(白名单 + 体积/SHA256 双校验 + 延后安装 + 回滚)
+├── scripts/diagnose_babeltower.ps1 一键检测:只读,输出脱敏报告(每条结论带判据)
+├── scripts/uninstall_babeltower.ps1 卸载/还原:mod + 自启 + 桥 + 证书 + 状态目录,默认保守逐项确认
+├── BabelTower-维护菜单.bat  维护总入口(先选语言再进菜单:安装/更新/卸载/诊断/自启开关,也支持带参数)
 ├── StartDeadlock.bat       手动启动:桥 + 游戏
 ├── docs/                   架构与开发文档
 │   ├── architecture.md       架构总览 + 三条通信通道 + 翻译服务商协议
 │   ├── btipc-v1.md           BTIPC 协议规格(冻结)
+│   ├── btipc-https-v1.md     https 面板通道(低延迟回程)+ 路线来源逐项对账
 │   ├── ipc-checklist-6726.md 6726 版本 IPC 排查记录与发版口径
 │   ├── compatibility.md      兼容性快照 + 冻结清单/解冻边界(2026-10-10 起)
 │   └── development.md        构建 / 冒烟测试 / 常见问题
@@ -49,34 +61,30 @@ BabelTower/
 
 ## 安装
 
-1. 获取 `dist/pak01_dir.vpk`(自行构建,见下;或使用 GitHub Release 附件)
-2. 安装到 Deadlock(**二选一**):
-   - **推荐**:用 Deadlock Mod Manager 导入(自动分配空闲 pak 槽位)
-   - 或手动:复制到 `game/citadel/addons/` 目录(改名为空闲的 `pakNN_dir.vpk`,避免覆盖其它 mod)
-
-3. (推荐)安装 [Universal Mod Manager](https://gamebanana.com/mods/693642):
-   游戏内设置窗口,调 Babel Tower 选项不用开 `/tr` 面板(见下方 [UMM 设置联动](#ummuniversal-mod-manager设置联动))
-
-4. 安装 Node.js 18+([nodejs.org](https://nodejs.org)),或使用项目自带的 `portable-node/`
-5. **必做**:给 Deadlock 加 `-condebug` 启动参数(只需设置一次) —— 游戏不带它就不会写
-   `game/citadel/console.log`,而桥只能从该文件读回游戏侧消息(BTIPC 上行的唯一通路),
-   缺了它 mod 表现为**装了完全没反应**:
+1. 获取发行包（GitHub Release 附件 `BabelTower-<版本>-win64.zip`），解压到任意目录（路径可含中文/空格，**保持压缩包内目录结构**）。
+   包里自带 `portable-node/`，开箱即用不用另装 Node；自行构建见下方 [从源码构建](#从源码构建-vpk)。
+2. mod 装进 Deadlock（**二选一**）:
+   - **推荐**：用 Deadlock Mod Manager 导入（自动分配空闲 pak 槽位）
+   - 或手动：把包里的 `pak01_dir.vpk` 复制到 `game/citadel/addons/` 目录（改名为空闲的 `pakNN_dir.vpk`，**不要覆盖其它 mod，也不要同时放两份我们的包**）
+3. （推荐）安装 [Universal Mod Manager](https://gamebanana.com/mods/693642)：
+   游戏内设置窗口，调 Babel Tower 选项不用开 `/tr` 面板（见下方 [UMM 设置联动](#ummuniversal-mod-manager设置联动)）
+4. 给 Deadlock 加 `-condebug` 启动参数（**必做，只需设置一次**）—— 游戏不带它就不会写
+   `game/citadel/console.log`，而桥只能从该文件读回游戏侧消息（BTIPC 上行的唯一通路），
+   缺了它 mod 表现为**装了完全没反应**：
    Steam 库 → Deadlock 右键 → 属性 → 常规 → **启动选项** 填 `-condebug`
-   > 桥若检测到游戏已运行 90s 仍无本次启动的 `console.log`,会在 `logs\bridge.log` 打一条
-   > `[… ] [warn] 缺少 -condebug` 告警;用第 7 步的 `StartDeadlock.bat` 启动则自动带上该参数
-
-6. 一键自启(推荐,之后 Steam 直接启动游戏即可;桥常驻,游戏退出后保持运行):
-
-```powershell
-# 先进入项目目录(换成你的实际路径)
-cd D:\BabelTower
-powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
-```
-
-> 若提示找不到脚本,说明当前目录不对:先 `cd` 到项目目录,或用完整路径
-> `powershell -ExecutionPolicy Bypass -File "<你的路径>\scripts\autostart.ps1" -Action Install`
-
-7. (可选)不用自启时,双击 `StartDeadlock.bat` 手动启动(桥 + 游戏,自动带 `-condebug`)
+   > 桥若检测到游戏已运行 90s 仍无本次启动的 `console.log`，会在 `logs\bridge.log` 打一条
+   > `[… ] [warn] 缺少 -condebug` 告警
+5. 双击 **`BabelTower-维护菜单.bat`**（中文菜单先选语言），按菜单走：
+   - **选 1 一键安装**：环境检查 → 证书信任（https 低延迟通道的唯一拦点）→ 起桥 → 验收
+   - **选 5** 装开机自启（之后 Steam 直接启动游戏即可，桥常驻；不想装也行，用选 6 关）
+6. 日常使用（都在同一个维护菜单里，不用记多个脚本）：
+   | 事项 | 做法 |
+   | --- | --- |
+   | 玩游戏 | Steam 直接启动（已装自启）；没装自启就双击 `StartDeadlock.bat` 手动启动（桥 + 游戏，自动带 `-condebug`） |
+   | 更新到新版本 | 维护菜单 → 选 2（只从官方 Releases 取包，体积 + SHA256 双校验） |
+   | 出问题先诊断 | 维护菜单 → 选 4（只读，生成脱敏报告，可直接发反馈） |
+   | 卸载 | 维护菜单 → 选 3（默认保守，逐项确认） |
+   | 桥没起来 | 双击 `restart_bridge.bat`（一键重启 + 健康检查） |
 
 ## 使用
 
@@ -176,6 +184,13 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
   出站翻译 / 入站聊天翻译 / 配置读写改走自研 BTIPC 信道(上行 `console.log` 结构化行 +
   下行 128 个隐藏面板的位编码帧,CRC + 幂等重试),协议见 [docs/btipc-v1.md](docs/btipc-v1.md)
 - ✅ **更多翻译接口**:DeepL / Google / OpenAI 兼容接口,主服务商失败时自动回退(Thirt927 贡献)
+- ✅ **https 面板通道(低延迟回程,已转正)**:隐藏 HTML 面板只接受证书有效的
+  https(引擎 `error:-202`),信任一张本机自签证书后,面板页面在桥这一侧同源取走**整条**结果,
+  下行从位泵的 `1200ms + 帧数×600ms`(实测 3~27s)变成**一个 RTT**(实测 1 秒以内,见 §8)。
+  双击 `BabelTower-维护菜单.bat → 选 1` 完成「信任证书 + 起桥 + 验收」;**信任后必须完全退出并
+  重启 Steam**(信任库由 Steam 宿主缓存,只重启游戏不生效)。
+  BTIPC 全程保留为兜底:证书没信任 / Steam 没重启的用户体感与现在完全一致。
+  通道机制、启用流程与**路线来源逐项对账**见 [docs/btipc-https-v1.md](docs/btipc-https-v1.md)
 - ✅ **游戏术语表**:内置词典 2801 条 + 自适应学习(上限 5000/语言)
 - ✅ **名称保护动态同步**:翻译前占位/译后还原,桥在线时从 `/api/v1/gamenames` 拉全量名单
   (292 条),桥不可达则用打包内置 60 条兜底

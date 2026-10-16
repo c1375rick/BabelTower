@@ -20,8 +20,7 @@ const BATS = [
   "StartDeadlock.bat",
   "run-bridge.bat",
   "restart_bridge.bat",
-  "install-autostart.bat",
-  "remove-autostart.bat",
+  "BabelTower-维护菜单.bat",
 ];
 
 // 每个 bat 实际【调用】的文件(注释/日志文案里提到的不算,否则 logs\bridge.log 之类会误报)
@@ -44,8 +43,18 @@ for (const bat of BATS) {
   try { src = read(bat); }
   catch (e) { check(bat + " 存在", false, String(e && e.message)); continue; }
 
-  // 入口脚本必须是纯 ASCII:cmd 在不同 codepage 下遇到 CJK 会乱码甚至吞行
-  check(bat + " 保持纯 ASCII", !/[^\x00-\x7F]/.test(src));
+  // 入口脚本必须是纯 ASCII:cmd 在不同 codepage 下遇到 CJK 会乱码甚至吞行。
+  // 唯一例外是双语菜单总入口:文件存 UTF-8 无 BOM 且首行 chcp 65001,
+  // 缺 chcp 会整屏乱码 —— 故豁免 ASCII 的同时钉死 chcp 行。
+  if (bat === "BabelTower-维护菜单.bat") {
+    const raw = fs.readFileSync(path.join(ROOT, bat));
+    check(bat + " 无 BOM(bat 开头多 EF BB BF 会打印成乱码)",
+      !(raw[0] === 0xEF && raw[1] === 0xBB && raw[2] === 0xBF));
+    check(bat + " 首部切 UTF-8 代码页(否则中文菜单乱码)",
+      /chcp 65001/.test(src));
+  } else {
+    check(bat + " 保持纯 ASCII", !/[^\x00-\x7F]/.test(src));
+  }
 
   const refs = invokedRefs(src);
   check(bat + " 确实调用了脚本(否则本护栏无意义)", refs.length > 0, JSON.stringify(refs));
@@ -76,6 +85,10 @@ function guardBlock(src) {
   return null;
 }
 for (const bat of BATS) {
+  const raw = fs.readFileSync(path.join(ROOT, bat));
+  // 2026-10-16 实测:换行是 LF 的 bat 会被 cmd 劈行、后半截当命令逐段执行。
+  check(bat + " 用 CRLF 换行(不用 LF)",
+    !/[^\r]\n/.test(raw.toString("latin1")));
   const src = read(bat);
   const blk = guardBlock(src);
   check(bat + " 自检块可被 cmd 正确配对", !!blk);

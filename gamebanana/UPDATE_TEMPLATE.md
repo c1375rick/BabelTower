@@ -1,7 +1,7 @@
 # GameBanana 更新日志填写模板(Babel Tower)
 
 > 每次发新版时对照本文件填写,复制对应内容到 GameBanana 表单即可。
-> 配套文档:首次提交看 `SUBMISSION_GUIDE.md`;自动提交看 `scripts/gb_add_update.js`。
+> 配套文档:首次提交看 `SUBMISSION_GUIDE.md`;自动提交看 `scripts/archive/gb_add_update.js`(2026-10-16 归档,一次性探针集中存放)。
 
 ## 入口与前置
 

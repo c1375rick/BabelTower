@@ -56,6 +56,8 @@ ok(!/job\.op === "health"|job\.op === "gamenames"|job\.op === "quickchat"/.test(
 console.log("--- 桥端 get 分发 ---");
 ok(/if \(obj && typeof obj\.get === "string"\) return runBtipcGet\(obj\);/.test(bridge),
   "runBtipcOp config 分支优先处理 get");
+ok(/if \(bodyObj && typeof bodyObj\.get === "string"\)/.test(bridge) && /runBtipcGet\(bodyObj\)/.test(bridge),
+  "HTTP POST /api/v1/config 同处理 get(2026-10-16:https 读不断握手,不落盘)");
 ok(/if \(obj\.config\)/.test(bridge), "配置写分支仍在(与 get 互斥)");
 ok(/syncData\.syncGet\(kind, current, readSyncBaseline\(kind\), clientFp, o\.off, o\.lim, expect\)/.test(bridge),
   "runBtipcGet 委托给纯函数 syncGet");

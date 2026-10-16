@@ -120,10 +120,24 @@ MockPanel.prototype.SetImage = function (url) {
 };
 
 // ---------------- 独立环境:面板树 + $ + 配置 + 模块加载 ----------------
+// ---------- 隐藏 HTML 面板的页面仿真(2026-10-15 改造) ----------
+// 真引擎里:面板导航到 https:// 页面 → 页面 JS 在**桥这一侧**同源 fetch 完
+// /api/v1/translate,再把整条结果一次写进 document.title;引擎只认一个 RTT。
+// 若 https 证书不被信任,引擎在 LoadPage 之前就拒掉,页面从不加载(title 恒空)。
+//
+// 旧 mock 无视 URL 里的 scheme/host,一律直连 POST 8791 —— 那等于把 https 通道也
+// 假成功,降级路径永远测不到(而且 BTIPC 与面板两条路都测不出差别)。现在照抄语义,
+// 并留三种故障开关:
+//   httpsBroken  : 证书未受信 / Steam 未重启 → 引擎拒 https,页面从不加载
+//   aliveOnly    : 页面 alive 到了但结果始终不来(软失败那类,不触发降级)
+//   op=health    : 探针专用,回 {ok:true} 而不是翻译结果
+let panelSim = null;
+
 function freshEnv(cfg) {
   // 上一环境的所有定时器与挂起桥回调在此终止(见 envTimers 注释)
   for (const tid of envTimers) { try { clearTimeout(tid); } catch (e) {} }
   envTimers = [];
+  panelSim = { navUrls: [], httpsBroken: false, aliveOnly: false };
   delete require.cache[require.resolve(SCRIPT)];
   delete require.cache[require.resolve(SCRIPT_EXP)];
 
@@ -157,8 +171,22 @@ function freshEnv(cfg) {
     const text = q.get("text") || "";
     const source = q.get("source") || "auto";
     const target = q.get("target") || "zh-Hans";
+    const op = q.get("op") || "translate";
+    const isHttps = String(url).indexOf("https://") === 0;
+    panelSim.navUrls.push(String(url));
+    // 故障一:证书未受信 / Steam 没重启 —— 引擎在 LoadPage 之前拒掉,页面从不加载。
+    if (isHttps && panelSim.httpsBroken) return;
+    // 故障二:页面 alive 到了但结果始终不来(软失败,不该触发降级交接)。
+    const aliveOnly = panelSim.aliveOnly;
     envTimers.push(nativeSetTimeout(() => {
       if (bridgePanel._deleted) return;
+      bridgePanel.title = "lct-alive"; // 真页面第一件事就是置 alive
+      if (aliveOnly) return;
+      // 探针(op=health)要的是健康应答,不是翻译结果 —— 真页面同样走 GET /api/v1/health。
+      if (op === "health") {
+        bridgePanel.title = "LCT" + id + JSON.stringify({ ok: true, name: "Babel Tower Bridge", sim: true });
+        return;
+      }
       const body = JSON.stringify({ text, sourceLanguage: source, targetLanguage: target });
       const req = http.request({
         host: "127.0.0.1", port: 8791, path: "/api/v1/translate",
@@ -226,6 +254,7 @@ function freshEnv(cfg) {
 
   return {
     cfg, // 场景配置快照:waitBootSync 后回写 State.cfg(桥同步会以真机偏好覆盖)
+    panelSim, // 面板页面仿真状态(httpsBroken / aliveOnly / navUrls),见上方说明
     contextPanel, messagesPanel, hudMessages, hudMessages2, settingsPanel, dispatchLog,
     setFocusedPanel(p) { focusedPanel = p; },
     addRow(kind, sender, text, opts) {
@@ -750,28 +779,115 @@ async function test20_quickchatWhitelistSkip() {
   assert("non-template english still translated", ok && labelsOf(row2).length === 1, labelsOf(row2).length + " labels");
 }
 
+// ===== https 面板通道(2026-10-15):探针定通道 + 自动降级回 BTIPC =====
+
+function httpsState() {
+  try {
+    const S = globalThis.LCTNS && globalThis.LCTNS.State;
+    return { ok: S ? S.httpsPanelOk : "no-state", streak: S ? S.httpsPanelStreak : -1 };
+  } catch (e) { return { ok: "throw", streak: -2 }; }
+}
+
+// [21] 证书受信:开机探针判活 → 入站翻译走 https 面板(URL 里能看见 https + op=translate),
+// 不再进 BTIPC 位泵。
+async function test21_httpsPanelPrimary() {
+  console.log("\n[21] https panel ALIVE -> translations go through the panel channel");
+  const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
+  const st = httpsState();
+  assert("probe decided ALIVE", st.ok === true, "httpsPanelOk=" + st.ok);
+  const row = env.addRow("text", "Fay", "retreat please now");
+  const ok = await waitFor(() => labelsOf(row).length > 0, 12000);
+  assert("inbound translated via https panel", ok && labelsOf(row).length === 1, labelsOf(row).length + " labels");
+  const httpsNavs = env.panelSim.navUrls.filter((u) => u.indexOf("https://") === 0);
+  assert("navigated to https panel page", httpsNavs.length >= 2, "https navs=" + httpsNavs.length);
+  assert("translate request went through https",
+    env.panelSim.navUrls.some((u) => u.indexOf("https://") === 0 && u.indexOf("op=translate") !== -1),
+    env.panelSim.navUrls.slice(-3).join(" | "));
+}
+
+// [22] 证书未信任 / Steam 没重启:探针拿不到 lct-alive → 判死 → 全程 BTIPC,
+// 翻译照常(与本通道上线前完全一致的体感)。
+async function test22_httpsPanelCertUntrusted() {
+  console.log("\n[22] https panel cert UNTRUSTED -> stay on BTIPC, translations unaffected");
+  const env = freshEnv(CFG.translationOnly);
+  env.panelSim.httpsBroken = true; // 必须在探针(boot+1.2s)之前就位
+  await waitBootSync(env);
+  await sleep(1800); // 等探针窗口(BRIDGE_ALIVE_SECONDS 1.5s)走完
+  const st = httpsState();
+  assert("probe decided DEAD", st.ok === false, "httpsPanelOk=" + st.ok);
+  const row = env.addRow("text", "Fay", "retreat please now");
+  const ok = await waitFor(() => labelsOf(row).length > 0, 15000);
+  assert("inbound still translated on BTIPC", ok && labelsOf(row).length === 1, labelsOf(row).length + " labels");
+}
+
+// [23] 判活后中途掉线(证书被吊销/桥重启):连续 3 次通道级失败 → 本会话永久退 BTIPC,
+// 且后续请求不再试面板 —— 降级必须是"一次判死",不是"每条请求白等 1.5s"。
+async function test23_httpsPanelDemotesAfterStreak() {
+  console.log("\n[23] https panel dies mid-session -> 3 hard fails -> permanent BTIPC fallback");
+  const env = freshEnv(CFG.translationOnly);
+  await waitBootSync(env);
+  assert("probe decided ALIVE first", httpsState().ok === true, "httpsPanelOk=" + httpsState().ok);
+  env.panelSim.httpsBroken = true; // 此刻起页面再也加载不了
+  // 三条消息,每条都必须硬失败后交回 BTIPC 并仍然出译文
+  const rows = [];
+  for (let i = 0; i < 3; i += 1) {
+    rows.push(env.addRow("text", "Fay", "group up on mid please " + i));
+    await waitFor(() => labelsOf(rows[rows.length - 1]).length > 0, 20000);
+  }
+  assert("streak counted hard fails", httpsState().streak >= 3, "streak=" + httpsState().streak);
+  assert("demoted to BTIPC for the session", httpsState().ok === false, "httpsPanelOk=" + httpsState().ok);
+  const before = env.panelSim.navUrls.length;
+  const row4 = env.addRow("text", "Fay", "final push now");
+  const ok = await waitFor(() => labelsOf(row4).length > 0, 20000);
+  assert("post-demotion request still translated", ok && labelsOf(row4).length === 1, labelsOf(row4).length + " labels");
+  // 只数本通道自己发的**翻译**请求(op=translate)。不能笼统地数"还有没有 https 导航":
+  // health 检查也走面板导航,而面板是单槽共享的 —— 把 health 算进来等于断言一件
+  // 与降级无关的事(实测第一次踩这个坑:抓到的"残留 https"是 exp6742 实验探针,
+  // 不是生产通道,而那次恰恰暴露了实验探针不该在生产里自动开火)。
+const navAfter = env.panelSim.navUrls.slice(before).filter((u) =>
+  u.indexOf("https://") === 0 && u.indexOf("op=translate") !== -1);
+  assert("no https translate nav after demotion", navAfter.length === 0,
+    "stray=" + navAfter.length + " :: " + navAfter.join(" || ").slice(0, 400));
+}
+
 async function main() {
+  // 场景表 + 过滤(2026-10-15):LCT_SIM_ONLY=21,22 只跑指定场景。
+  // 动机:全量 23 场景在本机要十几分钟,而且依赖真实 console.log 与桥的实时状态,
+  // 跨运行有残留 —— 出了问题只想复现一个场景时,等不起也看不清。
+  // 用法(powershell): $env:LCT_SIM_ONLY="23"; node scripts\lingua_chat_simtest.js
+  const SCENES = [
+    ["1", test1_injectAndCollapse],
+    ["2", test2_recycleToChineseQuickChat],
+    ["3", test3_recycleToAnotherEnglish],
+    ["4", test4_bilingualNoCollapse],
+    ["5", test5_pingBubbleKept],
+    ["6", test6_ownMessageSkipped],
+    ["7", test7_consecutiveOutgoing],
+    ["8", test8_consecutiveIncoming],
+    ["9", test9_hudTopBarTranslation],
+    ["10", test10_hudOwnMessageSkipped],
+    ["11", test11_hudBothTeamsFoundById],
+    ["12", test12_lcttestCommand],
+    ["13", test13_outgoingWithoutGlobalSetTimeout],
+    ["14", test14_outgoingFailShowsTip],
+    ["15", test15_bridgeUpDotGreen],
+    ["16", test16_entryBlurDropsFocusOnEntryItself],
+    ["17", test17_entryEscReleasesFocusThenClosesPanel],
+    ["18", test18_mixedMessageFragmentTranslation],
+    ["19", test19_pureChineseStillSkipped],
+    ["20", test20_quickchatWhitelistSkip],
+    ["21", test21_httpsPanelPrimary],
+    ["22", test22_httpsPanelCertUntrusted],
+    ["23", test23_httpsPanelDemotesAfterStreak],
+  ];
+  const only = String(process.env.LCT_SIM_ONLY || "").split(",").map((s) => s.trim()).filter(Boolean);
   console.log("=== Babel Tower lingua_chat simulation tests v7 (bridge must run on 8791) ===");
-  await test1_injectAndCollapse();
-  await test2_recycleToChineseQuickChat();
-  await test3_recycleToAnotherEnglish();
-  await test4_bilingualNoCollapse();
-  await test5_pingBubbleKept();
-  await test6_ownMessageSkipped();
-  await test7_consecutiveOutgoing();
-  await test8_consecutiveIncoming();
-  await test9_hudTopBarTranslation();
-  await test10_hudOwnMessageSkipped();
-  await test11_hudBothTeamsFoundById();
-  await test12_lcttestCommand();
-  await test13_outgoingWithoutGlobalSetTimeout();
-  await test14_outgoingFailShowsTip();
-  await test15_bridgeUpDotGreen();
-  await test16_entryBlurDropsFocusOnEntryItself();
-  await test17_entryEscReleasesFocusThenClosesPanel();
-  await test18_mixedMessageFragmentTranslation();
-  await test19_pureChineseStillSkipped();
-  await test20_quickchatWhitelistSkip();
+  if (only.length) console.log("[LCT-sim] 只跑场景: " + only.join(","));
+  for (const pair of SCENES) {
+    if (only.length && only.indexOf(pair[0]) === -1) continue;
+    await pair[1]();
+  }
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   console.log("[LCT-sim][dbg] imgSet=" + (globalThis.__imgSet || 0) +
     " http=" + (globalThis.__imgHttp || 0) + " http200=" + (globalThis.__img200 || 0) +

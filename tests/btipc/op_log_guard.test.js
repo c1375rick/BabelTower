@@ -74,7 +74,12 @@ test("客户端:isOp 含 log + payload=op=log\\n + 8s 写死线(链尾 config �
   assert.ok(ifTestIdx > 0 && logPayloadIdx > ifTestIdx, "op=log payload 在 test 分支之后");
   assert.ok(cfgIdx > logPayloadIdx, "config payload 在 log 之后(else 链尾,lc_btipc_guard 配对前提)");
   const logSlice = lcSrc.slice(logPayloadIdx, cfgIdx);
-  assert.ok(/timeoutMs = 8000;/.test(logSlice), "log 写死线 8s(应答 {ok,written} 1 帧)");
+  // 2026-10-15:log 死线从固定 8000 改为按载荷算。理由与 config 写完全同一条:
+  // 死线当初只量了**应答**({ok,written} 1 帧),没量**上行请求**。log 批 600B → 60 帧
+  // → 物理 ≈37.2s,8s 死线必超时 → 聊天日志静默丢失(没人报障,因为不报错)。
+  // 现在与 config 写共用 btipcWriteDeadlineMs,按帧数算 + ×1.2 余量,地板 8000。
+  assert.ok(/timeoutMs = btipcWriteDeadlineMs\(btipcUtf8Bytes\(payload\)\.length\)/.test(logSlice),
+    "log 死线必须按载荷算(原来 8000 是按应答定的,600B 批 60 帧 ≈37s 必超时)");
 });
 
 test("客户端:所有 config|test op 谓词都同步含 log(防 op 集合漂移)", () => {

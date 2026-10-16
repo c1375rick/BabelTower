@@ -93,9 +93,13 @@ test("S1-④b 自启 vbs 引号闭合(2026-10-13 实锤语法错误)", () => {
 });
 
 test("S1-⑤ bat 入口失败可见", () => {
-  for (const f of ["install-autostart.bat", "remove-autostart.bat"]) {
-    const src = rd(f);
-    assert.ok(/if errorlevel 1/.test(src),
-      f + " 不检查 errorlevel,失败也显示 Done.(误导用户以为已装/已卸)");
+  // 2026-10-16:6 对 bat 合成 BabelTower-维护菜单.bat,自启开关是其菜单 5/6。
+  const src = rd("BabelTower-维护菜单.bat");
+  for (const a of ["do_autostart_on", "do_autostart_off"]) {
+    const i = src.indexOf(":" + a);
+    assert.ok(i >= 0, "BabelTower.bat 缺分支 " + a);
+    const body = src.slice(i, i + 1200);
+    assert.ok(/if errorlevel 1/.test(body),
+      a + " 不检查 errorlevel,失败也显示 Done.(误导用户以为已装/已卸)");
   }
 });

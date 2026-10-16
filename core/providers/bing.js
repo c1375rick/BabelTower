@@ -110,14 +110,27 @@ async function translate(text, opts) {
 
   let res = await attempt();
 
-  // 429 限流:指数退避重试(初始 1s,每次翻倍,最多 3 次:1s→2s→4s,总等待 ≤ 8s)
+  // 429 限流:**快速失败,把回退机会让给回退链**,不在这里睡。
+  //
+  // 2026-10-15 实机教训:原来是「1s→2s→4s 共 7 秒」的指数退避(旧注释还写着"总等待 ≤ 8s")。
+  // 那 7 秒把三件事一起饿死:① 回退链 —— provider 内部没抛错,桥根本没机会换服务商;
+  // ② 用户的聊天;③ 可观测性 —— 退避提示走 console.log,而桥是隐藏窗口启动、stdout 没人接,
+  // 于是 logs\bridge.log 里一行限流记录都没有,现场只剩"游戏侧 8 秒后出译文"的黑盒现象。
+  // 现在:短等一次就放弃,并给错误打上 rateLimited 标记,桥据此立刻走回退。
   let retry = 0;
-  while (res.status === 429 && retry < 3) {
-    const waitMs = 1000 * Math.pow(2, retry); // 1000, 2000, 4000
-    logInfo("edge 端点 429 限流,等待 " + waitMs + "ms 后重试...");
+  while (res.status === 429 && retry < 1) {
+    const waitMs = 600;
+    logInfo("edge 端点 429 限流," + waitMs + "ms 后再试一次;仍限流则交给回退链");
     await sleep(waitMs);
     res = await attempt();
     retry++;
+  }
+
+  if (res.status === 429) {
+    const err = new Error("接口限流(429),已让出回退机会");
+    err.status = 429;
+    err.rateLimited = true;
+    throw err;
   }
 
   if (res.status !== 200) {
@@ -147,5 +160,6 @@ async function translate(text, opts) {
 module.exports = {
   id: "bing",
   label: "Bing Translator(免 Key)",
+  requiresKey: false, // 回退链据此判定:没 Key 也能用(2026-10-15:原来靠 pid!=="bing" 硬编码,google 会被误跳过)
   translate,
 };

@@ -8,12 +8,16 @@
     扫描 #ChatMessages 行 → 签名去重 / 缓存 / 语言启发式 → 串行队列(MAX_ACTIVE=1)
     译文追加显示(聊天行下方 / HUD 顶栏气泡 / 大厅聊天记录)
 
-    与本地桥的三条通道(dispatchJob 按序尝试):
-      ① BTIPC     出站翻译、入站聊天翻译、配置读写(op=config)、测试(op=test)
-                   上行 console.log 行 "[LCT] BTIPC REQ ..." → 桥 tail 轮询读回
-                   下行 128 个隐藏 Image 面板轮询 GET /btipc/dl 取 16 字节帧
-      ② 直连      $.AsyncWebRequest → GET/POST /api/v1/*
-      ③ 面板导航  隐藏 HTML 面板 SetURL → /bridge 页面,轮询 document.title 读回
+    与本地桥的通道(dispatchJob 按序尝试,2026-10-15 起 https 优先):
+      ① https 面板 翻译 / 配置读写 / 测试 / 读数:隐藏 HTML 面板经本地 TLS(8792)
+                    同源取走整条结果,一个 RTT。开机探针 ALIVE 才用;硬失败原样
+                    交回 BTIPC,3 连击本会话退回(详见 docs/btipc-https-v1.md)
+      ② BTIPC      兜底:出站翻译、入站聊天翻译、配置读写(op=config)、测试(op=test)、回声
+                    上行 console.log 行 "[LCT] BTIPC REQ ..." → 桥 tail 轮询读回
+                    下行 128 个隐藏 Image 面板轮询 GET /btipc/dl 取 16 字节帧
+      ③ http 面板  最后一级兜底(判死冷却 10min):隐藏 HTML 面板 SetURL → /bridge
+                    页面,轮询 document.title 读回
+      ✕ 直连      $.AsyncWebRequest → GET/POST /api/v1/*(游戏已移除,仅留探测)
 
                     │ 127.0.0.1:8791(仅本机)
                     ▼
@@ -25,9 +29,10 @@
 ```
 
 游戏内的 Panorama 无法直接发 HTTP:`$.AsyncWebRequest` 已被游戏移除(调用即抛
-`AsyncWebRequest has been removed.`),隐藏 HTML 面板的 `SetURL` 导航在 2026-09-30
+`AsyncWebRequest has been removed.`),隐藏 HTML 面板的 http `SetURL` 导航在 2026-09-30
 的 **6726** 更新后也静默失效(`src=""`、`act=0`,桥日志记 `bridge nav failed: panel dead`)
-—— 所以 **BTIPC 是当前唯一在用的通道**,②③ 保留为兜底分支。详见 §4.2。
+—— 所以快路是 **① https 面板**(需信任本机证书),**② BTIPC 是全程保留的兜底**,
+③ 只剩最后一级。详见 §4.2 与 `docs/btipc-https-v1.md`。
 
 > 2026-10-03 实测(`logs/bridge.log`):
 > `bridge transport: AsyncWebRequest removed/unavailable, using HTML panel channel`、
@@ -41,7 +46,7 @@
 3. 签名 = `channel \x00 sender \x00 text`,用于去重(Set)与缓存(Map)
 4. 过滤:空/短文本、纯数字符号、`/` 指令、自己的消息、已为目标语言(启发式)
 5. 入队 → 串行翻译(MAX_ACTIVE=1)→ 成功追加译文 Label / 失败红字(重试 1 次);
-   翻译请求经 §4.2 的 ① BTIPC 送桥、译文从同一条信道的入站帧读回
+   翻译请求经 §4.2 的通道送桥(https 优先,BTIPC 兜底)、译文从同一条信道读回
 6. 聊天滚动回收后,签名命中缓存则自动重建译文
 7. 快捷语音轮盘消息(模板命中)直接 skip 不送翻;模板语料由桥同步或打包兜底
    (`core/quickchat.js` 生成,见 `tests/quickchat_match.test.js`)
@@ -50,7 +55,7 @@
 
 - `chat.xml` 的 TextEntry `oninputsubmit` 改由 `LCTOnChatSubmit()` 接管
 - `/tr` → 打开设置面板,不发送
-- 发送前翻译开启 → 先翻译输入文本(经 §4.2 的 ① BTIPC,超时/通道不可用则**按原文发送**),
+- 发送前翻译开启 → 先翻译输入文本(经 §4.2 的通道,超时/通道不可用则**按原文发送**),
   再派发 `CitadelChatInputSubmitted` 事件触发原版发送(该事件路径在 poker 系 mod 中已验证可用)
 - 其余情况直接派发事件,行为与原版一致
 
@@ -75,13 +80,14 @@
 安全:仅监听 127.0.0.1;请求体 ≤64KB;单文本 ≤4000 字符;无任意 URL 代理;
 日志不含 apiKey;apiKey 只在本地 `config/config.json`(gitignore)。
 
-### 4.2 游戏 → 桥:三条通道与派发顺序(`dispatchJob`)
+### 4.2 游戏 → 桥:通道与派发顺序(`dispatchJob`)
 
-| 优先级 | 通道 | 承载的请求 | 状态(2026-10-03 实测) |
+| 优先级 | 通道 | 承载的请求 | 状态(2026-10-16 实测) |
 | --- | --- | --- | --- |
-| ① | **BTIPC**(协议 [btipc-v1.md](btipc-v1.md),实现在 `core/btipc/`) | 出站翻译、入站聊天翻译、配置读写 `op=config`、测试 `op=test` | ✅ **在用**:`BTIPC TRQ w=.. op=config` + `boot: config synced from bridge` |
-| ② | 直连 `$.AsyncWebRequest` → `/api/v1/*` | 其余桥接口(health / quickchat / gamenames / log)、①接不了时的回退 | ❌ 游戏已移除该 API,调用即抛 `AsyncWebRequest has been removed.`;探测日志 `bridge transport: AsyncWebRequest removed/unavailable` |
-| ③ | 隐藏 HTML 面板 `SetURL` → `/bridge` + `document.title` 轮询 | ②不可用时的回退 | ❌ 6726 更新后导航静默失效,日志 `bridge nav failed: panel dead (no lct-alive within 1.5s) … src=""` |
+| ① | **https 面板**(终结于 `core/bridge_https.js` 8792) | 出站翻译、入站聊天翻译、配置读写、测试、读数 | ✅ **优先**:开机探针 `ALIVE` 后一个 RTT;`bridge_https.log` 逐条可对齐 |
+| ② | **BTIPC**(协议 [btipc-v1.md](btipc-v1.md),实现在 `core/btipc/`) | 同上全部(https 硬失败时原样交回,不扣重试;探针判死则全程走它) | ✅ **兜底**:`BTIPC TRQ w=.. op=config` + `boot: config synced from bridge` |
+| ③ | http 面板 `SetURL` → `/bridge` + `document.title` 轮询 | BTIPC 恰好接不下(busy/too_long)时 | ⚠️ 判死冷却 10min,最后一级 |
+| ✕ | 直连 `$.AsyncWebRequest` → `/api/v1/*` | 无(仅留探测) | ❌ 游戏已移除该 API,调用即抛 `AsyncWebRequest has been removed.` |
 
 - **① 的上行硬依赖 `-condebug`**:游戏→桥只能读 `game/citadel/console.log`(桥
   `startGameLogTail()` 每秒尾随),而该文件**只在游戏带 `-condebug` 启动时**才会生成。
@@ -111,13 +117,10 @@
   细节日志 `bridge nav failed` 全程只打一次,进冷却只打一条摘要;
   离线复探直连通道(`reset to re-probe direct`)同样限流 `CANHTTP_REPROBE_MS=10min` 一次。
   效果:死链日志从**每 15s 一条**降到每冷却周期一条。
-- **已知欠账**:②③ 尚未迁 BTIPC 的接口(`health`、`quickchat`、`gamenames` 动态同步)
-  在当前游戏版本实际不可达 → 游戏侧降级走**打包内置**兜底:
-  - 快捷语音模板 → `lingua_chat_quickchat_fallback.js`(构建时由 `node core/quickchat.js`
-    从本机游戏 loc 重新生成;指纹不一致本应采纳桥侧语料,现在拿不到桥响应只能一直用打包版);
-  - 名称保护名单 → `lingua_chat.js` 内硬编码的约 60 条 `PROTECT_NAMES`
-    (桥侧全量 292 条在 `config/gamenames.json`,日志里 `game names synced from bridge` 因此从不出现);
-  - 死链日志已被上面的判死冷却压掉,**但接口本身仍未迁 BTIPC** —— 这些接口迁 BTIPC 是下一阶段任务(btipc07)。
+- **已知欠账已结清**(btipc07 + https 扩围,2026-10-15/16):`health`、`quickchat`、`gamenames`
+  动态同步已迁出旧通道 —— 经 BTIPC `get` 或 https 面板通道,指纹一致时零传输
+  (`gamenames sync: fingerprint match` / `quickchat templates delta applied`);
+  打包内置兜底(快捷语音 fallback 模板、硬编码 `PROTECT_NAMES`)仅在桥不可达时生效。
 
 ## 5. 配置
 

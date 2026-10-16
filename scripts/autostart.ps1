@@ -62,15 +62,22 @@ if ($Action -eq "Install") {
 ' Paths are resolved at runtime from this script's own location, so the
 ' folder can be extracted/moved/renamed anywhere (incl. non-ASCII paths).
 Option Explicit
-Dim fso, sh, root, node, server
+Dim fso, sh, root, node, server, https
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set sh = CreateObject("WScript.Shell")
 root = fso.GetParentFolderName(fso.GetParentFolderName(WScript.ScriptFullName))
 node = root & "\portable-node\node.exe"
 server = root & "\core\bridge_server.js"
+https = root & "\core\bridge_https.js"
 If Not fso.FileExists(node) Then node = "node"
 If fso.FileExists(server) Then
   sh.Run """" & node & """ """ & server & """", 0, False
+End If
+' 2026-10-16: https 面板通道的 TLS 终结进程。开机只起 bridge_server 会导致
+' 8792 无监听,游戏探针判死、全天退回 BTIPC(08:47 实车)。缺证书时它 exit(3)
+' 自退,无影响;文件不存在(老包)则跳过。
+If fso.FileExists(https) Then
+  sh.Run """" & node & """ """ & https & """", 0, False
 End If
 '@ + "`r`n"
   [System.IO.File]::WriteAllText($VbsPath, $vbs, (New-Object System.Text.UTF8Encoding($false)))

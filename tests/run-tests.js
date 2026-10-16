@@ -6,6 +6,7 @@
 // 铁律:新增/删除测试文件必须同步维护下方 files 清单(漏登记 = 不进 CI 视野)。
 "use strict";
 const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const files = [
@@ -13,8 +14,12 @@ const files = [
   "tests/bridge_paths_logs_guard.test.js",
   "tests/btipc07_sync.test.js",
   "tests/btipc_echo_storm_guard.test.js",
+  "tests/cfg_sync_guard.test.js",
   "tests/client_copy_sync.test.js",
   "tests/config_atomic_write.test.js",
+  // 2026-10-15:https 面板通道的降级纪律 + 发行包自足(新增文件必须显式登记,
+  // 这个清单是显式的而非 glob —— 漏登记 = 护栏永远不跑,而"全链 30/30"照样绿)。
+  "tests/https_panel_guard.test.js",
   "tests/launcher_condebug_guard.test.js",
   "tests/launcher_entry_guard.test.js",
   "tests/lc_btipc07_guard.test.js",
@@ -24,9 +29,11 @@ const files = [
   "tests/lc_p4_partition.test.js",
   "tests/lc_panel_nav_guard.test.js",
   "tests/loc_parser.test.js",
+  "tests/log_redaction.test.js",
   "tests/providers.test.js",
   "tests/quickchat_handshake.test.js",
   "tests/quickchat_match.test.js",
+  "tests/release_entry_guard.test.js",
   "tests/script_hardening_guard.test.js",
   "tests/security_boundary_guard.test.js",
   "tests/umm_integration.test.js",
@@ -46,6 +53,48 @@ const files = [
 
 const root = path.join(__dirname, "..");
 const failed = [];
+
+// ---- 第 0 关:产品代码的语法检查(2026-10-15 补)----
+// 为什么排在最前面:护栏测试都是**读源码做正则断言**,不 require 产品模块。
+// 于是 `core/bridge_server.js` 里一处正则语法错(/"apiKey":"(?!\\*{8})…" 的 Nothing to repeat)
+// 能让**全链 33/33 全绿** —— 桥却起不来,重启脚本只打印最后一行,一眼扫过去根本看不出来。
+// 「测试全绿但产品跑不起来」是最贵的失败类型:它把错误伪装成通过。
+// 这里对所有随包分发的 JS 做 node --check,语法错 = 直接红,不必等到装车或重启桥才发现。
+const SYNTAX_TARGETS = [
+  "core/bridge_server.js",
+  "core/bridge_https.js",
+  "core/config.js",
+  "core/loc_parser.js",
+  "core/sync_data.js",
+  "core/steam_paths.js",
+  "core/quickchat_match.js",
+  "core/btipc/index.js",
+  "core/btipc/transport.js",
+  "core/btipc/framer.js",
+  "core/btipc/window.js",
+  "core/providers/bing.js",
+  "core/providers/google.js",
+  "core/providers/microsoft.js",
+  "core/providers/deepl.js",
+  "core/providers/openai.js",
+  "core/providers/registry.js",
+  "mod/panorama/scripts/lingua_chat.js",
+  "mod/panorama/scripts/lingua_chat_exp.js",
+];
+let syntaxBad = 0;
+for (const rel of SYNTAX_TARGETS) {
+  const abs = path.join(root, rel);
+  if (!fs.existsSync(abs)) continue;
+  const r = spawnSync(process.execPath, ["--check", abs], { cwd: root, encoding: "utf8" });
+  if (r.status !== 0) {
+    syntaxBad += 1;
+    const msg = ((r.stderr || r.stdout || "").split(/\r?\n/).find((l) => /SyntaxError|Error/.test(l)) || "").trim();
+    console.log("FAIL | syntax: " + rel + (msg ? "  ->  " + msg : ""));
+  }
+}
+console.log((syntaxBad ? "FAIL" : "PASS") + " | syntax check (" + SYNTAX_TARGETS.length + " 个产品文件)");
+if (syntaxBad) failed.push("syntax-check");
+
 for (const rel of files) {
   const abs = path.join(root, rel);
   const r = spawnSync(process.execPath, [abs], { cwd: root, encoding: "utf8" });

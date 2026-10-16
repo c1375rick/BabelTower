@@ -1,5 +1,16 @@
-// Babel Tower —— 隐藏 HTML 面板通道的 TLS 终结进程(2026-10-15)
+﻿// Babel Tower —— 隐藏 HTML 面板通道的 TLS 终结进程(2026-10-15)
 // ------------------------------------------------------------------
+// 【路线来源】(详见 docs/btipc-https-v1.md §2)
+//   ① 设计面是我们自己的:隐藏 HTML 面板 SetURL → /bridge 页面 + document.title 轮询
+//      这条回程,早于 BTIPC 就记在 docs/architecture.md §4.2 的通道③(定位是"②不可用
+//      时的回退")。本文件不发明新路线,只给它补一个引擎要求的证书入口。
+//   ② "给面板一个受信任的本机 https"这个**方案本身**(自签证书 + 写入
+//      CurrentUser\Root + 信任后完全重启 Steam)来自一款 GPL-3.0 同类实现,我们此前
+//      没有这个方案;其中"非交互进程写信任库必须用 certutil"是本仓自动化语境下自己
+//      撞出来的。逐项对账(含我们更正过的两处表述)见 docs/btipc-https-v1.md §2。
+//   ③ 拦点是证书链(`error:-202`)这个定位是本仓实机抓到的,不是抄来的。
+//   我们与该实现零代码重叠(审计基线见 docs/btipc-https-v1.md §2.5)。
+//
 // 为什么单独一个进程,而不是在 bridge_server.js 里再开一个 https 监听:
 //   ① core/bridge_server.js 有安全护栏(tests/security_boundary_guard.test.js)要求
 //      "整个桥只有一处 .listen(),且形如 (PORT, host)",不允许第二个内联绑定。
@@ -33,9 +44,41 @@ const LOG = path.join(__dirname, "..", "logs", "bridge_https.log");
 function ensureLogDir(file) {
   try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (e) {}
 }
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+// 本地时间,与 bridge_server.js 的 localTimestamp() 同格式。
+// 2026-10-15 修:原来用 toISOString(),那是 **UTC**。本机在 UTC+8,于是
+// bridge_https.log 记「14:43:23」而同一时刻 bridge.log 记「22:43:23」——
+// 两个本该对着读的日志差 8 小时,当场把"TLS 被拒"这件事错判成 8 小时前的事。
+// **两个日志文件的时区必须一致,否则跨文件对时序就是自杀。**
+function localTimestamp() {
+  const d = new Date();
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+    " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+}
+
+// 请求 URL 的日志用:把 ?d=<JSON> 的值整段打码。
+// 2026-10-15:设置面板的保存走本通道后,载荷(含 API Key)会经 URL 查询串进来。
+// 虽然实测"Key 落在第 ~132 个字符,而这里只取 96"看似安全 —— 但那是**算术余量**:
+// 字段顺序或服务商名一变短,余量就没了。而本仓有硬规矩「任何日志都不允许包含 apiKey」,
+// 且安装包自带"导出诊断"会把日志发出去。所以这里按规矩打码,不靠余量。
+function redactUrl(u) {
+  const s = String(u == null ? "" : u);
+  // 必须按**参数边界**找 d=,不能 indexOf("d=")—— 那会命中 "id=" 里的那个 d=。
+  // (2026-10-15 踩过:自测用例直接报 LEAK,眼看一下是看不出来的。)
+  const m = s.match(/[?&]d=/);
+  if (!m) return s.length > 120 ? s.slice(0, 120) + "…" : s;
+  const start = m.index + m[0].length;      // 值开始处
+  const cut = s.indexOf("&", start);
+  const end = cut === -1 ? s.length : cut;
+  // m.index 指到 ? 或 &,切片要 +1 把分隔符带上 —— 否则日志里会印出 "op=configd=<redacted>"
+  // 这种畸形串。日志畸形就是坏日志:它要能被当证据读。
+  return s.slice(0, m.index + 1) + "d=<redacted " + (end - start) + "B>" +
+    (cut === -1 ? "" : s.slice(cut));
+}
+
 function log(level, msg) {
   ensureLogDir(LOG);
-  const line = "[" + new Date().toISOString().replace("T", " ").slice(0, 19) + "] [" + level + "] " + msg;
+  const line = "[" + localTimestamp() + "] [" + level + "] " + msg;
   try { fs.appendFileSync(LOG, line + "\n"); } catch (e) {}
   console.log(line);
 }
@@ -54,6 +97,11 @@ try {
 }
 
 function handle(req, res) {
+  // 成功请求也落一行(2026-10-15 补)。此前**只记失败**,于是"这一条到底有没有走 https 进来"
+  // 只能回头看 8791 的 REQHDR 反推 —— 而 8791 同时也接 http 面板和 BTIPC,三条路混在一起,
+  // 推不出结论。当天就栽在这上面:证书已撤销,游戏却报 ALIVE,到底是"游戏不校验证书"
+  // 还是"请求其实没走 https",没有正面证据,只能靠猜。
+  log("info", "REQ " + req.method + " " + redactUrl(req.url) + " (经 https 面板通道进来)");
   const headers = {};
   for (const k of Object.keys(req.headers || {})) {
     if (!HOP.has(k.toLowerCase())) headers[k] = req.headers[k];

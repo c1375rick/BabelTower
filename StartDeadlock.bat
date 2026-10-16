@@ -27,14 +27,14 @@ if defined MISSING (
 )
 
 set "NODE_EXE="
-if exist "portable-node\node.exe" (
-    set "NODE_EXE=portable-node\node.exe"
+if exist "portable-node\r\node.exe" (
+    set "NODE_EXE=portable-node\r\node.exe"
 ) else (
     where node >nul 2>nul && set "NODE_EXE=node"
 )
 if not defined NODE_EXE (
     echo [LCT] Node.js not found. Install Node.js 18+ or put a portable
-    echo [LCT] copy at portable-node\node.exe
+    echo [LCT] copy at portable-node\r\node.exe
     pause
     exit /b 1
 )

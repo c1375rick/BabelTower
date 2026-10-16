@@ -1,5 +1,13 @@
 ﻿# 生成 Babel Tower 本机 HTTPS 证书(隐藏 HTML 面板通道用)
 # ------------------------------------------------------------------
+# 路线来源(逐项对账见 docs/btipc-https-v1.md §2):
+#   ① 通道设计是我们自己的(隐藏 HTML 面板 → /bridge → document.title 轮询,
+#      早于 BTIPC 就记在 docs/architecture.md §4.2 的通道③);本脚本只补它缺的证书。
+#   ② "本机自签证书 + 写入 CurrentUser\Root + 信任后完全重启 Steam"这个方案本身来自
+#      一款 GPL-3.0 同类实现(SAN 布局与它同款);下面坑②是**本仓自动化语境下自己撞出来的**
+#      —— 对方用 .NET X509Store + 交互式 YES 确认,不会遇到非交互失败。
+#   下面坑①③ 是这套方案的固有要求(对方脚本已写明),我们实跑时验证过,不是本仓首创。
+#
 # 为什么需要:Panorama 的隐藏 HTML 面板只接受**证书有效**的 https(SB 2 引擎实测
 # error:-202 = ERR_CERT_AUTHORITY_INVALID),http://127.0.0.1 与 http://localhost
 # 都在 LoadPage 之前被拒。因此桥需要一张本机自签证书,并且**必须被信任**。

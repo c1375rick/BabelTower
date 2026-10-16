@@ -6,6 +6,13 @@
 //   1. 硬死签名(src 为空)累计判死,够 PANEL_NAV_DEAD_STREAK 次进冷却(加载慢不计数)
 //   2. 冷却内 dispatchViaPanel 不导航直接快速失败(不打日志)
 //   3. 细节日志全程只打一次,离线复探直连通道限流 CANHTTP_REPROBE_MS
+//
+// 2026-10-15 增补(https 面板通道上线):第 2 条的适用范围被收窄为 **http 面板通道**。
+// navDeadUntil 是 http 通道的判死结论,而 config/test/log 三个 op 至今仍走 http,
+// 在当前 build 上必然连撞 src="" 而进冷却 —— 若 https 通道也受它约束,一次 http 判死
+// 会顺手压掉能用的 https 通道 10 分钟,且日志里只看得到 http 的死链记录,极难归因。
+// 因此 navSuppressedFor(hooks) 给 httpsChannel 一个显式豁免;护栏改为同时钉死
+// 「http 仍受冷却约束」与「豁免必须显式声明」两侧,防止豁免被扩大到所有通道。
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -34,13 +41,27 @@ check("State 字段齐全", /navDeadStreak: 0/.test(src) && /navDeadUntil: 0/.te
 // ---- 2. panelNavSuppressed 存在且被 dispatchViaPanel 使用 ----
 const supIdx = src.indexOf("function panelNavSuppressed()");
 check("panelNavSuppressed 已定义", supIdx > 0, "idx=" + supIdx);
-const useIdx = src.indexOf("panelNavSuppressed() ? null : ensurePanel()");
+// 2026-10-15:入口判定改成 navSuppressedFor(hooks)(https 通道显式豁免 http 的冷却),
+// 冷却本身仍必须由 panelNavSuppressed 决定 —— 护栏钉死这条因果链不被绕过。
+const gateIdx = src.indexOf("navSuppressedFor(hooks) ? null : ensurePanel()");
+check("dispatchViaPanel 经 navSuppressedFor 决定是否导航",
+  gateIdx > supIdx && gateIdx > 0, "gateIdx=" + gateIdx);
+const gateSrc = (src.match(/const navSuppressedFor = \(hooks\) =>[^\n]*/) || [])[0] || "";
+check("navSuppressedFor 只给 httpsChannel 豁免(不得无条件放行)",
+  /hooks && hooks\.httpsChannel \? false : panelNavSuppressed\(\)/.test(gateSrc), gateSrc);
+check("https 豁免必须由 dispatchJob 显式声明",
+  /httpsChannel: true/.test(src));
+const useIdx = gateIdx;
 check("dispatchViaPanel 冷却内不导航(直接走 !panel 快速失败分支)",
   useIdx > supIdx && useIdx > 0, "useIdx=" + useIdx);
 const branchEnd = src.indexOf("ensureBridgeEvents();", useIdx);
 const branchBody = useIdx > 0 && branchEnd > useIdx ? src.slice(useIdx, branchEnd) : "";
 check("冷却内快速失败不打日志(复用原 !panel 分支,零 log)",
   !!branchBody && !/log\(/.test(branchBody), branchBody ? "" : "未切到 !panel 分支");
+check("降级钩子走 handOff 包装(异常日志不在热路径)",
+  /function handOff\(hooks, payload\)/.test(src) &&
+  /if \(handOff\(hooks, \{ ok: false, error: "bridge_panel_unavailable" \}\)\) return;/.test(branchBody),
+  "钩子若内联 try/catch+log 就会破坏上一条断言");
 
 // ---- 3. panelNavSuppressed 行为(抽到沙箱,接真实 State/nowMs 语义) ----
 const supSrc = (src.match(/function panelNavSuppressed\(\) \{[\s\S]*?\n  \}/) || [])[0];

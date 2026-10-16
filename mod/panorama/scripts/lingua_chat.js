@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.1.0-6726-btipc08"; // 1.1.0 (2026-10-13) 发布 GitHub(tag v1.1.0) + GameBanana(前版 1.0.10 于 2026-10-10 发布 tag v1.0.10;1.0.11 消耗为未发布内部开发版,内容并入本版);1.1.0 内容:B6 配置原子写(core/config.js writeFileAtomic:tmp+fsync+rename+EPERM 降级直写,config_atomic_write 护栏)+ simtest TRQ 回程补齐(68/0:waitBootSync 等开机配置同步、applyScenarioCfg 应用套件配置、test20 换语料真模板 Stun {s:hero_name};纯 harness 零产品码,真桥真传输非 mock)+ BTIPC 回声拥塞豁免(State.btipcLastStormAt + BTIPC_ECHO_STORM_WINDOW_MS=15000:回声 catch 中 kind∈{timeout,crc_dead} 且风暴窗内 → 只记拥塞日志不调 onBridgeDown;8s 死线/STORM 常数/冻结面 core/btipc 四件零动;实弹 6 次回声超时 6 次分类全对 + 3/3 链不丢不重不乱序,echo_storm_guard 钉)+ 脚本层加固(装车换 [IO.File]::Replace 原子换、备份由交换产出;重启桥 $proc.HasExited 验尸 + Mutex 互斥 + 杀净复查;autostart vbs 模板 5 引号语法错误修复 —— 每装一次自启即打坏;端口改 ConvertFrom-Json;script_hardening_guard)+ 风险登记表 docs/risk_register.md(B6/simtest/transport/端点/P4b 五项性质/风险/状态/解冻范围;compatibility.md §9-§12 记档);统一测试入口 30 项;1.0.11 原内容:P1 桥侧耦合面收口(core/btipc/index.js 统一门 + transport/GameChannel 零逻辑壳,冻结四件零动)+ P2 op=log 聊天日志迁 BTIPC(桥侧 matchChatLogTrq + runBtipcOp log 分支镜像 /api/v1/log;客户端并入 BTIPC op 通道 + 600B 切批;装车窗实弹抓获客户端 viaBtipc 路由谓词漏 log —— 2655 路由 + 2631 兜底,op 集合谓词 4 处只补 2 处 → log op 落死通道,真机聊天日志 11 天从未落盘 —— 已修 + op_log_guard 钉)+ P3 收口审计(compatibility.md §7 端点/耦合面清点);前版 1.0.10 内容:B1 安全修复(删 GET ?d= 写通道→410 + 跨站守卫三闸 + ACAO 10 处收敛)+ F6($.Schedule 取消改走 $.CancelScheduled + ctprobe-v2,修 clearTimeout 实测无效→双 finishJob 超发)+ P0-2 doneFail/pumpQueue 双结算修复(settle 留痕)+ 统一测试入口 tests/run-tests.js(24 项,决策 node:test)+ compatibility.md 基线存档与冻结清单;前版 1.0.9 内容:/tr 面板 660x600->580x520 + 关闭按钮从标题栏移到底部 footer + 5 处口径改「点右下角 X 关闭」+ 7 项脚本缺陷修复;前版 1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏致出站队列停摆);更早版本(btipc05 系列读写死线/重试风暴诸修)见 docs/compatibility.md 与 docs/ipc-checklist-6726.md §16;升版时 VERSION 文件 / 本常量 / README L15 三处同步(lc_btipc_guard 锁形态 + 主版本与 VERSION 文件比对,不写死)
+  const VERSION = "1.2.0-6726-btipc09"; // 1.2.0 (2026-10-15) 内容: ① https 面板通道转正(新增 core/bridge_https.js 独立 TLS 终结进程 8792 + 自签证书; 客户端开机探针定通道 + 硬/软失败分类 + 连击 3 次降级;翻译下行从位泵 3.0-27.4s 降到 1s 以内, 实测服务端侧仅 55-76ms;BTIPC 保留为兜底,证书未信任时体感与本通道上线前完全一致); ② B1 跨站闸自伤修复(面板同源 fetch 带的 https Origin 不在白名单 -> 翻译全线失败; 改用惰性 isLocalOrigin()); ③ 翻译慢 8 秒的三层归因与修复(bing 命中 429 后在 provider 内部睡 1s->2s->4s 共 7 秒且不抛错, 回退链根本没机会接手 -> 改短等一次并抛 rateLimited;fallbackProviders 由空配成 google; provider 的 console 诊断接进 logs/bridge.log 并加自证标记); ④ 设置面板保存改走面板通道(用户实机反馈 OpenAI 的 API 老是保存不上: 带 Key 的载荷 ~600B,位泵 10B/帧 -> 61 帧 ~38 秒,而写死线只有 8 秒 (死线当初按应答 1 帧定的,没算上行 61 帧) -> 必然 REQ_TIMEOUT; 同根因的 op=log(600B 批)与读配置(7.8-26s)一并接入); ⑤ 日志打码(URL 走 ?d= 带 Key -> 两处日志按值打码,不靠截断长度; BTIPC 上行 b64 是运输通道不能改,改为桥抄进 bridge.log 时打码); ⑥ 证书信任结论转为实测(游戏确实校验证书/TLS 告警为证;信任缓存在 Steam 进程, 只重启游戏无效,撤销信任同样要重启 Steam;不需要管理员); ⑦ bridge_https.log 时间戳由 UTC 改本地时(与 bridge.log 差 8 小时曾致误判); ⑧ 用户侧四件套脚本(install/update/diagnose/uninstall + 四个 .bat)+打包必需文件断言; ⑨ 护栏:新增 https_panel_guard(85 项)/release_entry_guard(73 项)/log_redaction(6 项),均登记进 tests/run-tests.js 显式清单。 构建标 btipc09:BTIPC 路由语义变了(config/test/log/读 在面板通道判活时不再走位泵),故与 1.1.0 的 btipc08 线区分开; core/btipc/* 冻结面四件仍零改动。 升版时 VERSION 文件 / 本常量 / README 版本行 三处同步 (lc_btipc_guard 锁形态 + 主版本与 VERSION 文件比对,不写死) // 1.1.0 (2026-10-13) 发布 GitHub(tag v1.1.0) + GameBanana(前版 1.0.10 于 2026-10-10 发布 tag v1.0.10;1.0.11 消耗为未发布内部开发版,内容并入本版);1.1.0 内容:B6 配置原子写(core/config.js writeFileAtomic:tmp+fsync+rename+EPERM 降级直写,config_atomic_write 护栏)+ simtest TRQ 回程补齐(68/0:waitBootSync 等开机配置同步、applyScenarioCfg 应用套件配置、test20 换语料真模板 Stun {s:hero_name};纯 harness 零产品码,真桥真传输非 mock)+ BTIPC 回声拥塞豁免(State.btipcLastStormAt + BTIPC_ECHO_STORM_WINDOW_MS=15000:回声 catch 中 kind∈{timeout,crc_dead} 且风暴窗内 → 只记拥塞日志不调 onBridgeDown;8s 死线/STORM 常数/冻结面 core/btipc 四件零动;实弹 6 次回声超时 6 次分类全对 + 3/3 链不丢不重不乱序,echo_storm_guard 钉)+ 脚本层加固(装车换 [IO.File]::Replace 原子换、备份由交换产出;重启桥 $proc.HasExited 验尸 + Mutex 互斥 + 杀净复查;autostart vbs 模板 5 引号语法错误修复 —— 每装一次自启即打坏;端口改 ConvertFrom-Json;script_hardening_guard)+ 风险登记表 docs/risk_register.md(B6/simtest/transport/端点/P4b 五项性质/风险/状态/解冻范围;compatibility.md §9-§12 记档);统一测试入口 30 项;1.0.11 原内容:P1 桥侧耦合面收口(core/btipc/index.js 统一门 + transport/GameChannel 零逻辑壳,冻结四件零动)+ P2 op=log 聊天日志迁 BTIPC(桥侧 matchChatLogTrq + runBtipcOp log 分支镜像 /api/v1/log;客户端并入 BTIPC op 通道 + 600B 切批;装车窗实弹抓获客户端 viaBtipc 路由谓词漏 log —— 2655 路由 + 2631 兜底,op 集合谓词 4 处只补 2 处 → log op 落死通道,真机聊天日志 11 天从未落盘 —— 已修 + op_log_guard 钉)+ P3 收口审计(compatibility.md §7 端点/耦合面清点);前版 1.0.10 内容:B1 安全修复(删 GET ?d= 写通道→410 + 跨站守卫三闸 + ACAO 10 处收敛)+ F6($.Schedule 取消改走 $.CancelScheduled + ctprobe-v2,修 clearTimeout 实测无效→双 finishJob 超发)+ P0-2 doneFail/pumpQueue 双结算修复(settle 留痕)+ 统一测试入口 tests/run-tests.js(24 项,决策 node:test)+ compatibility.md 基线存档与冻结清单;前版 1.0.9 内容:/tr 面板 660x600->580x520 + 关闭按钮从标题栏移到底部 footer + 5 处口径改「点右下角 X 关闭」+ 7 项脚本缺陷修复;前版 1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏致出站队列停摆);更早版本(btipc05 系列读写死线/重试风暴诸修)见 docs/compatibility.md 与 docs/ipc-checklist-6726.md §16;升版时 VERSION 文件 / 本常量 / README L15 三处同步(lc_btipc_guard 锁形态 + 主版本与 VERSION 文件比对,不写死)
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -96,6 +96,36 @@
   // 改回 127.0.0.1;桥已双栈监听(127.0.0.1+::1),两种解析都能命中。
   const BRIDGE_HOST = "127.0.0.1";
   const BRIDGE_PORT = 8791; // 与 core/config.json 保持一致
+
+  // ---- https 面板通道(2026-10-15):主路,但**有则用、无则退 BTIPC** ----
+  // 【路线来源】(详见 docs/btipc-https-v1.md §2)
+  //   ① 这条回程(隐藏 HTML 面板 SetURL → /bridge + document.title 轮询)是**我们自己的**
+  //      设计,早于 BTIPC 就写在 docs/architecture.md §4.2 的通道③里,当时定位是
+  //      "②不可用时的回退"。本段没有发明新路线,只是把它从"回退"提到"主路"并加了
+  //      探针与降级纪律。
+  //   ② "给面板一个受信任的本机 https"(自签证书 + 写入 CurrentUser\Root + 信任后完全
+  //      重启 Steam)这个**方案本身**来自一款 GPL-3.0 同类实现,我们此前没有;证书 SAN
+  //      布局也是同款。逐项对账(含我们更正过的两处表述)见 docs/btipc-https-v1.md §2。
+  //   ③ 拦点是证书链这个定位是本仓实机抓到的。我们与该实现零代码重叠(§2.5)。
+  //
+  // 事实:隐藏 HTML 面板只接受证书有效的 https。http://127.0.0.1 与 http://localhost
+  // 在 LoadPage 之前就被引擎拒掉(6726 起 SetURL 后 src=""、页面从不加载,只有死链日志)。
+  // 桥侧新增 core/bridge_https.js(TLS 终结 + 反代回 8791,独立进程:证书出问题绝不能连带
+  // BTIPC 一起死);证书由 scripts\gen_bridge_cert.ps1 生成,首次需 -Trust 并
+  // **完全退出并重启 Steam**(信任库由 Steam 宿主缓存,只重启游戏不生效 —— 实测)。
+  //
+  // 为什么值得当主路:面板页面在**桥这一侧**同源 fetch 完 /api/v1/translate,把整条结果
+  // 一次写进 document.title,下行只剩一个 RTT;而 BTIPC 位泵是
+  // FIRST_SHOT(1200ms) + 帧数 × tClose(600ms) —— 短句 3.0s、17 帧 11.6s、38 帧 24.4s。
+  //
+  // 为什么绝不拿掉 BTIPC:证书未信任 / Steam 没重启的用户,这条通道必然是死的,
+  // 他们必须原样留在 BTIPC 上(零摩擦)。所以本通道的失败路径只有一条:
+  // 原样把 job 交回 BTIPC 重做,且**不消耗 job.attempts**(不是翻译失败,不该扣重试)。
+  const HTTPS_PANEL_ENABLED = true; // 总开关;现场排障时置 false 即刻全量退回 BTIPC
+  const HTTPS_PANEL_HOST = "localhost"; // 证书 SAN 含 DNS:localhost 与 IP:127.0.0.1
+  const HTTPS_PANEL_PORT = 8792; // 与 core/bridge_https.js 的默认端口一致
+  const HTTPS_PANEL_PROBE_SECONDS = 3.0; // 开机探针窗口:超过仍无 lct-alive 即判本会话不可用
+  const HTTPS_PANEL_DEAD_STREAK = 3; // 会话内连续几次通道级失败才永久退 BTIPC(偶发抖动不误杀)
   const TITLE_PREFIX = "LCT";
   const TITLE_ALIVE = "lct-alive";
   const BRIDGE_STATUS_LABEL_ID = "LCTBridgeStatusLabel";
@@ -304,6 +334,9 @@
     bootLogged: false,
     cfgSynced: false, // 启动时是否已从桥同步过配置(healthCheck 补触发用)
     cfgSyncing: false, // 配置同步是否进行中(防 healthCheck 重复触发叠加)
+    cfgSyncStarted: false, // 2026-10-16:配置同步启动门(boot 与 onBridgeAlive 共用 once,等探针先定论)
+    cfgSyncWaitTries: 0, // 2026-10-16:等探针定论的轮询次数(8 次约 8s 无定论则走老路,不无限等)
+    cfgDirty: null, // 2026-10-16:用户脏标记 {provider:true...},同步落地/_mask 回填时跳过这些键
     gamenamesLoaded: false, // 启动后是否已从桥拉取过游戏名保护名单(healthCheck 补触发用)
     gamenamesLoading: false, // 名单拉取是否进行中(防 healthCheck 重复触发叠加)
     quickchatLoading: false, // 语料同步是否进行中(同上)
@@ -326,6 +359,11 @@
     navDeadStreak: 0, // 连续"页面从未加载"的导航失败计数(够 PANEL_NAV_DEAD_STREAK 次才判死通道)
     navDeadUntil: 0, // 面板通道判死冷却截止(nowMs());期间 dispatchViaPanel 快速失败,不导航
     navDeadLogged: false, // 本次会话是否已打过一条导航死链细节日志(此后只打"进入冷却"摘要)
+    // ---- https 面板通道(2026-10-15)----
+    httpsPanelOk: null, // null=尚未探测;true=本会话走 https 面板;false=退回 BTIPC
+    httpsPanelStreak: 0, // 通道级失败连击(够 HTTPS_PANEL_DEAD_STREAK 次就永久退 BTIPC)
+    httpsPanelDemotedLogged: false, // 本次会话是否已打过"退 BTIPC"那条日志(避免每请求刷屏)
+    httpsPanelProbeTries: 0, // 开机探针尝试次数(有在途翻译时让路,最多让 3 次)
     eventsRegistered: false,
     pending: null, // 统一在途桥请求 { id, onResult, deadline, sawAlive }
     bridgeUp: false,
@@ -2014,12 +2052,25 @@ function injectTranslation(row, sig, text, fragment) {
     }
   }
 
-  function buildBridgeUrl(job) {
+  // 面板导航基址:https 面板通道被探针判活后用 https,否则维持 http(旧面板兜底路径原样保留)。
+  // 走 localhost 而非 127.0.0.1 是因为证书 SAN 两条都有,但 localhost 正是引擎自带的
+  // 受信主机名口径(引擎自己的 WebKit 对 localhost 另有处理),少一个变量。
+  // forceHttp=true 用于"https 不可用而 BTIPC 又恰好接不下"的那次兜底 —— 那时宁可慢,
+  // 也不能把原文直接发出去。
+  function panelBaseUrl(forceHttp) {
+    if (!forceHttp && State.httpsPanelOk === true) {
+      return "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT;
+    }
+    return "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT;
+  }
+
+  function buildBridgeUrl(job, forceHttp) {
     const id = "r" + (++State.requestSeq).toString(36);
     job.id = id;
+    const base = panelBaseUrl(forceHttp);
     if (job.kind === "bridge") {
       return (
-        "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT +
+        base +
         "/bridge?id=" + id +
         "&op=" + job.op +
         "&d=" + job.data
@@ -2030,7 +2081,7 @@ function injectTranslation(row, sig, text, fragment) {
     const target = encodeURIComponent(job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage());
     const tm = job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000);
     return (
-      "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT +
+      base +
       "/bridge?id=" + id +
       "&op=translate&text=" + text +
       "&source=" + source +
@@ -2236,11 +2287,194 @@ function injectTranslation(row, sig, text, fragment) {
     return State.navDeadUntil > nowMs();
   }
 
+  // ===== https 面板通道:失败分类、降级交接、开机探针(2026-10-15)=====
+  // 通道级失败分两类,这个区分决定了"该不该重做",是本段代码的全部要点:
+  //
+  //   硬失败(通道压根没通)—— 页面从未加载(SetURL 被引擎拒:证书未受信 / Steam 没重启)、
+  //     面板找不到、导航抛异常、桥离线。请求**从未到达桥**,所以把 job 原样交回 BTIPC
+  //     重做是零风险的,而且不消耗 job.attempts(它不是翻译失败)。
+  //
+  //   软失败(通道通了但这次没成)—— bridge_timeout / timeout / bad_bridge_payload。
+  //     页面 alive 且 fetch 已经发出,只是翻译慢或应答解析不了。此时重做一遍等于把
+  //     用户已经等了 OUTGOING_TIMEOUT_MS 的出站请求再拖一个 3~27s(BTIPC 位泵),
+  //     所以**不重做**:交回 handleBridgePayload 按既有语义结算(出站发原文)。
+  const PANEL_HARD_FAIL = {
+    bridge_nav_failed: 1,
+    bridge_offline: 1,
+    bridge_load_failed: 1,
+    bridge_panel_unavailable: 1,
+  };
+  // 钩子统一入口:把 try/catch 与日志挡在调用方的热路径之外。
+  // 为什么必须这样:dispatchViaPanel 的「!panel 快速失败」分支有一条护栏
+  // (lc_panel_nav_guard「冷却内快速失败不打日志」)断言该分支内零 log —— 那条分支
+  // 每 15s 就可能走一次,里面任何 log 都会变成死链刷屏。钩子里已经要打日志,
+  // 所以不能让调用点出现 log 字样。
+  function handOff(hooks, payload) {
+    if (!hooks || typeof hooks.onHardFail !== "function") return false;
+    try {
+      return hooks.onHardFail(payload) === true;
+    } catch (e) {
+      log("https panel fallback threw: " + expErr(e));
+      return false;
+    }
+  }
+
+  function isPanelHardFail(payload) {
+    if (!payload || payload.ok) return false;
+    return PANEL_HARD_FAIL[String(payload.error || "")] === 1;
+  }
+
+  // 这条 job 是否归 https 面板通道管。
+  // 只接管两条翻译路径(outgoing/chat)—— 它们才是延迟的来源;config/test/log 三个 op
+  // 留在原路(BTIPC 已稳定可用),不拿它们的可用性去冒险。
+  function httpsPanelTakes(job) {
+    if (!HTTPS_PANEL_ENABLED) return false;
+    if (State.httpsPanelOk !== true) return false;
+    if (job.kind === "outgoing" || job.kind === "chat") return true;
+    // 2026-10-15:设置面板的「保存」也接进本通道(用户实机反馈「OpenAI 的 API 老是保存不上,
+    // 要反复好几次」)。根因是纯算术,不是玄学:
+    //   带 Key 的保存载荷 ≈ 600B,位泵每帧有效 10B → 约 61 帧 × 600ms + 首发起跑 1200ms ≈ 38 秒;
+    //   而写的死线只有 8 秒(死线当初是按**应答** 1 帧 ≈3s 定的,没算上行请求本身要 61 帧)
+    //   → 必然 REQ_TIMEOUT → 面板显示「保存失败」;反复重试只是把 38 秒的活排进单槽队列。
+    // 本通道是整条 JSON 一次 fetch,同一份载荷 ~1 秒。
+    //
+    // 为什么连 op=test / op=log / 读也一起接:它们是同一个根因(载荷大 vs 死线小)。
+    // 读本来就走 50 秒死线因而"能用",但一次要 7.8~26 秒;op=log 的批 600B 与保存同量级、同死线,
+    // 属于同一个坏掉的地方。**按"根因相同"划线,不按"哪个 op 眼下没报障"划线。**
+    // 通道判死时全部原样交回 BTIPC(见 demoteToBtipc),兜底语义与翻译路径完全一致。
+    if (job.kind === "bridge") return true;
+    return false;
+  }
+
+  // https 面板通道失败 → 把 job 原样交回 BTIPC。返回 true = 已被接走(调用方不要再结算)。
+  // 交接前必须先撤掉面板路径挂的出站超时句柄,否则它稍后触发会二次 job.done/finishJob,
+  // 把 MAX_ACTIVE_REQUESTS=1 的槽位超发(这正是 0.1.3 那个"发中文卡死"事故的同款机制)。
+  function demoteToBtipc(job) {
+    try {
+      if (job._timeout) { cancelSched(job._timeout); job._timeout = null; }
+      // 已超时的出站 job 不再交接:用户已经等到了兜底时刻,再拖 3~27s 是净损失。
+      if (job._timedOut) return false;
+    } catch (e) {
+      log("https panel demote: timer cleanup threw " + expErr(e));
+    }
+    State.httpsPanelStreak += 1;
+    if (State.httpsPanelStreak < HTTPS_PANEL_DEAD_STREAK) {
+      log("https panel: hard fail #" + State.httpsPanelStreak + "/" + HTTPS_PANEL_DEAD_STREAK +
+        ", handing this job back to BTIPC");
+      return handToBtipc(job);
+    }
+    // 连击到线:本会话永久退 BTIPC(不再每请求试一次),并在游戏内只告警一次。
+    State.httpsPanelOk = false;
+    if (!State.httpsPanelDemotedLogged) {
+      State.httpsPanelDemotedLogged = true;
+      log("https panel: dead (" + State.httpsPanelStreak + " consecutive hard fails) — " +
+        "falling back to BTIPC for the rest of this session. If the panel channel should work, run " +
+        "scripts\\gen_bridge_cert.ps1 -Trust and FULLY restart Steam (restarting the game alone is not enough).");
+    }
+    return handToBtipc(job);
+  }
+
+  // 交给 BTIPC。outgoingViaBtipc 返回 false 表示 BTIPC 也接不了(busy/too_long/目标语言不安全),
+  // 那就退回**http** 旧面板通道(与 6726 以来同款兜底):宁可慢,也不能把原文直接发出去。
+  // 注意 attempts 在两段之间已先退回,这里失败不再额外扣。
+  function handToBtipc(job) {
+    let taken = false;
+    try {
+      taken = outgoingViaBtipc(job);
+    } catch (e) {
+      log("https panel demote: outgoingViaBtipc threw " + expErr(e));
+      taken = false;
+    }
+    if (taken) return true;
+    // BTIPC 明确接不了(busy/too_long/目标语言不安全)。attempts 不动 —— job 是从队列
+    // 刚取出来的(attempts=0),后面交给 handleBridgePayload 按原语义重试。
+    try {
+      log("https panel demote: BTIPC declined (busy/too_long) — retrying on the http panel channel");
+      dispatchViaPanel(job, null, true);
+      return true;
+    } catch (e2) {
+      log("https panel demote: http panel retry threw " + expErr(e2));
+      return false;
+    }
+  }
+
+  // 开机探针:一次性决定本会话走哪条通道。
+  // 为什么必须探而不是"每请求试":证书未信任的用户若每条请求都先撞一次死链,
+  // 会白付 BRIDGE_ALIVE_SECONDS(1.5s)——比现在的 BTIPC 还慢。探一次定生死,
+  // 未通过就直接全程 BTIPC,用户体感与今天完全一致。
+  function probeHttpsPanel() {
+    if (State.httpsPanelOk !== null) return; // 已定论
+    State.httpsPanelProbeTries += 1;
+    if (State.httpsPanelProbeTries > 3) {
+      State.httpsPanelOk = false;
+      log("https panel: probe skipped (panel slot busy), staying on BTIPC");
+      return;
+    }
+    // 探针占用的是与翻译同一个单槽(State.pending),有在途请求就让路,1s 后再试。
+    if (State.pending) {
+      try { $.Schedule(1.0, probeHttpsPanel); } catch (eR) {}
+      return;
+    }
+    const panel = ensurePanel();
+    if (!isValid(panel) || typeof panel.SetURL !== "function") {
+      State.httpsPanelOk = false;
+      log("https panel: no usable HTML panel declared in chat.xml — staying on BTIPC");
+      return;
+    }
+    ensureBridgeEvents();
+    // 顺序要紧:State.pending 先落,再启动轮询。反过来会让 pollTitle 撞上空 pending
+    // 直接 return 并把 polling 置停(State.polling=false 在函数开头),探针永远收不到结果。
+    State.pending = {
+      id: "probe",
+      onResult: function (payload) {
+        if (payload && payload.ok) {
+          State.httpsPanelOk = true;
+          State.httpsPanelStreak = 0;
+          log("https panel: ALIVE (https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
+            ") — translations now take one RTT instead of the BTIPC bit pump");
+        } else {
+          State.httpsPanelOk = false;
+          log("https panel: not usable (" + String((payload && payload.error) || "no reply") +
+            ") — translations stay on BTIPC. To enable: scripts\\gen_bridge_cert.ps1 -Trust, then FULLY restart Steam.");
+        }
+      },
+      deadline: nowMs() + HTTPS_PANEL_PROBE_SECONDS * 1000,
+      startedAt: nowMs(),
+      sawAlive: false,
+    };
+    startTitlePolling();
+    try {
+      panel.visible = true;
+    } catch (e) {}
+    const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
+      "/bridge?op=health&id=probe";
+    try {
+      panel.SetURL(probeUrl);
+      log("https panel: probing " + probeUrl);
+    } catch (e) {
+      State.pending = null;
+      State.httpsPanelOk = false;
+      log("https panel: probe SetURL threw " + expErr(e) + " — staying on BTIPC");
+    }
+  }
+
   // HTML 面板通道:SetURL 导航 /bridge 页面,轮询 document.title 读回
   // (AsyncWebRequest 被移除的游戏版本唯一可用通道;DLCT 同款机制)
-  function dispatchViaPanel(job) {
-    const panel = panelNavSuppressed() ? null : ensurePanel();
+  // hooks 可选: { onHardFail(payload) -> true } 表示"这条我接走了,别再结算"。
+  // https 面板通道用它把通道级失败交回 BTIPC;不传就是 6726 以来的原样行为。
+  function dispatchViaPanel(job, hooks, forceHttp) {
+    // 冷却期(navDeadUntil)是 **http 面板通道**的判死结论,只该压制 http 导航。
+  // https 面板通道必须绕开它:引擎先过证书校验、再谈加载,两者判死条件互不相干;
+  // 而 config/test/log 这三个 op 至今仍走 http 面板,它们在当前 build 上必然连撞
+  // src="" 而把 http 通道打进冷却 —— 若不绕开,一次 http 判死就会顺手把**能用的**
+  // https 通道一起压掉 10 分钟,而且症状极隐蔽(日志里只有 http 的死链记录)。
+  const navSuppressedFor = (hooks) => (hooks && hooks.httpsChannel ? false : panelNavSuppressed());
+  const panel = navSuppressedFor(hooks) ? null : ensurePanel();
     if (!isValid(panel) || typeof panel.SetURL !== "function") {
+      // 通道压根不可用:若上层(https 面板通道)声明要接管这种失败,交出去走 BTIPC。
+      // 注意这里只能调 handOff:内联的 try/catch 或日志字样都会破坏上面那条护栏
+      // (它是按源码文本扫这个分支的,注释里写出来也算数)。
+      if (handOff(hooks, { ok: false, error: "bridge_panel_unavailable" })) return;
       if (job.kind === "outgoing") {
         job.done(null, null);
         finishJob();
@@ -2407,20 +2641,41 @@ function injectTranslation(row, sig, text, fragment) {
         finishJob();
       });
     }
-    const url = buildBridgeUrl(job);
+    const url = buildBridgeUrl(job, forceHttp);
     setPending(job.id, function (payload) {
+      // 通道级失败(证书未受信/面板死/桥离线)→ 交回 BTIPC 重做,不消耗 attempts。
+      // 软失败(bridge_timeout/timeout)不交接:请求已经到桥,重做只是把等待翻倍。
+      if (isPanelHardFail(payload) && handOff(hooks, payload)) return;
       handleBridgePayload(job, payload);
     }, job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000));
     // DIAG-6726:记录每次导航目标(去 query 串,避免刷长文本),确认请求确实发出
     State.diagNavCount = (State.diagNavCount || 0) + 1;
     if (State.diagNavCount <= 5 || State.diagNavCount % 20 === 0) {
-      log("diag-nav #" + State.diagNavCount + " -> " + String(url.split("?")[0] || "") + " (q=" + String(url.split("?")[1] || "").slice(0, 30) + "...)");
+      // d= 是整份请求 JSON(设置面板保存时含 API Key)。这里按值打码,
+      // 不留"靠截断长度保安全"的余量 —— 余量会被字段顺序/服务商名长度的变化吃掉。
+      var navQ = String(url.split("?")[1] || "");
+      // **必须按参数边界找 d=**(?d= 或 &d=),不能 indexOf("d=") —— 那会命中 "id=" 里的
+      // 那个 d=(2026-10-15 实车踩过:日志里出现 "id=<redacted 2B>&op=config&d=%...",
+      // id 的值被打码了、真正的 d= 反而没打上,只是碰巧被下面 30 字符截断挡住)。
+      // 同一个坑我在 redactUrl 里已经修过一次并写了注释,这里又写了一遍 ——
+      // **教训写进注释不等于用上了,复制粘贴自己的代码也要重读一遍。**
+      var navM = navQ.match(/[?&]d=/);
+      if (navM) {
+        var navStart = navM.index + navM[0].length;
+        var navCut = navQ.indexOf("&", navStart);
+        var navEnd = navCut === -1 ? navQ.length : navCut;
+        navQ = navQ.slice(0, navM.index + 1) + "d=<redacted " + (navEnd - navStart) + "B>" +
+          (navCut === -1 ? "" : navQ.slice(navCut));
+      }
+      log("diag-nav #" + State.diagNavCount + " -> " + String(url.split("?")[0] || "") +
+        " (q=" + navQ.slice(0, 30) + "...)");
     }
     try {
       panel.SetURL(url);
     } catch (e) {
       State.pending = null;
       log("SetURL failed: " + (e && e.message ? e.message : String(e)));
+      if (handOff(hooks, { ok: false, error: "bridge_load_failed" })) return;
       if (job.kind === "outgoing") {
         job._timeout = null;
         job.done(null, null);
@@ -2444,6 +2699,26 @@ function injectTranslation(row, sig, text, fragment) {
   // 失败语义对齐旧通道(spec §8 + 既有 attempts 策略):响应型失败(桥收到请求但翻译失败,
   // 空 END 帧 → translate_error)走 handleBridgePayload 重试 ≤1 次;传输型失败
   // (timeout/crc_dead/bridge_down)按原文发送不重试;busy/too_long/目标语言不安全 → 回落旧通道。
+
+  // ---- 写(以及 log 批)的死线:按上行载荷算,不按固定值 ----
+  // 2026-10-15 教训(用户实机反馈「OpenAI 的 API 老是保存不上」):原来写死 8000,
+  // 是按"写应答已瘦到 {ok:true}(9B/1帧≈3s)"定的 —— **只量了应答,没量请求本身**。
+  // 而位泵的耗时几乎全在上行:
+  //   每帧有效载荷 10B、每帧 tClose=600ms、首发起跑 1200ms;
+  //   带 API Key 的保存载荷 ≈600B → 60 帧 → 1200 + 60×600 = 37.2s;
+  //   8s 死线 → 必然 REQ_TIMEOUT → 面板显示「保存失败」,于是用户反复点。
+  // 模型与真机日志逐条吻合:47B/5帧=4210ms、110B/11帧=7821ms、113B/12帧=8435ms、
+  // 162B/17帧=11620ms、406B/41帧=26105ms —— 即 1200 + 帧数×600,误差 <0.5%。
+  // 所以:按帧数算出"物理下限",再叠加余量给 CRC 重试与 STORM 罚时(实测约 +15~20%)。
+  // 小载荷仍保留 8000 地板 —— 快速失败这个特性对小请求仍然成立,不无谓拖长。
+  // 常量 BTIPC_T_CLOSE_MS / BTIPC_FIRST_SHOT_DELAY_MS 是模块级 const(函数声明可提升)。
+  function btipcWriteDeadlineMs(payloadBytes) {
+    const bytes = Number(payloadBytes) || 0;
+    const frames = Math.max(1, Math.ceil(bytes / 10));
+    const physical = BTIPC_FIRST_SHOT_DELAY_MS + frames * BTIPC_T_CLOSE_MS;
+    return Math.max(8000, Math.round(physical * 1.2));
+  }
+
   function outgoingViaBtipc(job) {
     let tag = "btipc";
     try {
@@ -2500,10 +2775,11 @@ function injectTranslation(row, sig, text, fragment) {
           timeoutMs = Math.max(State.cfg.timeoutMs || 15000, 15000);
         } else if (job.op === "log") {
           // P2(2026-10-11):聊天日志迁 BTIPC —— 冻结信封白名单不含 log,首行 op=log 由桥侧
-          // 识别(bridge matchChatLogTrq);应答 {ok,written} 极小(1 帧),与 config 写同 8s
-          // 死线。载荷由 flushChatLog 按 600B 切批,必不顶 680B 行预算(顶了会落死旧通道)。
+          // 识别(bridge matchChatLogTrq)。载荷由 flushChatLog 按 600B 切批,必不顶 680B
+          // 行预算(顶了会落死旧通道)。批与保存同量级 → 死线同样按载荷算(原写死 8000,
+          // 与 config 写同一个错:只量了应答没量上行,600B/60 帧实测 ≈37s vs 8s 死线)。
           payload = "op=log\n" + raw;
-          timeoutMs = 8000;
+          timeoutMs = btipcWriteDeadlineMs(btipcUtf8Bytes(payload).length);
         } else {
           // btipc05b:读/写死线分离。读应答 maskCompact ≈400B=40 帧 × 真机 600ms/帧
           // ≈24s —— 原 8s 必超时(实车 config FAIL 34 连败的根因);写应答已瘦到
@@ -2515,10 +2791,13 @@ function injectTranslation(row, sig, text, fragment) {
           // 正好卡在 35025ms、帧只到 seq=22/38 —— 首发起跑竞态(r=1 全 404/混 BUSY)
           // 会白烧 5~6 轮 ×2.5s(STORM 罚时),再叠加中途 CRC 重试,35s 余量仅 4.8s,
           // 实测约 1/3 概率超时 → 白等 35s 再重试。50s 覆盖「竞态 15s + 38 帧 23s +
-          // 中途 2 次 STORM 5s」≈43s 的最坏情形。写仍 8s(1 帧,无帧竞态问题)。
+          // 中途 2 次 STORM 5s」≈43s 的最坏情形。
+          // 2026-10-15:写死线从固定 8000 改为**按载荷算**(见 btipcWriteDeadlineMs)。
+          // 原来写死 8s 是按"写应答 1 帧"定的,没算上行请求本身要 61 帧 —— 带 Key 的
+          // 保存必然 REQ_TIMEOUT。现在 600B 载荷 → 约 45s,与读的 50s 同量级。
           const isRead = !!job.read || String(raw).trim() === "{}";
           payload = "op=config\n" + raw;
-          timeoutMs = isRead ? 50000 : 8000;
+          timeoutMs = isRead ? 50000 : btipcWriteDeadlineMs(btipcUtf8Bytes(payload).length);
         }
       } else if (isChat) {
         payload = text;
@@ -2660,6 +2939,18 @@ function injectTranslation(row, sig, text, fragment) {
       log("outgoing dropped: queued too long, sending original");
       return;
     }
+    // ---- https 面板通道优先(2026-10-15)----
+    // 一个 RTT 拿整条结果(下行不再是位泵的 FIRST_SHOT + 帧数×tClose)。
+    // 通道级失败由 demoteToBtipc 原样交回下面的 BTIPC —— 证书没信任/Steam 没重启的
+    // 用户体感与今天完全一致(开机探针已判死时连一次都不会试)。
+    if (httpsPanelTakes(job)) {
+      dispatchViaPanel(job, {
+        httpsChannel: true, // 绕开 http 面板通道的判死冷却(见 navSuppressedFor 注释)
+        onHardFail: function () { return demoteToBtipc(job); },
+      });
+      return;
+    }
+
     // ⑥ 上层整合:出站翻译 + 入站 chat(btipc04)+ 保存/测试/读配置 op(btipc05)
     // 优先走 BTIPC;接不了(too_long/目标语言不安全/久等仍未空)回落旧通道
     // (6726 后已死 → 翻译兜底原文,op 兜底 {ok:false,error})
@@ -3425,23 +3716,28 @@ function injectTranslation(row, sig, text, fragment) {
     State.bridgeOfflineSince = 0;
     setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (State.cfg.provider || "bing"));
     if (!State.cfgSynced && !State.cfgSyncing) {
-      // cfgSyncing 由 syncBridgeConfig 自管(防重入:boot 已在途时这里直接返回,不会起第二个循环)
-      syncBridgeConfig();
+      // 启动门共用 once(boot 的等探针分支与这里互斥,不会起第二个循环)
+      startCfgSync();
     }
     // 首次上线:名称保护全量名单 + 快捷语音语料(两段式握手,指纹相同则一条数据都不传)
+    // 2026-10-16:分项 try/catch —— 00:22 实车 syncViaBtipc 同步抛,一次抛就把
+    // 同一 onBridgeAlive 里后面的触发器全带走,且 loading 标志卡死导致本会话不再试。
     if (!State.gamenamesLoaded && !State.gamenamesLoading) {
       State.gamenamesLoading = true;
-      syncGameNames(function () { State.gamenamesLoading = false; });
+      try { syncGameNames(function () { State.gamenamesLoading = false; }); }
+      catch (eG) { State.gamenamesLoading = false; log("onBridgeAlive gamenames THREW " + expErr(eG)); }
     }
     if (!quickchatSynced && !State.quickchatLoading) {
       State.quickchatLoading = true;
-      syncQuickChat(function () { State.quickchatLoading = false; });
+      try { syncQuickChat(function () { State.quickchatLoading = false; }); }
+      catch (eQ) { State.quickchatLoading = false; log("onBridgeAlive quickchat THREW " + expErr(eQ)); }
     }
     // provider / 版本更新提示:回声只证明桥活着,带不了这些字段 —— 每会话补一次
     // (先置位防重入;失败则复位,下一轮 healthCheck 再补)
     if (!State.healthDetailFetched) {
       State.healthDetailFetched = true;
-      bridgePost("health", {}, function (res) {
+      try {
+        bridgePost("health", {}, function (res) {
         if (!res || !res.ok) { State.healthDetailFetched = false; return; }
         if (res.provider) setBridgeStatus(t("bridgeOnline") + " \u00b7 " + res.provider);
         if (res.updateInfo && res.updateInfo.hasUpdate && !State.updateNotified) {
@@ -3451,7 +3747,11 @@ function injectTranslation(row, sig, text, fragment) {
           log("info", "update available: " + info.currentVersion + " -> " + info.latestVersion + " (" + info.releaseUrl + ")");
           updateBridgeStatusUI();
         }
-      });
+        });
+      } catch (eH) {
+        State.healthDetailFetched = false;
+        log("onBridgeAlive health detail THREW " + expErr(eH));
+      }
     }
   }
 
@@ -4621,14 +4921,15 @@ function injectTranslation(row, sig, text, fragment) {
       if (!c) return;
         if (c.ui) {
           let changed = false;
-          if (typeof c.ui.displayMode === "string") { State.cfg.displayMode = c.ui.displayMode; changed = true; }
-          if (typeof c.ui.outgoing === "string") { State.cfg.outgoing = c.ui.outgoing; changed = true; }
-          if (typeof c.ui.outgoingTarget === "string") { State.cfg.outgoingTarget = c.ui.outgoingTarget; changed = true; }
-          if (typeof c.ui.targetLanguage === "string") { State.cfg.targetLanguage = c.ui.targetLanguage; changed = true; }
-          if (typeof c.ui.enabled === "boolean") { State.cfg.enabled = c.ui.enabled; changed = true; }
-          if (typeof c.ui.force === "boolean") { State.cfg.force = c.ui.force; changed = true; }
-          if (typeof c.ui.provider === "string") { State.cfg.provider = c.ui.provider; changed = true; }
-          if (typeof c.ui.timeoutMs === "number") { State.cfg.timeoutMs = c.ui.timeoutMs; changed = true; }
+          const dirty = State.cfgDirty || {}; // 2026-10-16:开面板回填同样不得拍掉未存的 picks
+          if (typeof c.ui.displayMode === "string" && !dirty.displayMode) { State.cfg.displayMode = c.ui.displayMode; changed = true; }
+          if (typeof c.ui.outgoing === "string" && !dirty.outgoing) { State.cfg.outgoing = c.ui.outgoing; changed = true; }
+          if (typeof c.ui.outgoingTarget === "string" && !dirty.outgoingTarget) { State.cfg.outgoingTarget = c.ui.outgoingTarget; changed = true; }
+          if (typeof c.ui.targetLanguage === "string" && !dirty.targetLanguage) { State.cfg.targetLanguage = c.ui.targetLanguage; changed = true; }
+          if (typeof c.ui.enabled === "boolean" && !dirty.enabled) { State.cfg.enabled = c.ui.enabled; changed = true; }
+          if (typeof c.ui.force === "boolean" && !dirty.force) { State.cfg.force = c.ui.force; changed = true; }
+          if (typeof c.ui.provider === "string" && !dirty.provider) { State.cfg.provider = c.ui.provider; changed = true; }
+          if (typeof c.ui.timeoutMs === "number" && !dirty.timeoutMs) { State.cfg.timeoutMs = c.ui.timeoutMs; changed = true; }
           if (changed) {
             syncPanelFromConfig();
             saveUiConfig();
@@ -4660,11 +4961,11 @@ function injectTranslation(row, sig, text, fragment) {
           credFieldSnap.fallback = fbStr;
         }
         if (c.chatLog && typeof c.chatLog.enabled === "boolean") {
-          State.cfg.chatLog = c.chatLog.enabled;
+          if (!((State.cfgDirty || {}).chatLog)) State.cfg.chatLog = c.chatLog.enabled;
           setToggleText("LCTChatLog", State.cfg.chatLog);
         }
         if (typeof c.translateOwn === "boolean") {
-          State.cfg.translateOwn = c.translateOwn;
+          if (!((State.cfgDirty || {}).translateOwn)) State.cfg.translateOwn = c.translateOwn;
           setToggleText("LCTTranslateOwn", State.cfg.translateOwn);
         }
     }
@@ -4881,6 +5182,7 @@ function injectTranslation(row, sig, text, fragment) {
       setToggleText("LCTTranslateOwn", State.cfg.translateOwn);
       setStatus(State.cfg.translateOwn ? t("msgTranslateOwnOn") : t("msgTranslateOwnOff"));
     }
+    markCfgDirty(which);
     saveUiConfig();
     log("toggle: " + which);
   }
@@ -4912,6 +5214,7 @@ function injectTranslation(row, sig, text, fragment) {
 
   function LCTPickProvider(value) {
     State.cfg.provider = value;
+    markCfgDirty("provider");
     syncPanelFromConfig();
     saveUiConfig();
     closeSelectMenus();
@@ -4930,6 +5233,7 @@ function injectTranslation(row, sig, text, fragment) {
       State.cfg.outgoing = cycleValue(OUTGOING_MODES, State.cfg.outgoing || "off");
       setSelectText("LCTOutgoingSelect", labelFor(OUTGOING_MODES, State.cfg.outgoing));
     }
+    markCfgDirty(which);
     saveUiConfig();
     log("cycle: " + which + " -> " + State.cfg[which]);
   }
@@ -4967,6 +5271,7 @@ function injectTranslation(row, sig, text, fragment) {
       setSelectText("LCTOutgoingTargetSelect", labelFor(LANGUAGE_OPTIONS, value));
     }
     syncCustomInputs();
+    markCfgDirty(field);
     saveUiConfig();
     closeSelectMenus();
     log("pickLang: " + field + " -> " + value);
@@ -4986,6 +5291,7 @@ function injectTranslation(row, sig, text, fragment) {
     else if (field === "outgoing") State.cfg.outgoing = value;
     else return;
     syncPanelFromConfig();
+    markCfgDirty(field);
     saveUiConfig();
     closeSelectMenus();
     log("pickOption: " + field + " -> " + value);
@@ -5092,6 +5398,10 @@ function injectTranslation(row, sig, text, fragment) {
         }
         syncProviderRows();
         saveUiConfig();
+        // 2026-10-16:意图已落盘 —— 脏标记清零;启动期旧 _mask 作废(下次开面板走
+        // https 快读,不再吃冷冻值,否则重开面板显示回旧值)
+        State.cfgDirty = {};
+        State.cfg._mask = null;
         setStatus(t("msgSavedWith") + (p.provider || "bing") + ")");
         log("settings saved");
       } else {
@@ -5182,6 +5492,30 @@ function injectTranslation(row, sig, text, fragment) {
 
   // ================= 启动 =================
 
+  // ================= 2026-10-16:配置同步启动门 + 用户脏标记 =================
+  // 启动门:boot() 与 onBridgeAlive() 共用 once。boot 不再 t=0 直接同步 ——
+  // 那时 https 探针没定论只能走 BTIPC 位泵(25s+);等探针定论(通常 2-4s)后经
+  // https 1 个来回。探针 8s 无定论(槽忙)则走老路,不无限等(自动降级不断)。
+  function startCfgSync() {
+    if (State.cfgSyncStarted) return;
+    State.cfgSyncStarted = true;
+    syncBridgeConfig();
+  }
+  function waitProbeForSync() {
+    if (State.cfgSyncStarted || State.cfgSynced) { State.cfgSyncStarted = true; return; }
+    if (State.httpsPanelOk !== null) { startCfgSync(); return; }
+    State.cfgSyncWaitTries = (State.cfgSyncWaitTries || 0) + 1;
+    if (State.cfgSyncWaitTries >= 8) { startCfgSync(); return; }
+    try { $.Schedule(1.0, waitProbeForSync); } catch (e) { startCfgSync(); }
+  }
+  // 用户脏标记:启动同步落地 / 面板 _mask 回填不得拍掉用户在窗口内改过的值
+  // (23:35 与 00:48 两次实车:pick openai → sync 落地 → 被迫重选)。
+  // LCTSave 成功清零(意图已落盘);重启后 loadUiConfig 全新,无脏。
+  function markCfgDirty(key) {
+    if (!State.cfgDirty) State.cfgDirty = {};
+    State.cfgDirty[key] = true;
+  }
+
   function syncBridgeConfig(callback) {
     // BUGFIX 0.1.3:boot 时主动从桥拉取已保存配置,同步进 State.cfg,
     // 否则游戏重启后 outgoing 等偏好回落到 UI_DEFAULTS(发送前翻译默认关)。
@@ -5214,25 +5548,29 @@ function injectTranslation(row, sig, text, fragment) {
     };
     const trySync = function () {
       attempts += 1;
-      bridgePost("config", {}, function (res) {
+      // 2026-10-16:issued 同步抛(面板未建好等)不能把 cfgSyncing 卡死 —
+      // 卡死则本会话再无同步。抛了按重试走,不静默放弃。
+      try {
+        bridgePost("config", {}, function (res) {
         if (res && res.ok && res.config) {
           const c = res.config;
           let changed = false;
-          // ui 子对象(面板偏好)
+          // ui 子对象(面板偏好)。2026-10-16:用户脏键跳过(窗口内改过的值不许拍回)
           const ui = c.ui || {};
-          if (typeof ui.displayMode === "string") { State.cfg.displayMode = ui.displayMode; changed = true; }
-          if (typeof ui.outgoing === "string") { State.cfg.outgoing = ui.outgoing; changed = true; }
-          if (typeof ui.outgoingTarget === "string") { State.cfg.outgoingTarget = ui.outgoingTarget; changed = true; }
-          if (typeof ui.targetLanguage === "string") { State.cfg.targetLanguage = ui.targetLanguage; changed = true; }
-          if (typeof ui.enabled === "boolean") { State.cfg.enabled = ui.enabled; changed = true; }
-          if (typeof ui.force === "boolean") { State.cfg.force = ui.force; changed = true; }
-          if (typeof ui.provider === "string") { State.cfg.provider = ui.provider; changed = true; }
-          if (typeof ui.timeoutMs === "number") { State.cfg.timeoutMs = ui.timeoutMs; changed = true; }
+          const dirty = State.cfgDirty || {};
+          if (typeof ui.displayMode === "string" && !dirty.displayMode) { State.cfg.displayMode = ui.displayMode; changed = true; }
+          if (typeof ui.outgoing === "string" && !dirty.outgoing) { State.cfg.outgoing = ui.outgoing; changed = true; }
+          if (typeof ui.outgoingTarget === "string" && !dirty.outgoingTarget) { State.cfg.outgoingTarget = ui.outgoingTarget; changed = true; }
+          if (typeof ui.targetLanguage === "string" && !dirty.targetLanguage) { State.cfg.targetLanguage = ui.targetLanguage; changed = true; }
+          if (typeof ui.enabled === "boolean" && !dirty.enabled) { State.cfg.enabled = ui.enabled; changed = true; }
+          if (typeof ui.force === "boolean" && !dirty.force) { State.cfg.force = ui.force; changed = true; }
+          if (typeof ui.provider === "string" && !dirty.provider) { State.cfg.provider = ui.provider; changed = true; }
+          if (typeof ui.timeoutMs === "number" && !dirty.timeoutMs) { State.cfg.timeoutMs = ui.timeoutMs; changed = true; }
           // 顶层开关(chatLog/translateOwn 不在 ui 子对象里,BUGFIX:游戏重启后
           // 若不回填,State.cfg 回落到 DEFAULTS(translateOwn:true),导致"关掉还翻译")
-          if (typeof c.translateOwn === "boolean") { State.cfg.translateOwn = c.translateOwn; changed = true; }
+          if (typeof c.translateOwn === "boolean" && !dirty.translateOwn) { State.cfg.translateOwn = c.translateOwn; changed = true; }
           if (c.chatLog && typeof c.chatLog === "object") {
-            if (typeof c.chatLog.enabled === "boolean") { State.cfg.chatLog = c.chatLog.enabled; changed = true; }
+            if (typeof c.chatLog.enabled === "boolean" && !dirty.chatLog) { State.cfg.chatLog = c.chatLog.enabled; changed = true; }
           }
           if (changed) {
             saveUiConfig();
@@ -5248,7 +5586,12 @@ function injectTranslation(row, sig, text, fragment) {
         } else {
           finish();
         }
-      });
+        });
+      } catch (eSync) {
+        log("boot: config sync THREW " + expErr(eSync));
+        if (attempts < MAX_SYNC_ATTEMPTS) { try { $.Schedule(2.0, trySync); } catch (eS) { finish(); } }
+        else finish();
+      }
     };
     trySync();
   }
@@ -5390,9 +5733,14 @@ function injectTranslation(row, sig, text, fragment) {
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
     registerUmmSettings(); // UMM 设置联动(UMM 不在时为无害空操作,见 ummCurrentValues 注释)
     initBakedGameNames(); // btipc07:先装打包内烘焙的全量配对名单(292 条,硬编码只有 100 条)
-    syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
+    // 2026-10-16:启动同步等探针定论后再发(见 startCfgSync/waitProbeForSync),t=0 直发必走慢通道。
     applyUILang(); // 初始化界面语言(配置同步后应用)
     updateBridgeDot(); // 初始状态:桥未上线前显示红点
+    // https 面板通道开机探针(2026-10-15):一次性决定本会话走 https 面板还是 BTIPC。
+    // 排在 2s 的 healthCheck 之前 —— 那次也要占同一个单槽,先到先得;探针若被在途翻译
+    // 挡住会自己 1s 后重试(最多 3 次,见 probeHttpsPanel)。
+    try { $.Schedule(1.2, probeHttpsPanel); } catch (eP) {}
+    try { $.Schedule(2.0, waitProbeForSync); } catch (eW) { startCfgSync(); }
     // EXP6734-B/C/D/E: 手动触发(进对局后聊天输入 /bt6734b | /bt6734c | /bt6734d | /bt6734e);6734-A 已采完不自动跑
     // DMM 用户引导:启动后 12s 桥仍未在线 => 面板显示未运行 + 安装指引
     $.Schedule(12.0, checkBridgeMissing);

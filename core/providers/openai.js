@@ -179,7 +179,8 @@ async function translate(text, opts) {
 }
 
 module.exports = {
-  id: "openai",
+  requiresKey: true,
+id: "openai",
   label: "OpenAI 兼容(自定义)",
   translate,
   buildMessages,

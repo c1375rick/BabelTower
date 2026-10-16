@@ -101,7 +101,8 @@ async function translate(text, opts) {
 }
 
 module.exports = {
-  id: "deepl",
+  requiresKey: true,
+id: "deepl",
   label: "DeepL(需 Key)",
   translate,
 };

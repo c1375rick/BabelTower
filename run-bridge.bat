@@ -21,13 +21,13 @@ if not exist "%~dp0core\bridge_server.js" (
 )
 
 set "NODE_EXE="
-if exist "portable-node\node.exe" (
-    set "NODE_EXE=portable-node\node.exe"
+if exist "portable-node\r\node.exe" (
+    set "NODE_EXE=portable-node\r\node.exe"
 ) else (
     where node >nul 2>nul && set "NODE_EXE=node"
 )
 if not defined NODE_EXE (
-    echo [LCT] Node.js not found. Make sure portable-node\node.exe exists,
+    echo [LCT] Node.js not found. Make sure portable-node\r\node.exe exists,
     echo [LCT] or install Node.js 18+ and try again.
     pause
     exit /b 1

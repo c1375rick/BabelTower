@@ -28,10 +28,88 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
    另存一份 —— 新旧两份 mod 同时加载会导致界面重复、行为错乱。
 
 3. 启动本地桥(二选一):
-   方法 A(推荐,一劳永逸):**双击 install-autostart.bat**(安装开机自启)
+   方法 A(推荐,一劳永逸):**双击 BabelTower-维护菜单.bat → 选 5**(安装开机自启)
      之后开机自动启动桥;桥常驻不随游戏退出(2026-08-12 起),什么都不用管。
-     卸载自启:双击 remove-autostart.bat
+     卸载自启:BabelTower-维护菜单.bat → 选 6
    方法 B(临时):双击 StartDeadlock.bat(每次玩之前都要双击一次)
+
+3.5【可选,但强烈建议】开低延迟通道 —— 双击 **BabelTower-维护菜单.bat → 选 1**(一键安装)
+   不做这步也完全能用,只是译文会慢(3~27 秒)。做了之后实测**约 1 秒以内**
+   (服务端只占 0.06 秒,余下是游戏内页面加载 + 0.3 秒的结果轮询粒度)。
+
+   它做三件事:检查环境 → 问你要不要信任一张本机证书 → 起桥并自检。
+   证书只加到**当前 Windows 用户**的信任库(不碰系统级/企业级),用途是让游戏内
+   隐藏 HTML 面板能加载本机 https 页面 —— 那是低延迟回程的唯一拦点
+   (引擎报 error:-202 = ERR_CERT_AUTHORITY_INVALID)。
+
+   ⚠ 它会请你确认后才写入信任库。输入 YES 继续;不确认就直接跳过,
+     翻译仍然走原来的通道,功能不受影响。
+
+   ⚠ 它**不需要管理员权限**。证书写的是"当前用户"的库,Steam 和游戏用同一个
+     Windows 用户跑就行。**别把 Steam 或游戏设成"以管理员身份运行"** ——
+     提权解决不了证书问题,只会平白多一次 UAC。
+
+   ⚠ 走完这一步之后必须:**完全退出 Steam(托盘图标也退掉)→ 重新打开 Steam**。
+     信任库由 Steam 宿主缓存,**只重启游戏是不生效的**(2026-10-15 实测,见下)。顺序不能换。
+
+   ⚠ **撤销信任也一样要完全重启 Steam**(同一条机制)。证书从库里删掉之后,
+     正在运行的 Steam 仍会继续信任它 —— 2026-10-15 实测:证书已删、
+     游戏仍报 ALIVE,直到把 Steam 完全退出重开才变成 `not usable`。
+     **证书的加和减都不是即时生效的。**
+
+   怎么确认生效:进对局发一条消息,看游戏 console.log 里有没有这一行
+     `[LCT] https panel: ALIVE`
+   有 = 低延迟通道已启用;出现 `https panel: not usable` = 还没生效,
+   把那一行连同 logs\install_babeltower.log 一起反馈给我们。
+
+   不想用/要撤销:运行
+     powershell -ExecutionPolicy Bypass -File scripts\gen_bridge_cert.ps1 -Untrust
+   只看现状(什么都不改):BabelTower-维护菜单.bat status
+
+   提示:addons 目录里**只能有一份**我们的包。同时存在新旧两个(如 pak15 与
+   pak90)会导致界面重复、行为错乱 —— 新旧两份 mod 同时加载就是这个后果。
+
+3.6 更新到新版本 —— 双击 **BabelTower-维护菜单.bat → 选 2**(更新)
+
+   它只从官方 GitHub Releases 取包,不从别处下载:
+     ① 查 api.github.com/repos/c1375rick/BabelTower/releases/latest
+     ② 只认文件名严格匹配 BabelTower-<版本>-win64.zip 的资产(不做模糊匹配)
+     ③ 下载后**先校验体积、再校验 SHA256**,两者任一不符就拒绝安装
+     ④ **游戏正在运行时只下载、不安装**(运行中替换会留下损坏的半截文件);
+        退出游戏后重跑一次即完成安装
+     ⑤ 换包前自动备份旧包,换完校验 SHA256,失败自动回滚
+     ⑥ 覆盖安装目录时保留你的 config.json / 词典 / quickchat / logs
+
+   常用参数(BabelTower-维护菜单.bat update 后面加):
+     -Check         只看有没有新版,不下载不安装
+     -DownloadOnly  只下载并校验(网慢时先下好,之后离线装)
+     -Force         版本相同也重装
+   退出码:0 已最新或更新成功 / 2 有新版但未安装 / 1 失败
+
+   注意:若官方那个版本没有提供 SHA256,脚本**默认拒绝**安装并提示;确实要装
+   才加 -AllowNoDigest(自行承担风险)。我们不发布无法校验的包。
+
+3.7 检测/诊断 —— 双击 **BabelTower-维护菜单.bat → 选 4**(诊断,只读,不改任何东西)
+
+   一次摊开:Node 与安装目录完整性、桥是否在跑(版本/provider/日志目录)、
+   config 是否可解析与有没有配 Key(**只查有没有,不读值**)、证书是否已生成
+   与是否受信、https 端口是否通、游戏是否在跑、console.log 是否新鲜(这决定
+   桥能不能收到消息)、addons 里我们的包是哪一个(按内容标记认,不靠文件名)、
+   历史残件有多少占多少空间、开机自启、磁盘余量。
+   每条都带**判据**,方便你自己核对,而不是让你猜。
+   报告会落盘到 logs\diagnose_<时间>.txt,并已**脱敏**(Key/长串一律打码)——
+   可以放心截图或发给我们。
+
+   退出码:0 关键项全过 / 1 有关键项失败(报告里会列出)
+
+3.8 卸载 —— 双击 **BabelTower-维护菜单.bat → 选 3**(卸载,默认保守)
+
+   一次处理五处:mod 包、开机自启、常驻的桥与 https 终结进程、信任库里的
+   本机证书、%LOCALAPPDATA%\BabelTower 的证书状态。**认包靠内容标记**,所以
+   不会误删别人的 pak。
+   先列现状再逐项确认;删历史残件与删状态目录要额外加 -PurgeBackups / -PurgeState
+   (不可逆)。加 -List 则只列现状、什么都不改。
+   要恢复:重新解压发行包 + 双击 BabelTower-维护菜单.bat → 选 1。
 
 4. 给 Deadlock 加 -condebug 启动参数(必做,只需设置一次):
    Steam 库 → Deadlock 右键 → 属性 → 常规 → 启动选项 → 填 -condebug
@@ -81,11 +159,11 @@ A: 桥没启动。确认第 3 步做了:要么装了自启(重启电脑后生效
 
 Q: 双击 portable-node\node.exe 只出现一个 "> " 提示符的窗口?
 A: 那是 Node.js 的命令行控制台,不是启动器,直接关掉。启动桥请用
-   install-autostart.bat / StartDeadlock.bat / restart_bridge.bat,不要直接双击 node.exe。
+   BabelTower-维护菜单.bat / StartDeadlock.bat / restart_bridge.bat,不要直接双击 node.exe。
 
 Q: 开机时弹窗 "Windows Script Host 80070002 系统找不到指定的文件"?
 A: 旧版自启脚本对含中文的解压路径(如 D:\Bandizip\解压\)兼容有问题。
-   重新双击 install-autostart.bat 即可修复(1.0.5 起的自启脚本自动适应任意路径),
+   用 BabelTower-维护菜单.bat → 选 5 重装一次即可修复(1.0.5 起的自启脚本自动适应任意路径),
    然后重启电脑验证。
 
 Q: 点测试显示失败?
@@ -124,8 +202,7 @@ A: 游戏部分:Mod Manager 里禁用/删除,或删掉 addons 里对应的 vpk�
   pak01_dir.vpk          游戏内 Mod(装进 Deadlock addons)
   core\                  本地翻译桥(不要删)
   portable-node\         内置 Node.js 运行时(不要删)
-  install-autostart.bat  双击安装开机自启
-  remove-autostart.bat   双击卸载开机自启
+  BabelTower-维护菜单.bat        双击打开维护菜单(安装/更新/卸载/诊断/自启开关)
   restart_bridge.bat     一键重启桥 + 健康检查(桥没起来先点它)
   run-bridge.bat         诊断启动器(报错不闪退;反馈问题前先跑它)
   StartDeadlock.bat      手动启动(桥 + 游戏)

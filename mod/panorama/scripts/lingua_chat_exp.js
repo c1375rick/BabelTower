@@ -2131,8 +2131,9 @@
 
   // ============= EXP6739:隐藏 HTML 面板 https 导航可行性(2026-10-15)=============
   // 问题:exp6729 判死矩阵只覆盖 file:// 与 http://(含 localhost/127.0.0.1),
-  //       **https:// 全家从未测过**;而市面上一款同类实现把整套低延迟通道押在
-  //       https://localhost + 自签证书(还带 Trust-Local-Https.ps1 塞信任库)。
+  //       **https:// 全家从未测过**;而"给面板一个受信任的本机 https"(自签证书 +
+  //       写入 CurrentUser\Root + 信任后完全重启 Steam)这个方案本身来自一款 GPL-3.0
+  //       同类实现 —— 我们此前没有这个方案。逐项对账见 docs/btipc-https-v1.md §2。
   // 判据一字不改沿用 6729:src="" = 引擎压根没开始加载(硬死签名);
   //       panel.title / GetAttributeString("title") 读回复;最终以服务端 HIT 日志为最硬判据。
   // 三臂共用 chat.xml 里已声明的 LCTBridgePanel —— 运行时 $.CreatePanel("HTML") 无效(见核心注释),
@@ -2261,8 +2262,9 @@
     } catch (e) {}
   }
 
-  // 2026-10-15 实验已收官(结论见 docs/ipc-checklist-6726.md 的 6739/6740 行):
-  // HTML 面板 SetURL 对所有 http/https 一律失效,BTIPC 位泵是唯一可用通道。
+  // 2026-10-15 实验已收官:那轮结论是"HTML 面板 SetURL 对所有 http/https 一律失效,
+  // BTIPC 位泵是唯一可用通道"。**该结论已被后续定位取代**(拦点是证书链,不是协议/地址,
+  // 见上面 exp6742 处的说明),不要拿它当"面板通道不可能work"的依据。
   // **默认不自动跑**(免得每次开机白刷 8 条臂的日志)。需要复测时打开下面 3 行,
   // 或在控制台直接调 globalThis.LCTNS.runExp6739() / runExp6740()。
   // try {
@@ -2305,11 +2307,21 @@
       });
     } catch (e) {}
   }
-  // 两遍取双样本(第一遍可能在证书刚信任后仍被 Steam 缓存,第二遍确认)
-  try {
-    $.Schedule(12, function () { runExp6742(); });
-    $.Schedule(45, function () { runExp6742(); });
-  } catch (e) {}
+  // 两遍取双样本(第一遍可能在证书刚信任后仍被 Steam 缓存,第二遍确认)。
+  //
+  // 2026-10-15 晚:这两行**已注释掉**,原因是它会主动抢面板。
+  // 隐藏 HTML 面板只有一个,生产通道(https 面板通道)与实验共用同一个单槽;开机 12s
+  // 与 45s 各刷三臂共 6 次导航,会把正在飞的生产请求的 title 顶掉(读到陌生 title =
+  // bad_bridge_payload 软失败),而且正好压在 config 同步与首几条翻译的窗口上。
+  // 同理,上面 6739/6740 的"结论"也要更正:那轮只证明了"当时那种条件下全灭",
+  // 真正的拦点是**证书链**(需 -Trust 且完全重启 Steam),https 本身是可用的 ——
+  // 详见 docs/btipc-https-v1.md。现在通道生死由 lingua_chat.js 里开机自带的探针
+  // 持续判定(日志 `https panel: ALIVE/...`),不再需要本文件定期开火。
+  // 需要复测时打开下面 3 行,或直接调 globalThis.LCTNS.runExp6742()。
+  // try {
+  //   $.Schedule(12, function () { runExp6742(); });
+  //   $.Schedule(45, function () { runExp6742(); });
+  // } catch (e) {}
 
   // ---- P4a:向核心 expCall 晚绑定派发口发布探针入口(/bt* 命令链路)----
   globalThis.LCTNS = globalThis.LCTNS || {};

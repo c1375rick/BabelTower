@@ -223,3 +223,32 @@
 | 副作用①(Steam) | Steam 搬运/校验会把 `game\citadel\gameinfo.gi` 与 `cfg\video.txt` **还原成原版**(实测 sha `CDDBD1B321023823`(OptiLock 装车值)→ `1037523D910F8FF2`(原版))。**切勿对 Deadlock 点"验证文件完整性"**,否则配置与 `*.bak-pre-optilock-*` 备份一并丢失;重装按 OptiLock 官方两步(源包永久件 `F:\download\星露谷mod\optilock_fps_configs_7a7bc.zip`) |
 | 副作用②(DMM) | DMM 启停 mod 会**重写 gameinfo.gi**(两次实证:2026-10-14 22:42:58、2026-10-15 14:48:17,后者早于游戏启动 4 秒)。本次写入的是 GB 版 mod **OptiLock / QoL Lite(690233)自带**的 73.8 KB gameinfo(sha `F2DB5F02225EBB19`),与 zip 版 Recommended(75.8 KB)**不是同一构建,不得混用**。⇒「我装好的配置」≠「游戏实际跑的配置」,一律以 sha 复核归属 |
 | 未完成/待办 | ① Defender 排除项(`Add-MpPreference -ExclusionPath "C:\SteamLibrary\steamapps\common\Deadlock"`)与 USB 选择性暂停关闭**需用户以管理员执行,尚未确认落地**;② OptiLock 现为**混搭态**(GB 版 gameinfo + 用户自有 video.txt:`mip_bias=1` / `viewportscale=0.667` / `upscaling=4`),官方要求两件成对,是否收敛待定;③ 私人局迁移后**已复测通过**(2026-10-15 15:03–16:03 两局,SDR 四项异常全 0,详见「实测对照」行);④ `F:\$RECYCLE.BIN` 堆 12.42 GB 可清(未清);⑤ F: 可用空间未如预期回收 55 GB(fsutil 确认仍 538.9 GB,SMR 删除回收延迟,非故障) |
+
+## 14. addons 目录里并存两份 BabelTower(2026-10-15;零产品码)
+
+| 项 | 内容 |
+|---|---|
+| 起因 | 做 https 面板通道的实机验证前,顺手按 `DlctBridge` 指纹扫 `addons\*.vpk`,发现**两份 BabelTower 同时装着**:`650634_pak04_dir.vpk`(247,963 B,2026-09-17 23:21)与 `pak15_dir.vpk`(496,790 B,本日)。两份都声明同一面板 id(`LCTBridgePanel`)与同一套 JS 入口 |
+| 关键差别 | 旧包 `BTIPC` 标记命中 **0**、无 https 面板代码 —— 是 BTIPC 之前(该特性 2026-10-02 才进)的**旧快照**,几乎肯定是早期换装车命名时留下的手工残件(当前手工装车约定是无前缀 `pakNN_dir.vpk`) |
+| 危害 | 不是"占地方",而是**制造假否定结论**:实机验证 https 面板时若旧包先加载,`https panel: ALIVE` 那行日志永不出现,会被误判成"证书路线不可行",而真实原因是装了一份没有该功能的旧代码。**实验环境里的无关变量会把结论归到被测对象上** —— 与 6739/6740 那两轮"全灭里混着打空"同一类错误 |
+| 处置 | 改名为 `650634_pak04_dir.vpk.dup-20261015`(**不删,可逆**;sha 改名前后一致 `50935FD2E505C09D4AB4…`)。复扫确认**有效 `*.vpk` 里只剩 1 份**且带 BTIPC + https 面板代码 |
+| 判定口径 | **认自己的包只能看内容标记**(`Babel Tower` / `LCTBridgePanel` / `BTIPC TRQ`),不能看文件名 —— 手工安装的 `pakNN_dir.vpk` 与 workshop 的 `<id>_pakNN_dir.vpk` 混在同一目录,名字完全不可靠。装车前固定先扫一遍 |
+| 游戏资源完整性 | 本次只动 addon 目录,`game\citadel\gameinfo.gi`(sha `2d168be3d114301b03bb`)与 `pak01_dir.vpk`(sha `e449bce1eb96d293d673`)未触碰 |
+| 遗留 | 该旧包是否曾属 Steam 订阅项未查(改名后 Steam 未重新下载,暂看不像订阅物);若日后它自己回来,说明是订阅项,需改用取消订阅或更新发布版,而不是继续改名 |
+
+## 13. https 面板通道转正 + 保存修复 + 日志打码(1.2.0 窗口;2026-10-15)
+
+| 项 | 内容 |
+|---|---|
+| **1. 新增通道并转正** | `core/bridge_https.js` 独立 TLS 终结进程(8792),证书缺失 exit 3、上游不通返 502 不退出;客户端开机探针定通道 + 硬/软失败分类 + 连击 3 次降级。**翻译下行从位泵 3.0–27.4s 降到 1s 以内**(服务端侧实测 55–76ms)。`core/btipc/*` 冻结面四件零改动;http 8791 永远保留 |
+| **2. B1 跨站闸自伤** | 面板同源 fetch 带的 `https Origin` 不在白名单 → 翻译全线失败。改惰性 `isLocalOrigin()`(顺带踩到"模块级 const 在 PORT 之前求值 → ReferenceError 直接把桥搞崩") |
+| **3. 翻译慢 8 秒** | 三层归因全部已修:① bing 命中 429 后内部睡「1s→2s→4s」共 7s 且不抛错 → 改短等一次并抛 `rateLimited`;② `fallbackProviders` 原为空 → 配 `google`;③ provider 的 `console.*` 接进 `logs/bridge.log`(桥是隐藏窗口启动,此前全部蒸发)。顺带修"是否需要 Key"硬编码 `pid !== "bing"` 导致同为免 Key 的 google 被误跳过 → 改 provider 自己声明 `requiresKey` |
+| **4. 保存扩围到面板通道** | 用户反馈「OpenAI 的 API 老是保存不上」。根因纯算术:带 Key 载荷 ≈600B,位泵 10B/帧 → 61 帧 ≈ **38s**,而写死线只有 **8s**(死线按**应答** 1 帧定,没算上行 61 帧)→ 必然 `REQ_TIMEOUT`。同根因的 `op=log`(600B 批)与读配置(7.8–26s)一并接入。**代价:BTIPC 兜底那条路的 8s 写死线未动**(判死退回位泵时保存会照旧失败) |
+| **5. 日志打码** | 保存载荷经 URL 查询串 `?d=` 带 Key 进来 → `core/bridge_https.js` 的 `redactUrl()` 与游戏侧 `diag-nav` **按值打码**,不靠截断长度(实测 Key 在第 ~132 字符而日志取 96 —— 那是算术余量,字段一变短就没了)。**BTIPC 侧**:上行 b64 是运输通道(`transport.js` 的 `REQ_RE` 从该行解析)不能改 → 改为桥抄进 `bridge.log` 时打码,协议侧仍收原样行 |
+| **6. 证书信任实测** | 对照实验双向验证(撤销信任不重启 Steam 仍 `ALIVE` vs 完全退出 Steam 报 `not usable` + `TLS_ALERT_CERTIFICATE_UNKNOWN`)。结论:**游戏确实校验证书;信任缓存在 Steam 进程,只重启游戏无效;撤销信任同样要重启 Steam;不需要管理员** |
+| **7. 版本口径** | `VERSION` / `lingua_chat.js const VERSION` / README 三处同步 1.2.0。**升版两处必须一起改**的护栏再次验证(只改一处 → 全链挂)。**构建标 btipc09**:BTIPC 路由语义变了(config/test/log/读 在面板判活时不再走位泵),与 btipc08 线区分;`core/btipc/*` 零改动 |
+| **8. 发行包补 VERSION** | 打包脚本只读 `VERSION` 命名 zip 从不拷它 → 1.0.9~1.2.0 **全部发行包都没有 VERSION** → 用户侧 health 恒报 `unknown`、version-check 的 `currentVersion` 恒为 `null`(而它是"有没有新版本"的比较基准)。已修并加进 `$requiredUserEntry`(缺一个拒绝出包)。**放错位置也踩一次**:拷贝放在断言之后 → 断言当场拦下出包 |
+| **9. 测试入口加语法关** | 护栏只读源码做正则、不 require 产品模块 → `bridge_server.js` 正则语法错时**全链 33/33 全绿而桥起不来**。`tests/run-tests.js` 加**第 0 关**:对 19 个随包 JS 做 `node --check`,语法错直接红 |
+| **护栏** | 新增 `https_panel_guard`(85 项)/`release_entry_guard`(73 项)/`log_redaction`(8 项);`run-tests.js` 显式清单登记(33 项,**全链 33/33**) |
+| **发行** | `BabelTower-1.2.0-win64.zip` 35.4MB,sha256 `584875C8…`,56→57 条目(补 VERSION);冒烟通过;装车 pak15_dir.vpk 494888B(sha `7DA5CBB2…`)与包内 pak 一致;addons 扫内容标记确认仅此一份、无双载 |
+| **版本口径表** | 1.1.0 → btipc08;**1.2.0 → btipc09** |

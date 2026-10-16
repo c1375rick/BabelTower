@@ -1,5 +1,7 @@
 # Deadlock 6726 Panorama IPC 检查表 — exp6727~6734C 实测全记录
 
+> 2026-10-16 归档说明:本文记录的历史命令里凡写 `scripts/gb_*.js` / `crash_probe` 等一次性探针的,文件已移至 `scripts/archive/`,照抄运行时前面加 `archive/` 即可。记录本身是当时实况,不改。
+
 > 部署:2026-10-01 · mod 最新 `v1.0.7-6726-exp6734C`(装在 addons/**pak15_dir.vpk**,DMM 登记 local-d0264ee4;备份 `pak15_dir.vpk.bak-pre-exp6734C-1001-223452`;上一版备份 `bak-pre-exp6734B-1001-173951`)
 > 桥:`core/bridge_server.js` 含 `/probe` 信标、`/probe_img` 状态码差分、游戏 console.log 尾随器
 > 检查表原始出处:`新建 文本文档.txt`(A~J 节)

@@ -38,10 +38,37 @@ check("test payload 在 else 之前(不被 config 覆盖)",
   "testIdx=" + testPayloadIdx + " elseIdx=" + elseIdx + " cfgIdx=" + configPayloadIdx);
 
 // ---- 2. 读/写死线分离 ----
-const rd = src.match(/isRead \? (\d{5}) : (\d{4})/);
-check("读死线 ≥50s / 写死线 =8s", !!rd && Number(rd[1]) >= 50000 && Number(rd[2]) === 8000,
-  rd ? "got " + rd[1] + "/" + rd[2] + "(05c 实车:成功那读 30.2s,另一次卡在 35s 只到 seq=22/38)"
+// 2026-10-15 改:写死线**不再钉死 8000**。原来钉的是"写死线 =8s",而那个 8s 是按
+// **应答** 1 帧定的,没算上行请求本身要 61 帧 —— 带 Key 的保存必然 REQ_TIMEOUT,
+// 用户实机反馈「OpenAI 的 API 老是保存不上」。现在写死线按载荷算
+// (btipcWriteDeadlineMs:1200 + 帧数×600,再 ×1.2 余量,地板 8000)。
+// 所以这里钉的是**不变式**:写死线必须 ≥ 物理成本,而不是某个具体数字。
+const rd = src.match(/isRead \? (\d{5}) : btipcWriteDeadlineMs\(/);
+check("读死线 ≥50s / 写死线按载荷算(不再写死 8s)", !!rd && Number(rd[1]) >= 50000,
+  rd ? "got 读=" + rd[1] + " 写=btipcWriteDeadlineMs(…)"
      : "缺失 → 读应答 38 帧≈24s 必超 8s(实车 34 连败根因)");
+// 写死线的算法必须按帧数算,且留余量 —— 用真实日志校准过的模型:
+//   47B/5帧=4210ms、110B/11帧=7821ms、406B/41帧=26105ms ⇒ 1200 + 帧数×600
+const dl = src.match(/function btipcWriteDeadlineMs\(payloadBytes\) \{[\s\S]*?\n {2}\}/);
+check("抽到 btipcWriteDeadlineMs 源码", !!dl);
+const dlBody = dl ? dl[0] : "";
+check("写死线按帧数算(1200 + 帧数×600),不是固定值",
+  /Math\.ceil\(bytes \/ 10\)/.test(dlBody) &&
+  /BTIPC_FIRST_SHOT_DELAY_MS \+ frames \* BTIPC_T_CLOSE_MS/.test(dlBody),
+  "帧数模型与真机日志逐条吻合(406B/41帧=26105ms)");
+check("写死线留了余量(×1.2,覆盖 CRC 重试与 STORM 罚时)",
+  /physical \* 1\.2/.test(dlBody), "实测 406B 读 26105ms,余量约 15~20%");
+check("小载荷仍保留 8000 地板(快速失败对小请求仍成立)",
+  /Math\.max\(8000/.test(dlBody));
+// 关键不变式:600B 保存载荷的死线必须覆盖实测成本(37.2s 物理下限)
+check("600B 保存载荷的死线 ≥ 40s(覆盖 37.2s 物理成本)",
+  (() => {
+    const frames = Math.max(1, Math.ceil(600 / 10));
+    const physical = 1200 + frames * 600;
+    const deadline = Math.max(8000, Math.round(physical * 1.2));
+    return deadline >= 40000;
+  })(),
+  "600B → 60 帧 → 物理 37.2s,死线须 ≥40s");
 // op 忙等窗必须同步跟随读死线,否则 op 等到窗口就掉旧通道 → 读死线白设
 const bw = src.match(/busyMs = isOp \? (\d+) : 12000/);
 check("op 忙等窗 ≥ 52s(跟随读死线)", !!bw && Number(bw[1]) >= 52000,
