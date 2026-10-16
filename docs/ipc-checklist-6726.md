@@ -581,10 +581,10 @@ if (record.quick) {
 
 | 位置 | 含义 | 当前值 |
 |---|---|---|
-| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.1.0-6726-btipc08`(已发布;构建标沿用 btipc08 —— 本版无新 btipc 批次,前例 1.0.9→1.0.10 同样沿用 btipc07d) |
-| `VERSION` 文件 | 开发/发布号 | `1.1.0`(已发布) |
-| GitHub Release tag | **已发布版** | `v1.1.0`(@ `5f0c4ea`,Latest,2026-10-13T11:58:40Z) |
-| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.1.0`(文件 `babeltower-110-win64.zip` / `File_1847137`;更新条目 `463796`) |
+| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.0-6726-btipc09`(已发布;构建标 **btipc09** —— BTIPC 路由语义变了:config/test/log/读 在面板通道判活时不再走位泵,与 btipc08 线必须区分) |
+| `VERSION` 文件 | 开发/发布号 | `1.2.0`(已发布) |
+| GitHub Release tag | **已发布版** | `v1.2.0`(@ `5eeed45` 推送的代码;**tag/release 待打**) |
+| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.0`(文件 `babeltower-120-win64_3df0e.zip` / 条目 `700107`;**更新条目(changelog)未发**,列表页 Updates 仍为 1.1.0) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
 > **1.0.8 起断言不再写死具体版本号**:原来 `/1\.0\.7-6726-btipc\d/` 每次升版都得手改一次、
@@ -716,6 +716,35 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 填 `Note` select 不接受、落库为无类型(显示 `-`),已改 `Adjustment` 并在 `gb_add_update5.js` 注记;
 ② PS5.1 下 `[IO.File]::Replace($src,$dst,$null)` 的 `$null` 绑成空串抛「路径的形式不合法」,必须传真实备份路径(§12 探针);
 ③ `package_release.ps1` 压缩撞实时防护扫描窗口重试即过(已知窗口,1.0.10 记录同源);新增 `scripts/gb_add_update5.js`。
+
+#### 1.2.0 发版记录(2026-10-16)
+
+**发版前查重(铁律,两渠道都查)**:`gh release list` 最新为 `v1.1.0`;GB 列表页文件列表无 1.2.0 → 两渠道均未消耗,可发。
+
+| 渠道 | 落位结果 |
+|---|---|
+| GitHub | 代码推 `origin/push/code-only` = `5eeed45`(34 项改动,含 archive 归并与新护栏);**`v1.2.0` tag 与 release 尚未打**(`release.ps1` 尾部的 VERSION 自增已于 1.0.10 停用,须手工 `gh release create`) |
+| GameBanana | 上传 `babeltower-120-win64_3df0e.zip` → 文件行版本 `1.2.0`;描述(中英合并短版)已替换;**回读复验**:列表页出现该 zip + `1.2.0`,主描述含 `Real-time Chat Translator for Deadlock` 与 `队友外语秒翻`、旧长文案与 "Installation (3 steps)" 已消失;编辑页文件行 18 行、末行 `1.2.0` |
+| 包内自报 | `README.md` → `1.2.0`;zip 内 `VERSION` 已随 `package_release.ps1` 的 `$requiredUserEntry` 强制携带(1.0.9~1.1.0 **全部发行包都漏过**,致 health 恒 `unknown`、version-check 的 `currentVersion` 恒 `null`) |
+| 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `55ED30ED69665C…` 双向一致);备份 `pak15_dir.vpk.bak-cfgsync-20261016-0100` |
+| 一致性 | 34/34 全链(停桥铁律:`git checkout -- config/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`);`https_panel_guard` 88/88、`release_entry_guard` 68/68、`launcher_entry_guard` 44/44 |
+
+**本版内容(三条主线)**
+
+1. **https 面板通道转正**:隐藏 HTML 面板经本机 TLS(8792,独立进程 `core/bridge_https.js`)同源取走**整条**结果,下行从位泵的 `1200ms + 帧数×600ms`(实测 3.0–27.4s)变成**一个 RTT**(实测 1s 以内,服务端 55–76ms);BTIPC 全程保留兜底,证书未信任时探针判死、体感与上线前一致。
+2. **配置同步三修**(当晚实车日志驱动):首启同步等探针定论(25–28s → **2s**);`onBridgeAlive` 分项 try/catch(此前一次抛就带走后面全部触发器);脏标记 + `_mask` 作废(此前窗口内改过的服务商会被迟到同步拍回,且存完重开面板显示旧值)。
+3. **维护入口精简**:装/更/卸/检/自启 6 对 bat 合成 `BabelTower-维护菜单.bat`(中英双语菜单);27 个一次性探针 `git mv` 进 `scripts/archive/`。
+
+**同批缺陷修复**:① 桥 `POST /api/v1/config` 补 `get` 分发(B 方案扩围后 `gamenames`/`quickchat` 经 https 握手必败 `bad_handshake`);② bing 429 改快速失败 + provider `console.*` 接进 `logs/bridge.log`;③ 回退链"是否需要 Key"改由 provider 声明 `requiresKey`(原硬编码 `pid!=="bing"` 会误跳过 google);④ 写死线按上行载荷算 `btipcWriteDeadlineMs(bytes)`(600B 保存 ≈38s,旧固定 8s 必超时);⑤ **自启补拉 `bridge_https`**(此前只起 `bridge_server`,8792 整夜无监听 → 08:47 实车全天退 BTIPC);⑥ 打码(`redactUrl` / `redactBtipcPayload`,Key 不再进日志)。
+
+**发版过程新获事实(GB 编辑页结构,自动化连栽四次才摸清)**
+
+1. 编辑页 URL 形状是 `/mods/edit/<id>`,**不是** `/mods/<id>/edit`(后者 301 到任意游戏页 —— 曾据此误判条目号 700107 无效)。
+2. 编辑表单**仅登录后渲染**:未登录时只返回页面外壳(`Log In Signup`),版本行与文件选择器均为 0 —— 自动化据此判"表单缺失"再转登录。
+3. 有**两个** `Select files`:第一个属 **Screenshots** 区(挂 zip 静默无效),第二个属 **Files** 区;其隐藏 input id = 按钮 id 把 `_FileSelector` 换成 `_FileInput`。
+4. **文件行只在上传真正完成后才落库**:挂上文件后版本行会 +1,但 `FILE SHOWN ON PAGE` 始终 false,此时点 Save → **整行连版本一起丢弃**(本地 zip 35.4MB,必须等上传走完)。
+5. 描述是自研 **RichText 控件**(textarea + `<id>_WysiwygView` contenteditable):只写 textarea → 页面不变且**不会被提交**;`execCommand('insertHTML')`/`insertText` 在该控件上静默空转,只有 `view.innerHTML = html` + `input/change/keyup` 生效;控件**不回写 textarea**,提交读哪一侧未知 → **两边都写**才安全。
+6. 脚本侧的坑:等待登录时不能周期性 `page.goto`(会把用户正在填的登录页抢走,表现为"一直刷新登不进去");`page.waitForFileChooser` + `accept` 报 `already handled`,改走 CDP 灌文件更稳;GB 的 id 以数字开头,`#id` 是非法 CSS 选择器,要用 `[id="…"]`。
 
 #### 口径纪律
 

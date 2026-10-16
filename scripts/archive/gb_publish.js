@@ -1,3 +1,14 @@
+// GameBanana publish automation (ASCII-only on purpose).
+// Run:  node scripts\archive\gb_publish.js publish
+//
+// Login handling (fixed 2026-10-16): the old loop called page.goto(MOD_URL)
+// every 5s while waiting, which navigated the browser AWAY from the login
+// form the user was typing into -- they could never finish logging in.
+// This version never navigates while waiting: it only watches page.url()
+// and, once that changes away from the login page, checks the edit link once.
+//
+// NOTE: never paste session cookies into chat. The script reads them from
+// config\gamebanana_cookies.txt, which is gitignored.
 const puppeteer = require("puppeteer-core");
 const fs = require("fs");
 const path = require("path");
@@ -8,98 +19,86 @@ const COOKIES_FILE = "F:\\BabelTower\\config\\gamebanana_cookies.txt";
 const MOD_URL = "https://gamebanana.com/mods/700107";
 const EDIT_URL = "https://gamebanana.com/mods/700107/edit";
 
-// 待上传的 zip(自动找 dist 下最新)
 function findZip() {
   const dist = "F:\\BabelTower\\dist";
-  const files = fs.readdirSync(dist).filter(f => /^BabelTower-.*-win64\.zip$/.test(f));
-  if (!files.length) throw new Error("dist 下没有 BabelTower-*-win64.zip");
+  const files = fs.readdirSync(dist).filter((f) => /^BabelTower-.*-win64\.zip$/.test(f));
+  if (!files.length) throw new Error("no BabelTower-*-win64.zip under dist");
   files.sort((a, b) => fs.statSync(path.join(dist, b)).mtimeMs - fs.statSync(path.join(dist, a)).mtimeMs);
   return path.join(dist, files[0]);
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+async function editLinks(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("a")]
+      .filter((a) => /edit/i.test(a.href) && /700107/.test(a.href))
+      .map((a) => a.href));
+}
 
 (async () => {
   const zipPath = findZip();
   console.log("ZIP:", zipPath, "size:", fs.statSync(zipPath).size);
-  const args = process.argv.slice(2);
-  const mode = args[0] || "probe"; // probe | publish
+  const mode = process.argv[2] || "probe";
 
   const browser = await puppeteer.launch({
     executablePath: EDGE,
     userDataDir: PROFILE,
-    headless: mode === "publish" ? false : "new",
+    headless: false, // always visible: the user may need to log in
     args: ["--no-sandbox", "--disable-blink-features=AutomationControlled"],
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
 
-  // 打开 mod 页
   await page.goto(MOD_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
   await sleep(2500);
   console.log("MOD PAGE:", await page.title());
 
-  // 检查是否登录:找 Edit 按钮
-  const editLink = await page.evaluate(() => {
-    const links = [...document.querySelectorAll("a")].filter(a => /edit/i.test(a.href) && /700107/.test(a.href));
-    return links.map(a => a.href);
-  });
-  console.log("EDIT LINKS:", JSON.stringify(editLink));
-
-  if (!editLink.length) {
-    console.log("NOT_LOGGED_IN: 需要登录");
-    if (mode === "publish") {
-      // 打开登录页,等用户手动登录
-      await page.goto("https://gamebanana.com/members/account/login", { waitUntil: "domcontentloaded", timeout: 60000 });
-      console.log("LOGIN PAGE OPENED - 请在浏览器窗口完成登录...");
-      // 等待登录完成(轮询检测)
-      let loggedIn = false;
-      for (let i = 0; i < 120; i++) { // 最长等 10 分钟
-        await sleep(5000);
+  let links = await editLinks(page);
+  if (!links.length) {
+    // Open the login page ONCE, then never navigate again while waiting.
+    await page.goto("https://gamebanana.com/members/account/login", { waitUntil: "domcontentloaded", timeout: 60000 });
+    console.log("LOGIN PAGE OPENED - log in inside this window. It will NOT be reloaded.");
+    let loggedIn = false;
+    for (let i = 0; i < 240; i++) { // up to 20 minutes
+      await sleep(5000);
+      const url = page.url();
+      if (!/\/login/i.test(url)) {
+        // Session established (GameBanana redirects away from the login form).
         await page.goto(MOD_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-        const links = await page.evaluate(() =>
-          [...document.querySelectorAll("a")].filter(a => /edit/i.test(a.href) && /700107/.test(a.href)).map(a => a.href)
-        );
-        if (links.length) { loggedIn = true; console.log("LOGIN OK after", (i + 1) * 5, "s"); break; }
+        links = await editLinks(page);
+        if (links.length) { loggedIn = true; console.log("LOGIN OK after " + (i + 1) * 5 + "s"); break; }
       }
-      if (!loggedIn) { console.log("LOGIN_TIMEOUT"); await browser.close(); process.exit(1); }
-    } else {
-      console.log("PROBE_MODE: 不实际登录/发布");
-      await browser.close();
-      return;
     }
+    if (!loggedIn) { console.log("LOGIN_TIMEOUT (no edit link found within 20 min)"); await browser.close(); process.exit(1); }
   }
+  console.log("EDIT LINKS:", JSON.stringify(links));
 
-  // 保存 cookies
   const cookies = await page.cookies("https://gamebanana.com");
   const keep = ["sess", "rmc", "cf_clearance"];
-  const parts = cookies.filter(c => keep.includes(c.name)).map(c => c.name + "=" + c.value);
-  fs.writeFileSync(COOKIES_FILE, parts.join("; "));
-  console.log("COOKIES SAVED");
+  const parts = cookies.filter((c) => keep.includes(c.name)).map((c) => c.name + "=" + c.value);
+  if (parts.length) fs.writeFileSync(COOKIES_FILE, parts.join("; "));
+  console.log("COOKIES SAVED:", keep.filter((n) => cookies.some((c) => c.name === n)).join(",") || "(none)");
 
-  if (mode !== "publish") {
-    console.log("PROBE_DONE: 已登录,编辑页待发布");
-    await browser.close();
-    return;
-  }
-
-  // ===== PUBLISH 模式:编辑页操作 =====
   await page.goto(EDIT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
   await sleep(3000);
-  console.log("EDIT PAGE TITLE:", await page.title());
-  console.log("EDIT PAGE URL:", page.url());
+  console.log("EDIT PAGE:", await page.title(), "|", page.url());
 
-  // 探测编辑页结构:表单、文件区、版本号输入框
   const structure = await page.evaluate(() => {
-    const inputs = [...document.querySelectorAll("input")].map(i => ({ id: i.id, name: i.name, type: i.type, value: (i.value || "").slice(0, 40) }))
-      .filter(i => i.type !== "checkbox");
-    const fileInputs = [...document.querySelectorAll("input[type=file]")].map(i => ({ id: i.id, name: i.name, accept: i.accept }));
-    const buttons = [...document.querySelectorAll("button, input[type=submit], a.btn")].map(b => ((b.innerText || b.value || "").trim()).slice(0, 40)).filter(Boolean).slice(0, 15);
-    const versionFields = [...document.querySelectorAll("input, select")].filter(el => /version|ver/i.test(el.id + " " + (el.name || ""))).map(el => ({ tag: el.tagName, id: el.id, name: el.name, value: el.value }));
-    return { inputs, fileInputs, buttons, versionFields };
+    const inputs = [...document.querySelectorAll("input")].map((i) => ({
+      id: i.id, name: i.name, type: i.type, value: (i.value || "").slice(0, 60),
+    }));
+    const fileInputs = [...document.querySelectorAll("input[type=file]")].map((i) => ({ id: i.id, name: i.name, accept: i.accept }));
+    const textareas = [...document.querySelectorAll("textarea")].map((t) => ({ id: t.id, name: t.name, len: (t.value || "").length }));
+    const buttons = [...document.querySelectorAll("button, input[type=submit], a.btn")]
+      .map((b) => ((b.innerText || b.value || "").trim()).slice(0, 40)).filter(Boolean).slice(0, 25);
+    return { inputs, fileInputs, textareas, buttons };
   });
   console.log("EDIT STRUCTURE:", JSON.stringify(structure, null, 1));
 
+  if (mode !== "publish") { await browser.close(); console.log("PROBE_DONE"); return; }
+
+  // Upload step is written after the real form structure is known.
+  console.log("UPLOAD_STEP: TODO (structure above)");
   await browser.close();
   console.log("DONE");
-})().catch(e => { console.error("ERR:", e.message); process.exit(1); });
+})().catch((e) => { console.error("ERR:", e.message); process.exit(1); });
