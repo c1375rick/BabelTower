@@ -583,7 +583,7 @@ if (record.quick) {
 |---|---|---|
 | `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.0-6726-btipc09`(已发布;构建标 **btipc09** —— BTIPC 路由语义变了:config/test/log/读 在面板通道判活时不再走位泵,与 btipc08 线必须区分) |
 | `VERSION` 文件 | 开发/发布号 | `1.2.0`(已发布) |
-| GitHub Release tag | **已发布版** | `v1.2.0`(**待打** —— 代码已推 `origin/push/code-only` @ `67ac851`;`release.ps1` 尾部自增 1.0.10 起停用,须手工 `gh release create`) |
+| GitHub Release tag | **已发布版** | `v1.2.0` = **Latest**(@ `482c70a`,发布 `2026-10-16T03:54:07Z`),资产 `BabelTower-1.2.0-win64.zip`(37,095,525B)+ `pak01_dir.vpk`(501,053B),双资产字节数与本地逐字节一致 |
 | GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.0`(文件 `babeltower-120-win64_3df0e.zip` / `File_1850082`;条目 `700107`;更新条目已发,列表页 Updates 最新 = 1.2.0) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
@@ -723,7 +723,7 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 
 | 渠道 | 落位结果 |
 |---|---|
-| GitHub | 代码推 `origin/push/code-only` = `5eeed45`(34 项改动,含 archive 归并与新护栏);**`v1.2.0` tag 与 release 尚未打**(`release.ps1` 尾部的 VERSION 自增已于 1.0.10 停用,须手工 `gh release create`) |
+| GitHub | 代码推 `origin/push/code-only`(`5eeed45` → `67ac851` → `482c70a`);`v1.2.0` = **Latest**(发布 `2026-10-16T03:54:07Z`,target `push/code-only`),资产 `BabelTower-1.2.0-win64.zip`(37,095,525B)+ `pak01_dir.vpk`(501,053B),`gh release view` 回读双资产字节数与本地逐字节一致。**注意**:`release.ps1` 尾部 VERSION 自增已于 1.0.10 停用,tag 须手工 `gh release create` |
 | GameBanana | 上传 `babeltower-120-win64_3df0e.zip`(`File_1850082`)→ 文件行版本 `1.2.0`;描述(中英合并短版)已替换;更新条目(`scripts/archive/gb_add_update6.js`,派生自 add5/1.1.0):6 条 changelog(1×Feature + 3×Bugfix + 1×Improvement + 1×Adjustment)+ blurb(377 字)+ 绑定 `File_1850082`;**回读复验**:列表页 Updates 最新为 `1.2.0`、主描述含 `Real-time Chat Translator for Deadlock` 与 `队友外语秒翻`、旧长文案与 "Installation (3 steps)" 已消失;编辑页文件行 18 行、末行 `1.2.0` |
 | 包内自报 | `README.md` → `1.2.0`;zip 内 `VERSION` 已随 `package_release.ps1` 的 `$requiredUserEntry` 强制携带(1.0.9~1.1.0 **全部发行包都漏过**,致 health 恒 `unknown`、version-check 的 `currentVersion` 恒 `null`) |
 | 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `55ED30ED69665C…` 双向一致);备份 `pak15_dir.vpk.bak-cfgsync-20261016-0100` |
