@@ -185,6 +185,11 @@ async function runBtipcOp(op, body, timeoutMs) {
   if (op === "config") {
     let obj = null;
     try { obj = JSON.parse(body || "{}"); } catch (e) { return { ok: false, error: "bad_json" }; }
+    // revOnly(2026-10-20):只要一个 8 位指纹(应答约 30B)。给游戏的运行时
+    // "配置变了没"轻量轮询用 —— 全量读在 BTIPC 上要 24s,不能常做。
+    if (obj && obj.revOnly === true) {
+      return { ok: true, rev: configStore.configRev(configStore.load()) };
+    }
     // btipc07:数据接口("get" 字段)优先于配置读写;两者互斥(config 写只在有 obj.config 时发生)
     if (obj && typeof obj.get === "string") return runBtipcGet(obj);
     const current = configStore.load();
@@ -192,6 +197,7 @@ async function runBtipcOp(op, body, timeoutMs) {
       const next = configStore.applyMaskedUpdate(current, obj.config);
       configStore.save(next);
       log("info", "config saved (btipc)");
+      onConfigSaved(); // 面板保存 → 同样叫醒游戏的长轮询
       // btipc05b:写应答只回 {ok:true}。原先回 maskCompact(≈400B=40 帧)在真机
       // 600ms/帧节拍下要 24s+ —— 游戏侧 8s 死线必超时,实车 34 连败(UI 报假失败,
       // 其实已落盘)。保存方用本地收集的 p 回填,不需要回执里的 config。
@@ -199,7 +205,7 @@ async function runBtipcOp(op, body, timeoutMs) {
     }
     // 读:与 GET /api/v1/config 同形(精简 mask)。体积 ≈400B=40 帧 ×600ms/帧 ≈24s,
     // 游戏侧 op=config 读分支已配 35s 死线(btipc05b),此处只管给全量。
-    return { ok: true, config: configStore.maskCompact(current) };
+    return { ok: true, config: configStore.maskCompact(current), rev: configStore.configRev(current) };
   }
   if (op === "test") {
     let obj = null;
@@ -480,6 +486,90 @@ let gameProcessSeen = false;
 let watchMissCount = 0;
 let watchTimer = null;
 
+// ---------- 通道心跳(2026-10-19, /ui 设置页健康卡用) ----------
+// 浏览器设置页直连 8791,只能证明"人→桥"活着;游戏↔桥是否连通只有桥看得见。
+// 四个观测点覆盖两条通道的两个方向:
+//   btpcDl     游戏 Image 面板在轮询 GET /btipc/dl   → BTIPC 下行(桥→游戏)在跑
+//   consoleLog 游戏 console.log 出现 marker 行        → BTIPC 出站(游戏→桥)在跑
+//   bridgeNav  游戏内浏览器导航到 /bridge             → HTML 桥页已加载
+//   gameFetch  游戏内桥页同源调 /api/v1/*             → HTML 桥取数链路在跑
+// 值为 Date.now();0 = 桥本次启动后从未观测到(不是"断了一分钟",是"压根没连上过")。
+const channelPulse = { startedAt: Date.now(), btpcDl: 0, bridgeNav: 0, gameFetch: 0, consoleLog: 0 };
+function touchChannel(name) {
+  if (Object.prototype.hasOwnProperty.call(channelPulse, name)) channelPulse[name] = Date.now();
+}
+
+// ---------- 游戏侧界面语言(2026-10-19, /ui 本地化默认值用) ----------
+// 游戏每次导航 /bridge 都会带 &lang=<zh|en>(取 mod 的界面语言设置),桥记下最后一次值。
+// 桌面设置页据此决定默认显示中文还是英文;用户可在页面右上角覆盖。
+let gameLangPulse = { value: null, at: 0 };
+function noteGameLang(raw) {
+  const s = String(raw || "").toLowerCase();
+  if (!s) return;
+  let v = null;
+  if (s.indexOf("zh") === 0 || s.indexOf("chinese") !== -1) v = "zh";
+  else if (s.indexOf("en") === 0 || s.indexOf("english") !== -1) v = "en";
+  if (v) gameLangPulse = { value: v, at: Date.now() };
+}
+
+// ---------- /tr → 打开桌面设置页(2026-10-19) ----------
+// 游戏侧 `/tr`(或 `/tr ui`)写一行 `[LCT] UI_OPEN <状态摘要>`(走 console.log 出站),桥看到后用
+// 系统默认浏览器打开 /ui。`/tr panel` 不走这里 —— 它只开游戏内旧面板。
+// 摘要只是留痕:桥把它连行抄进 bridge.log;动作本身固定为本地设置页、不接受行内参数,
+// 日志里出现什么都不会被当命令执行。
+// 两道自保(2026-10-19 用户要求):
+//   ① 连按去重:桥自己刚拉起过(<8 秒)就不再开一个标签 —— 只挡"手滑连按两下";
+//      **不能**用"页面最近有活动"当判据(2026-10-20 实测踩坑:桌面页每 2s 轮询一次
+//      健康,永远"很活跃",于是 /tr 变成永远不拉起 —— 用户反馈"又拉不起网页")。
+//   ② 只有游戏进程在跑时才响应 —— 桥常驻,单看 console.log 分不清是谁写的。
+let lastUiOpenAt = 0;
+let lastUiSkipLogAt = 0;  // "为什么没拉起"日志节流
+const UI_OPEN_DEBOUNCE_MS = 8000;
+const UI_SKIP_LOG_MS = 5000;
+
+// 进程监视是否启用(--no-watch / watchGame:false 时关掉):关掉就不做 ② 的判定,
+// 因为那时 gameProcessSeen 永远为 false,会让 /tr 永远拉不起页面。
+function isGameWatchActive() {
+  if (process.argv.indexOf("--no-watch") !== -1) return false;
+  if (activeConfig && activeConfig.watchGame === false) return false;
+  return true;
+}
+
+function maybeOpenSettingsUi(line) {
+  if (line.indexOf("UI_OPEN") === -1) return;
+  const now = Date.now();
+
+  // ② 游戏必须在跑:能拿到的最强本地证据(不能证明这行就是游戏写的,但能挡住
+  //    "桥常驻期间任何进程往 console.log 塞一行就拉起浏览器")。
+  if (isGameWatchActive() && !gameProcessSeen) {
+    if (now - lastUiSkipLogAt > UI_SKIP_LOG_MS) {
+      lastUiSkipLogAt = now;
+      log("warn", "/tr UI_OPEN 被忽略:未检测到游戏进程(仅游戏运行时才拉起设置页)");
+    }
+    return;
+  }
+
+  // ① 连按去重:桥自己刚拉起过(<8s)就再来一个标签,只挡手滑连按。
+  //    页面是否开着**不作为判据** —— 桌面页每 2s 轮询一次健康,永远"很活跃",
+  //    拿它当判据会让 /tr 永远不拉起(2026-10-20 实测踩坑)。
+  if (lastUiOpenAt && now - lastUiOpenAt < UI_OPEN_DEBOUNCE_MS) {
+    if (now - lastUiSkipLogAt > UI_SKIP_LOG_MS) {
+      lastUiSkipLogAt = now;
+      log("info", "/tr UI_OPEN: " + Math.round((now - lastUiOpenAt) / 1000) +
+        "s 前刚拉起过,跳过(防连按重复标签);再等几秒再按会重新打开");
+    }
+    return;
+  }
+
+  lastUiOpenAt = now;
+  const port = Number(configStore.load().port) || 8791;
+  const uiUrl = "http://127.0.0.1:" + port + "/ui";
+  log("info", "/tr UI_OPEN from game → opening " + uiUrl);
+  execFile("cmd", ["/c", "start", "", uiUrl], { windowsHide: true }, function (err) {
+    if (err) log("warn", "failed to open settings UI: " + ((err && err.message) || String(err)));
+  });
+}
+
 function checkGameProcess() {
   const gameExe = String((activeConfig && activeConfig.watchGameExe) || "deadlock.exe").toLowerCase();
   execFile(
@@ -516,8 +606,7 @@ function checkGameProcess() {
 }
 
 function startGameWatch() {
-  if (process.argv.indexOf("--no-watch") !== -1) return;
-  if (activeConfig && activeConfig.watchGame === false) return;
+  if (!isGameWatchActive()) return;
   checkGameProcess();
 }
 
@@ -685,6 +774,44 @@ function parseJson(raw) {
   } catch (e) {
     return null;
   }
+}
+
+// ---------- 配置观察页(2026-10-20) ----------
+// 目的:网页保存 → 游戏**立刻**知道(≈0.3s),而不是"游戏每隔 N 秒问一次"。
+// 关键约束(2026-10-20 实测):引擎只在页面 **load 完成** 后才把 title 暴露给脚本,
+// 所以页面必须**立即返回** —— 长轮询(挂住 20s)的页面 load 永不完成,title 永远读不到,
+// 那条路是死的(实测:长轮询跑了一整局,一次都没送达)。
+// 因此:这个页面零 JS,标题里直接带当前配置指纹;游戏每 ~200ms 换一次 URL 重新加载,
+// 指纹一变就重读配置。页面走独立面板,和请求面板零干扰(单槽语义不会互相顶掉)。
+function watchPage(rev) {
+  return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>LCTW" + rev + "</title></head><body></body></html>";
+}
+let watchHits = 0; // 观察页命中计数(日志抽样用)
+
+// ---------- 配置变更长轮询(2026-10-20) ----------
+// 这就是"桥向游戏发送信息,游戏再读配置":游戏把一个长轮询挂在桥上,网页一保存,
+// 桥立刻把它叫醒 → 游戏几百毫秒内知道"配置变了",然后自己去读配置(不走 title 通道,
+// 避免 512 字符上限)。挂在**独立面板**上,不占请求面板的单槽。
+// 兜底:若某台机器上观察面板的 title 读不到(引擎不给未激活面板暴露 title),
+// 游戏会自动降级到 /watch 观察页轮询,见 core/web 与游戏侧 configWatchTick。
+const CONFIG_WATCH_HOLD_MS = 20000;
+const configWatchers = new Set();
+
+function notifyConfigWatchers() {
+  let rev = "";
+  try { rev = configStore.configRev(configStore.load()); } catch (e) { return; }
+  configWatchers.forEach(function (w) {
+    if (w.done || w.rev === rev) return;
+    w.done = true;
+    configWatchers.delete(w);
+    try { clearTimeout(w.timer); } catch (e) {}
+    try { sendJson(w.res, 200, { ok: true, rev: rev, changed: true }); } catch (e) {}
+  });
+}
+
+// 保存后叫醒等待者(网页保存 / 面板保存两条路径共用)
+function onConfigSaved() {
+  try { notifyConfigWatchers(); } catch (e) {}
 }
 
 function sendJson(res, status, obj) {
@@ -893,6 +1020,19 @@ function bridgePage(query) {
     "try{document.title=s;}catch(e){}",
     "try{location.hash='#'+encodeURIComponent(s);}catch(e){}",
     "}",
+    // op=watch:配置变更长轮询(2026-10-20)。桥在网页保存时立刻回,否则最多挂 20s。
+    // 结果写进标题前缀 LCTW(与请求应答的 LCT+id 区分),由游戏侧读。
+    // **这一段必须排在通用 'lct-alive' 之前**:引擎会把同一帧里的两次标题变更合并,
+    // 只送第一个 → 后面再写 'lct-watch' 游戏就收不到,长轮询会被当成"没起来"而重挂。
+    // watch 页面因此只写一次标题:'lct-watch'(活着、在等)。
+    "if(op==='watch'){",
+    "try{document.title='lct-watch';}catch(e){}",
+    "var wq='/api/v1/watch?rev='+encodeURIComponent(q.get('rev')||'');",
+    "fetch(wq).then(function(r){return r.json();})",
+    ".then(function(j){if(done)return;done=true;try{document.title='LCTW'+JSON.stringify(j);}catch(e){}})",
+    ".catch(function(e){/* 被导航顶掉/失败:不写标题,避免盖掉请求应答的标题 */});",
+    "return;",
+    "}",
     "try{document.title='lct-alive';}catch(e){}",
     "var t=Math.max(Number(q.get('timeoutMs'))||8000,8000);",
     "setTimeout(function(){if(!done){done=true;out({ok:false,error:'bridge_timeout'});}},t);",
@@ -957,6 +1097,23 @@ async function handleApi(req, res, url, bodyObj) {
       providers: providerRegistry.listProviders(),
       fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],
       chatLog: Object.assign({ enabled: true, dir: "logs/chat" }, cfgH.chatLog || {}),
+      // 游戏↔桥连通性(2026-10-19):/ui 健康卡据此判断"通道断了没有"。
+      // byChannel 里 0 表示本次桥启动后从未观测到该方向有流量。
+      gameRunning: !!gameProcessSeen,
+      // 游戏侧界面语言(zh/en),来自 mod 每次 /bridge 导航带的 &lang=;
+      // /ui 页面据此决定默认语言,null 表示还没收到过。2026-10-19
+      gameLang: gameLangPulse.value,
+      gameLangAt: gameLangPulse.at,
+      channels: {
+        now: Date.now(),
+        startedAt: channelPulse.startedAt,
+        byChannel: {
+          btpcDl: channelPulse.btpcDl,
+          consoleLog: channelPulse.consoleLog,
+          bridgeNav: channelPulse.bridgeNav,
+          gameFetch: channelPulse.gameFetch,
+        },
+      },
     };
     // 有缓存的版本检测结果时附带更新信息(游戏面板据此显示更新提示)
     if (cachedVersionInfo && cachedVersionInfo.ok && cachedVersionInfo.hasUpdate) {
@@ -1070,6 +1227,32 @@ async function handleApi(req, res, url, bodyObj) {
     return;
   }
 
+  // 配置变更长轮询:游戏挂着等"配置变了没"。
+  // 指纹已变 → 立刻回;没变 → 挂住最多 20 秒,期间网页一保存就被 notifyConfigWatchers 叫醒。
+  if (p === "/api/v1/watch") {
+    const want = String(url.searchParams.get("rev") || "");
+    const cur = configStore.configRev(configStore.load());
+    if (want !== cur) {
+      sendJson(res, 200, { ok: true, rev: cur, changed: true });
+      return;
+    }
+    const w = { res: res, rev: cur, done: false, timer: null };
+    w.timer = setTimeout(function () {
+      if (w.done) return;
+      w.done = true;
+      configWatchers.delete(w);
+      try { sendJson(res, 200, { ok: true, rev: cur, changed: false }); } catch (e) {}
+    }, CONFIG_WATCH_HOLD_MS);
+    configWatchers.add(w);
+    res.on("close", function () {
+      if (w.done) return;
+      w.done = true;
+      configWatchers.delete(w);
+      try { clearTimeout(w.timer); } catch (e) {}
+    });
+    return;
+  }
+
   if (p === "/api/v1/config") {
     if (req.method === "GET") {
       // 2026-10-10 B1:GET + ?d= 保存配置通道删除(无鉴权写 → 恶意网页可改 baseUrl
@@ -1081,11 +1264,23 @@ async function handleApi(req, res, url, bodyObj) {
       }
       // 读取用精简 mask:完整 mask 约 700 字符会超出 title 通道(约 512)上限,
       // 导致游戏侧 JSON 解析失败(2026-08-14 保存失效根因)
-      sendJson(res, 200, { ok: true, config: configStore.maskCompact(configStore.load()) });
+      // 2026-10-19:桌面设置页(/ui)走 ?full=1 拿完整 mask(各服务商块/默认值/UI 偏好),
+      // 与游戏侧无关;apiKey 依然只有 ******** 和 hasApiKey,不传明文。
+      if (url.searchParams.get("full") === "1") {
+        sendJson(res, 200, { ok: true, config: configStore.mask(configStore.load()), rev: configStore.configRev(configStore.load()) });
+        return;
+      }
+      sendJson(res, 200, { ok: true, config: configStore.maskCompact(configStore.load()), rev: configStore.configRev(configStore.load()) });
       return;
     }
     if (req.method === "POST") {
       if (!bodyObj) return sendJson(res, 400, { ok: false, error: "bad_json" });
+      // revOnly(2026-10-20):轻量指纹读(应答约 30B),给游戏运行时轮询"配置变了没"用。
+      // 早于 get 分支判断:指纹读不是数据接口,不能落进 runBtipcGet。
+      if (bodyObj.revOnly === true) {
+        sendJson(res, 200, { ok: true, rev: configStore.configRev(configStore.load()) });
+        return;
+      }
       // 2026-10-16 实车:B 方案后读经 https 进来,带 get 的握手被当普通读回
       // maskCompact(无 fingerprint)→ 游戏侧 bad_handshake。与 runBtipcOp 的
       // op=config 分支同序:get 优先、两者互斥;get 读不落盘。
@@ -1098,8 +1293,11 @@ async function handleApi(req, res, url, bodyObj) {
       configStore.save(next);
       // body 带 config = 保存;不带 = 加载(面板通道下两者都走 POST)。
       // 统一回精简 config(约 366 字符,远低于 title 通道 ~512 上限;2026-08-14 保存失效根因)
-      if (bodyObj.config) log("info", "config saved");
-      sendJson(res, 200, { ok: true, config: configStore.maskCompact(next) });
+      if (bodyObj.config) {
+        log("info", "config saved");
+        onConfigSaved(); // 网页保存 → 立刻叫醒游戏的长轮询(即时生效)
+      }
+      sendJson(res, 200, { ok: true, config: configStore.maskCompact(next), rev: configStore.configRev(next) });
       return;
     }
   }
@@ -1245,7 +1443,8 @@ const requestHandler = (req, res) => {
     res.end("bad request");
     return;
   }
-  logReqHdr(req, url.pathname);
+  // /watch 是游戏每 ~200ms 一次的观察页(高频),不逐条记(否则日志一天几万行)
+  if (url.pathname !== "/watch") logReqHdr(req, url.pathname);
   // ---------- B1 安全边界(2026-10-10 游戏内实测取证后落地) ----------
   // 实测(REQHDR):游戏 Panorama 请求不带 Origin / Sec-Fetch-* 元数据,Host 恒为
   // 127.0.0.1:8791;游戏 HTTP 只打 /btipc/dl + /test.png + /dim.png。
@@ -1405,6 +1604,7 @@ const requestHandler = (req, res) => {
   // BTIPC v1 下行(规格 docs/btipc-v1.md §3.1/§6):每面板一位 —— 位=1 → 200 PNG,位=0 → 404。
   // 帧号只由轮号现算 idx = r - frameStartRound(§4.0 幂等),未知窗口 → 404。
   if (url.pathname === "/btipc/dl") {
+    touchChannel("btpcDl");
     const out = btipcCh.serveDL({
       w: url.searchParams.get("w") || "",
       r: url.searchParams.get("r") || "",
@@ -1423,7 +1623,49 @@ const requestHandler = (req, res) => {
     return;
   }
 
+  // 配置观察页(2026-10-20):游戏独立面板每 ~200ms 加载一次,标题里带当前配置指纹。
+  // 指纹一变 → 游戏重读配置 → 网页改设置 ≈0.3s 生效。页面零 JS、立即返回(引擎只在
+  // load 完成后才暴露 title,长轮询页面 load 永不完成 → title 永远读不到,实测死路)。
+  if (url.pathname === "/watch") {
+    const rev = configStore.configRev(configStore.load());
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.end(watchPage(rev));
+    // 高频请求:逐条记会刷爆日志 → 每 100 条记一次
+    watchHits = (watchHits || 0) + 1;
+    if (watchHits % 100 === 1) log("info", "watch poll (rev=" + rev + ")");
+    return;
+  }
+
+  // 桌面浏览器设置页(2026-10-19):本地静态页,直连 /api/v1/*,不经过游戏内任何通道。
+  // 只服务 core/web/ui.html 这一个固定文件,不接路径参数 → 无目录遍历面。
+  if (url.pathname === "/") {
+    res.statusCode = 302;
+    res.setHeader("Location", "/ui");
+    res.end();
+    return;
+  }
+  if (url.pathname === "/ui" || url.pathname === "/ui/") {
+    let html;
+    try {
+      html = fs.readFileSync(path.join(__dirname, "web", "ui.html"));
+    } catch (e) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end("ui.html missing: " + (e && e.message ? e.message : String(e)));
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.end(html);
+    return;
+  }
+
   if (url.pathname === "/bridge") {
+    touchChannel("bridgeNav");
+    noteGameLang(url.searchParams.get("lang"));
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
@@ -1433,6 +1675,11 @@ const requestHandler = (req, res) => {
   }
 
   if (url.pathname.indexOf("/api/v1/") === 0) {
+    // 游戏内桥页的取数:HTTPS(8792)代理会给所有转发请求打 x-bt-via: https-panel;
+    // 桌面浏览器页直接打 8791,不带这个头 → 两者可区分,不会把"人"的点击误当"游戏还活着"。
+    if (req.headers["x-bt-via"] === "https-panel" || req.headers["x-bt-channel"] === "game") {
+      touchChannel("gameFetch");
+    }
     readBody(req, (err, raw) => {
       if (err) return sendJson(res, 413, { ok: false, error: "body_too_large" });
       const bodyObj = req.method === "POST" ? parseJson(raw) : null;
@@ -1553,6 +1800,7 @@ function startGameLogTail() {
   }
 
   function emit(line) {
+    touchChannel("consoleLog");
     if (line.length > 4000) line = line.slice(0, 4000) + "...<truncated>";
     log("game", redactBtipcPayload(line).replace(/\r$/, ""));
   }
@@ -1609,6 +1857,7 @@ function startGameLogTail() {
           if (line.indexOf(markers[m]) !== -1) { hit = true; break; }
         }
         if (hit) {
+          maybeOpenSettingsUi(line);
           emit(line);
           onBtipcGameLine(line); // BTIPC REQ/CAN(非 BTIPC 行在解析内静默忽略)
           contBudget = 3; // 命中行之后同批的后续行视作多行消息续行

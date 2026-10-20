@@ -6,6 +6,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const DEFAULTS = {
   port: 8791,
@@ -187,6 +188,8 @@ function mask(cfg) {
     },
     timeoutMs: cfg.timeoutMs,
     ui: Object.assign({}, DEFAULTS.ui, cfg.ui || {}),
+    // 2026-10-19:桌面设置页(/ui)回填用;游戏侧仍读 maskCompact,不受影响
+    translateOwn: cfg.translateOwn !== false,
   };
 }
 
@@ -215,6 +218,16 @@ function maskCompact(cfg) {
   out.translateOwn = c.translateOwn !== false;
   if (c.chatLog) out.chatLog = { enabled: c.chatLog.enabled !== false };
   return out;
+}
+
+// 游戏侧可见配置的指纹(8 位十六进制)。
+// 用途:游戏只要知道"配置变了没有"就能决定要不要拉全量 —— 全量读在 BTIPC 上约 24s,
+// 不能常做;指纹读应答约 30B(快通道 ~80ms,BTIPC 兜底 ~2s),可以常做。
+// 指纹取自 maskCompact 的内容:凡是游戏看得见的字段变了,指纹就变;
+// 桥重启后指纹不变(内容派生,不是计数器),所以不会引发无意义的全量重拉。
+function configRev(cfg) {
+  const json = JSON.stringify(maskCompact(normalize(cfg)));
+  return crypto.createHash("md5").update(json).digest("hex").slice(0, 8);
 }
 
 // 保存配置时处理打码回传:apiKey 为 "********" 表示保留原值;空串表示清除
@@ -335,4 +348,4 @@ function applyMaskedUpdate(current, incoming) {
   return cfg;
 }
 
-module.exports = { load, save, mask, maskCompact, applyMaskedUpdate, configPath, examplePath, DEFAULTS, writeFileAtomic /* 测试钩子 */ };
+module.exports = { load, save, mask, maskCompact, applyMaskedUpdate, configRev, configPath, examplePath, DEFAULTS, writeFileAtomic /* 测试钩子 */ };

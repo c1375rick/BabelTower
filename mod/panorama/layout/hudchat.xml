@@ -200,7 +200,7 @@
 				<Button id="LCTTestBtn" class="LCTBtn LCTBtnTest" onactivate="LCTTest();">
 					<Label text="测试" />
 				</Button>
-				<Label class="LCTKeyHint" text="选项点击选择 · 改完点保存 · 点右下角 X 关闭" />
+				<Label class="LCTKeyHint" text="选项点击选择 · 改完点保存 · 设置推荐用桌面网页(/tr 打开)· 点右下角 X 关闭" />
 				<!-- 关闭按钮放底部:顶部被原版 HUD 遮挡时底部仍可点 -->
 				<Button id="LCTCloseBtn" class="LCTCloseButton" onactivate="LCTCloseSettings();">
 					<Label text="X" />

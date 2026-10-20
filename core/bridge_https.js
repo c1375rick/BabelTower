@@ -101,7 +101,10 @@ function handle(req, res) {
   // 只能回头看 8791 的 REQHDR 反推 —— 而 8791 同时也接 http 面板和 BTIPC,三条路混在一起,
   // 推不出结论。当天就栽在这上面:证书已撤销,游戏却报 ALIVE,到底是"游戏不校验证书"
   // 还是"请求其实没走 https",没有正面证据,只能靠猜。
-  log("info", "REQ " + req.method + " " + redactUrl(req.url) + " (经 https 面板通道进来)");
+  // /watch 是游戏每 ~200ms 一次的观察页(高频),不逐条记(否则日志一天几万行)
+  if (String(req.url || "").indexOf("/watch") !== 0) {
+    log("info", "REQ " + req.method + " " + redactUrl(req.url) + " (经 https 面板通道进来)");
+  }
   const headers = {};
   for (const k of Object.keys(req.headers || {})) {
     if (!HOP.has(k.toLowerCase())) headers[k] = req.headers[k];

@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Babel Tower</title>
+<style>
+  :root {
+    --bg: #14161a; --card: #1c1f26; --line: #2c313c; --fg: #e6e8ee;
+    --dim: #9aa3b2; --accent: #6ea8ff; --ok: #46c281; --warn: #e0b341; --bad: #e2605c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 22px 18px 60px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .sub { color: var(--dim); font-size: 12.5px; margin: 8px 0 18px; }
+  .langpick { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+  .langpick label { margin: 0; }
+  .langpick select { width: auto; padding: 5px 8px; font-size: 12.5px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px; }
+  .row { display: flex; gap: 12px; align-items: baseline; padding: 7px 0;
+    border-bottom: 1px dashed rgba(255,255,255,.05); }
+  .row:last-child { border-bottom: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #555; flex: 0 0 auto;
+    transform: translateY(-1px); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px rgba(70,194,129,.5); }
+  .dot.warn { background: var(--warn); }
+  .dot.bad { background: var(--bad); }
+  .dot.idle { background: #555; }
+  .k { flex: 0 0 200px; }
+  .k small { display: block; color: var(--dim); font-size: 11.5px; }
+  .v { color: var(--fg); font-variant-numeric: tabular-nums; }
+  .v .age { color: var(--dim); }
+  label { display: block; margin: 10px 0 4px; color: var(--dim); font-size: 12.5px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; background: #12141a; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px; font: inherit; }
+  textarea { font-family: ui-monospace, Consolas, monospace; font-size: 12px; min-height: 160px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .checks { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 12px; }
+  .checks label { display: flex; gap: 7px; align-items: center; margin: 0; color: var(--fg); }
+  .btns { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+  button { background: var(--accent); color: #0b1220; border: 0; border-radius: 7px;
+    padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 500; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-size: 12.5px; color: var(--dim); }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  .note { color: var(--dim); font-size: 12px; margin-top: 10px; }
+  .badge { display: inline-block; border: 1px solid var(--line); border-radius: 99px;
+    padding: 1px 9px; font-size: 11.5px; color: var(--dim); margin-left: 6px; font-weight: 400; }
+  .hide { display: none; }
+  details summary { cursor: pointer; color: var(--dim); font-size: 12.5px; }
+  #testOut { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <h1><span data-i18n="title"></span> <span class="badge" id="ver">…</span></h1>
+    <div class="langpick">
+      <label for="uiLang" data-i18n="lang_label"></label>
+      <select id="uiLang"></select>
+    </div>
+  </div>
+  <div class="sub" data-i18n="top_note"></div>
+
+  <div class="card">
+    <h2><span data-i18n="health_title"></span>
+      <span class="badge" id="gameState">…</span>
+      <span class="badge hide" id="gameLangBadge"></span>
+    </h2>
+    <div class="row">
+      <div class="dot idle" id="dot-btpcDl"></div>
+      <div class="k"><span data-i18n="ch_btpc_dl"></span><small data-i18n="ch_btpc_dl_sub"></small></div>
+      <div class="v" id="age-btpcDl">—</div>
+    </div>
+    <div class="row">
+      <div class="dot idle" id="dot-consoleLog"></div>
+      <div class="k"><span data-i18n="ch_console"></span><small data-i18n="ch_console_sub"></small></div>
+      <div class="v" id="age-consoleLog">—</div>
+    </div>
+    <div class="row">
+      <div class="dot idle" id="dot-bridgeNav"></div>
+      <div class="k"><span data-i18n="ch_nav"></span><small data-i18n="ch_nav_sub"></small></div>
+      <div class="v" id="age-bridgeNav">—</div>
+    </div>
+    <div class="row">
+      <div class="dot idle" id="dot-gameFetch"></div>
+      <div class="k"><span data-i18n="ch_fetch"></span><small data-i18n="ch_fetch_sub"></small></div>
+      <div class="v" id="age-gameFetch">—</div>
+    </div>
+    <div class="note"><span id="healthNote"></span></div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="tr_title"></h2>
+    <div class="grid">
+      <div>
+        <label for="provider" data-i18n="tr_provider"></label>
+        <select id="provider"></select>
+      </div>
+      <div id="row-apiKey">
+        <label for="apiKey" data-i18n="tr_key"></label>
+        <input type="password" id="apiKey" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="note hide" id="noKeyNote" data-i18n="tr_nokey_note"></div>
+    <div class="grid">
+      <div id="row-region">
+        <label for="region" data-i18n="tr_region"></label>
+        <input type="text" id="region" spellcheck="false">
+      </div>
+      <div id="row-endpoint">
+        <label for="endpoint" data-i18n="tr_endpoint"></label>
+        <input type="text" id="endpoint" spellcheck="false">
+      </div>
+      <div id="row-baseUrl">
+        <label for="baseUrl" data-i18n="tr_baseurl"></label>
+        <input type="text" id="baseUrl" spellcheck="false">
+      </div>
+      <div id="row-model">
+        <label for="model" data-i18n="tr_model"></label>
+        <input type="text" id="model" spellcheck="false">
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <label for="fallback" data-i18n="tr_fallback"></label>
+        <input type="text" id="fallback" data-i18n-ph="tr_fallback_ph" spellcheck="false">
+      </div>
+      <div>
+        <label for="timeoutMs" data-i18n="tr_timeout"></label>
+        <input type="number" id="timeoutMs" min="1000" step="500">
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <label for="sourceLanguage" data-i18n="tr_srclang"></label>
+        <input type="text" id="sourceLanguage" placeholder="auto" spellcheck="false">
+      </div>
+      <div>
+        <label for="targetLanguage" data-i18n="tr_targetlang"></label>
+        <input type="text" id="targetLanguage" spellcheck="false">
+      </div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="translateOwn"> <span data-i18n="tr_own"></span></label>
+      <label><input type="checkbox" id="chatLog"> <span data-i18n="tr_chatlog"></span></label>
+    </div>
+    <div class="btns">
+      <button id="save" data-i18n="tr_save"></button>
+      <button class="ghost" id="reload" data-i18n="tr_reload"></button>
+      <button class="ghost" id="test" data-i18n="tr_test"></button>
+      <span class="status" id="cfgStatus"></span>
+    </div>
+    <div class="note" id="testOut"></div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="bh_title"></h2>
+    <div class="grid">
+      <div>
+        <label for="uiEnabled" data-i18n="bh_enabled"></label>
+        <select id="uiEnabled">
+          <option value="1" data-i18n="bh_on"></option>
+          <option value="0" data-i18n="bh_off"></option>
+        </select>
+      </div>
+      <div>
+        <label for="displayMode" data-i18n="bh_display"></label>
+        <select id="displayMode">
+          <option value="bilingual" data-i18n="bh_display_bilingual"></option>
+          <option value="translation_only" data-i18n="bh_display_only"></option>
+        </select>
+      </div>
+      <div>
+        <label for="outgoing" data-i18n="bh_outgoing"></label>
+        <select id="outgoing">
+          <option value="off" data-i18n="bh_out_off"></option>
+          <option value="translation" data-i18n="bh_out_translation"></option>
+          <option value="bilingual" data-i18n="bh_out_bilingual"></option>
+        </select>
+      </div>
+      <div>
+        <label for="outgoingTarget" data-i18n="bh_target"></label>
+        <select id="outgoingTarget">
+          <option value="en">English</option>
+          <option value="zh-Hans">简体中文</option>
+          <option value="zh-Hant">繁體中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+          <option value="ru">Русский</option>
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="custom" data-i18n="bh_custom"></option>
+        </select>
+      </div>
+      <div id="row-outgoingCustom">
+        <label for="outgoingTargetCustom" data-i18n="bh_custom_label"></label>
+        <input type="text" id="outgoingTargetCustom" data-i18n-ph="bh_custom_ph" spellcheck="false">
+      </div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="force"> <span data-i18n="bh_force"></span></label>
+    </div>
+    <div class="grid">
+      <div>
+        <label for="uiTimeoutMs" data-i18n="bh_ui_timeout"></label>
+        <input type="number" id="uiTimeoutMs" min="5000" max="30000" step="1000">
+      </div>
+    </div>
+    <div class="note" data-i18n="bh_note"></div>
+    <div class="note" data-i18n="bh_sync"></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary data-i18n="adv_summary"></summary>
+      <label for="raw" data-i18n="adv_label"></label>
+      <textarea id="raw" spellcheck="false"></textarea>
+      <div class="btns">
+        <button class="ghost" id="rawSave" data-i18n="adv_save"></button>
+        <span class="status" id="rawStatus"></span>
+      </div>
+    </details>
+  </div>
+
+  <div class="note" data-i18n="footer_note"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var HEALTH_MS = 2000;
+  var STORE_KEY = "babeltower.uiLang";
+
+  // ---------- 语言清单(加语言 = 往 LANGS 加一项 + I18N 加一份字典) ----------
+  var LANGS = [
+    { code: "zh-Hans", label: "简体中文" },
+    { code: "zh-Hant", label: "繁體中文" },
+    { code: "en", label: "English" },
+    { code: "ja", label: "日本語" },
+    { code: "ko", label: "한국어" },
+    { code: "fr", label: "Français" },
+    { code: "de", label: "Deutsch" },
+    { code: "es", label: "Español" },
+    { code: "ru", label: "Русский" },
+    { code: "pt-BR", label: "Português (Brasil)" }
+  ];
+
+  var I18N = {
+    "zh-Hans": {
+      title: "Babel Tower 设置",
+      top_note: "本页由桥直接提供（HTTP 直连 127.0.0.1，不经过游戏内任何接口）。注意：这里能证明“浏览器 ↔ 桥”通，不能证明“游戏 ↔ 桥”通；后者看下面这张心跳表。",
+      lang_label: "语言",
+      lang_auto: "自动（跟随游戏）",
+      health_title: "通道健康",
+      health_game_on: "游戏运行中",
+      health_game_off: "未检测到游戏进程",
+      health_bridge_down: "桥不可达",
+      health_game_lang: "游戏界面语言：{lang}",
+      health_note: "心跳只在你游戏里实际说话 / 打开面板 / 翻译时刷新，安静时停在几分钟前是正常的。“从未” = 本次桥启动后没收到过该方向的流量。桥本次启动于 {t}。",
+      ch_btpc_dl: "BTIPC 下行",
+      ch_btpc_dl_sub: "游戏 Image 面板轮询 /btipc/dl",
+      ch_console: "BTIPC 出站",
+      ch_console_sub: "console.log 里的 [LCT] 行",
+      ch_nav: "HTML 桥页加载",
+      ch_nav_sub: "游戏内浏览器访问 /bridge",
+      ch_fetch: "HTML 桥取数",
+      ch_fetch_sub: "游戏内桥页调用 /api/v1/*",
+      tr_title: "翻译服务",
+      tr_provider: "服务商",
+      tr_key: "API Key（留空 = 保持不变）",
+      tr_key_saved: "已保存（留空 = 不变）",
+      tr_key_unset: "未设置",
+      tr_nokey_note: "此服务商使用公共免费接口，不需要 Key。质量 / 限流不稳时可切到 Microsoft 或配 OpenAI 兼容。",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint（留空 = 默认）",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "回退服务商（逗号分隔）",
+      tr_fallback_ph: "例如：google, deepl",
+      tr_timeout: "桥请求超时（毫秒）",
+      tr_srclang: "默认源语言",
+      tr_targetlang: "目标语言（收到的消息）",
+      tr_own: "翻译自己发的消息",
+      tr_chatlog: "记录聊天原文（logs/chat）",
+      tr_save: "保存到 config.json",
+      tr_reload: "重新读取",
+      tr_test: "测试连接",
+      st_reading: "读取中…",
+      st_loaded: "已读取（Key 已打码）",
+      st_loadfail: "读取失败：{err}",
+      st_saving: "保存中…",
+      st_saved: "已保存到 config.json,游戏约 10 秒内自动同步",
+      st_savefail: "保存失败：{err}",
+      st_testing: "测试中（会真实调用一次服务商）…",
+      st_testok: "测试通过",
+      st_testfail: "测试失败",
+      test_result: "译文：{t}",
+      test_error: "错误：{e}",
+      bh_title: "游戏内行为",
+      bh_enabled: "翻译总开关(收发都停)",
+      bh_on: "开启",
+      bh_off: "关闭",
+      bh_display: "显示模式（收到的消息）",
+      bh_display_bilingual: "双语（原文 + 译文）",
+      bh_display_only: "仅译文",
+      bh_outgoing: "发送前翻译",
+      bh_out_off: "关闭（发原文）",
+      bh_out_translation: "仅译文",
+      bh_out_bilingual: "双语（原文 | 译文）",
+      bh_target: "发送目标语言",
+      bh_custom: "自定义…",
+      bh_custom_label: "自定义目标（BCP-47，如 pt-BR）",
+      bh_custom_ph: "例如 pt-BR",
+      bh_force: "强制翻译（跳过语言检测）",
+      bh_ui_timeout: "游戏侧等待超时（毫秒）",
+      bh_note: "发送前翻译：按 Enter 时输入框立刻清空，原文先送去翻译，译好后自动发出（双语 = “原文 | 译文”，总长超 400 字符会截断译文）。需先打开上面的“翻译开关”。",
+      bh_sync: "保存后游戏会在十几秒内自动同步(不用重启游戏);若游戏没开、或通道退化到 BTIPC,最迟约一分钟。",
+      adv_summary: "高级：整份配置（打码 JSON，可编辑后保存）",
+      adv_label: "当前配置视图（apiKey 已打码；保存时把 ******** 原样留着即可保留原 Key）",
+      adv_save: "按此 JSON 保存",
+      adv_badjson: "JSON 解析失败：{err}",
+      time_just: "刚刚",
+      time_sec: "{n} 秒前",
+      time_min: "{n} 分钟前",
+      time_hour: "{n} 小时前",
+      time_never: "从未",
+      footer_note: "游戏内 /tr 面板与本页读的是同一份 config.json:保存后游戏会在十几秒内自动同步(面板显示也一起更新),不用重启游戏。"
+    },
+    "zh-Hant": {
+      title: "Babel Tower 設定",
+      top_note: "本頁由橋直接提供（HTTP 直連 127.0.0.1，不經過遊戲內任何介面）。注意：這裡能證明「瀏覽器 ↔ 橋」通，不能證明「遊戲 ↔ 橋」通；後者請看下方心跳表。",
+      lang_label: "語言",
+      lang_auto: "自動（跟隨遊戲）",
+      health_title: "通道健康",
+      health_game_on: "遊戲運行中",
+      health_game_off: "未偵測到遊戲行程",
+      health_bridge_down: "橋無法連線",
+      health_game_lang: "遊戲介面語言：{lang}",
+      health_note: "心跳只在你遊戲中實際說話 / 開啟面板 / 翻譯時更新，閒置時停在幾分鐘前是正常的。「從未」 = 本次橋啟動後沒收到該方向的流量。橋本次啟動於 {t}。",
+      ch_btpc_dl: "BTIPC 下行",
+      ch_btpc_dl_sub: "遊戲 Image 面板輪詢 /btipc/dl",
+      ch_console: "BTIPC 上行",
+      ch_console_sub: "console.log 中的 [LCT] 行",
+      ch_nav: "HTML 橋頁載入",
+      ch_nav_sub: "遊戲內瀏覽器存取 /bridge",
+      ch_fetch: "HTML 橋取數",
+      ch_fetch_sub: "遊戲內橋頁呼叫 /api/v1/*",
+      tr_title: "翻譯服務",
+      tr_provider: "服務商",
+      tr_key: "API Key（留空 = 保持不變）",
+      tr_key_saved: "已儲存（留空 = 不變）",
+      tr_key_unset: "未設定",
+      tr_nokey_note: "此服務商使用公共免費介面，不需要 Key。品質 / 限流不穩時可切換到 Microsoft 或設定 OpenAI 相容。",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint（留空 = 預設）",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "備援服務商（以逗號分隔）",
+      tr_fallback_ph: "例如：google, deepl",
+      tr_timeout: "橋請求逾時（毫秒）",
+      tr_srclang: "預設來源語言",
+      tr_targetlang: "目標語言（收到的訊息）",
+      tr_own: "翻譯自己發送的訊息",
+      tr_chatlog: "記錄聊天原文（logs/chat）",
+      tr_save: "儲存到 config.json",
+      tr_reload: "重新讀取",
+      tr_test: "測試連線",
+      st_reading: "讀取中…",
+      st_loaded: "已讀取（Key 已遮蔽）",
+      st_loadfail: "讀取失敗：{err}",
+      st_saving: "儲存中…",
+      st_saved: "已儲存到 config.json,遊戲約 10 秒內自動同步",
+      st_savefail: "儲存失敗：{err}",
+      st_testing: "測試中（會實際呼叫一次服務商）…",
+      st_testok: "測試通過",
+      st_testfail: "測試失敗",
+      test_result: "譯文：{t}",
+      test_error: "錯誤：{e}",
+      bh_title: "遊戲內行為",
+      bh_enabled: "翻譯總開關(收發都停)",
+      bh_on: "開啟",
+      bh_off: "關閉",
+      bh_display: "顯示模式（收到的訊息）",
+      bh_display_bilingual: "雙語（原文 + 譯文）",
+      bh_display_only: "僅譯文",
+      bh_outgoing: "發送前翻譯",
+      bh_out_off: "關閉（送原文）",
+      bh_out_translation: "僅譯文",
+      bh_out_bilingual: "雙語（原文 | 譯文）",
+      bh_target: "發送目標語言",
+      bh_custom: "自訂…",
+      bh_custom_label: "自訂目標（BCP-47，例如 pt-BR）",
+      bh_custom_ph: "例如 pt-BR",
+      bh_force: "強制翻譯（略過語言偵測）",
+      bh_ui_timeout: "遊戲端等待逾時（毫秒）",
+      bh_note: "發送前翻譯：按 Enter 時輸入框立刻清空，原文先送去翻譯，譯好後自動送出（雙語 = 「原文 | 譯文」，總長超過 400 字元會截斷譯文）。需先開啟上方的「翻譯開關」。",
+      bh_sync: "儲存後遊戲會在十幾秒內自動同步(不用重啟遊戲);若遊戲沒開、或通道退化到 BTIPC,最遲約一分鐘。",
+      adv_summary: "進階：完整設定（遮蔽 JSON，可編輯後儲存）",
+      adv_label: "目前設定檢視（apiKey 已遮蔽；儲存時保留 ******** 即可保留原 Key）",
+      adv_save: "依此 JSON 儲存",
+      adv_badjson: "JSON 解析失敗：{err}",
+      time_just: "剛剛",
+      time_sec: "{n} 秒前",
+      time_min: "{n} 分鐘前",
+      time_hour: "{n} 小時前",
+      time_never: "從未",
+      footer_note: "遊戲內 /tr 面板與本頁讀的是同一份 config.json:儲存後遊戲會在十幾秒內自動同步(面板顯示也一起更新),不用重啟遊戲。"
+    },
+    "en": {
+      title: "Babel Tower Settings",
+      top_note: "Served directly by the bridge (HTTP to 127.0.0.1, no in-game interface involved). Note: this proves browser ↔ bridge, not game ↔ bridge — see the heartbeat table below for that.",
+      lang_label: "Language",
+      lang_auto: "Auto (follow game)",
+      health_title: "Channel health",
+      health_game_on: "game running",
+      health_game_off: "game process not detected",
+      health_bridge_down: "bridge unreachable",
+      health_game_lang: "game UI language: {lang}",
+      health_note: "Heartbeats only refresh while you actually chat / open the panel / translate in game; sitting a few minutes old while idle is normal. \u201cnever\u201d = no traffic in that direction since this bridge started. Bridge started at {t}.",
+      ch_btpc_dl: "BTIPC downlink",
+      ch_btpc_dl_sub: "game Image panel polling /btipc/dl",
+      ch_console: "BTIPC uplink",
+      ch_console_sub: "[LCT] lines in console.log",
+      ch_nav: "HTML bridge page load",
+      ch_nav_sub: "in-game browser navigating /bridge",
+      ch_fetch: "HTML bridge fetch",
+      ch_fetch_sub: "in-game bridge page calling /api/v1/*",
+      tr_title: "Translation service",
+      tr_provider: "Provider",
+      tr_key: "API Key (empty = keep current)",
+      tr_key_saved: "saved (empty = keep)",
+      tr_key_unset: "not set",
+      tr_nokey_note: "This provider uses a public free endpoint and needs no key. Switch to Microsoft or an OpenAI-compatible endpoint if quality or rate limits bite.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint (empty = default)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "Fallback providers (comma separated)",
+      tr_fallback_ph: "e.g. google, deepl",
+      tr_timeout: "Bridge request timeout (ms)",
+      tr_srclang: "Default source language",
+      tr_targetlang: "Target language (incoming)",
+      tr_own: "Translate my own messages",
+      tr_chatlog: "Log chat text (logs/chat)",
+      tr_save: "Save to config.json",
+      tr_reload: "Reload",
+      tr_test: "Test connection",
+      st_reading: "reading…",
+      st_loaded: "loaded (key masked)",
+      st_loadfail: "load failed: {err}",
+      st_saving: "saving…",
+      st_saved: "saved to config.json — the game picks it up within ~10s",
+      st_savefail: "save failed: {err}",
+      st_testing: "testing (one real provider call)…",
+      st_testok: "test passed",
+      st_testfail: "test failed",
+      test_result: "translation: {t}",
+      test_error: "error: {e}",
+      bh_title: "In-game behaviour",
+      bh_enabled: "Master switch (stops both directions)",
+      bh_on: "on",
+      bh_off: "off",
+      bh_display: "Display mode (incoming)",
+      bh_display_bilingual: "Bilingual (original + translation)",
+      bh_display_only: "Translation only",
+      bh_outgoing: "Outgoing translation",
+      bh_out_off: "Off (send original)",
+      bh_out_translation: "Translation only",
+      bh_out_bilingual: "Bilingual (original | translation)",
+      bh_target: "Outgoing target language",
+      bh_custom: "Custom…",
+      bh_custom_label: "Custom target (BCP-47, e.g. pt-BR)",
+      bh_custom_ph: "e.g. pt-BR",
+      bh_force: "Force translate (skip language detection)",
+      bh_ui_timeout: "In-game wait timeout (ms)",
+      bh_note: "Outgoing translation: pressing Enter clears the box immediately, the original goes to the translator, and the result is sent automatically (bilingual = \u201coriginal | translation\u201d, translation truncated past 400 chars total). Requires Translation = on.",
+      bh_sync: "The game picks this up automatically within seconds (no restart needed); if the game is closed or the channel falls back to BTIPC, allow up to a minute.",
+      adv_summary: "Advanced: full config (masked JSON, editable)",
+      adv_label: "Current config view (apiKey masked; keep ******** as-is to preserve the stored key)",
+      adv_save: "Save this JSON",
+      adv_badjson: "invalid JSON: {err}",
+      time_just: "just now",
+      time_sec: "{n}s ago",
+      time_min: "{n}m ago",
+      time_hour: "{n}h ago",
+      time_never: "never",
+      footer_note: "The in-game /tr panel and this page read the same config.json: after you save, the game re-syncs within seconds (the panel display updates too) — no game restart needed."
+    },
+    "ja": {
+      title: "Babel Tower 設定",
+      top_note: "このページはブリッジが直接配信しています（HTTP で 127.0.0.1 に接続、ゲーム内のインターフェースは使いません）。ここで確認できるのは「ブラウザ ↔ ブリッジ」であり、「ゲーム ↔ ブリッジ」は下のハートビート表で確認してください。",
+      lang_label: "言語",
+      lang_auto: "自動（ゲームに追従）",
+      health_title: "チャンネル状態",
+      health_game_on: "ゲーム起動中",
+      health_game_off: "ゲームのプロセス未検出",
+      health_bridge_down: "ブリッジに接続できません",
+      health_game_lang: "ゲームの UI 言語：{lang}",
+      health_note: "ハートビートはゲーム内で発言 / パネルを開く / 翻訳したときだけ更新されます。待機中に数分前のままで正常です。「未受信」はこのブリッジ起動後にその方向の通信が一度も無いことを意味します。ブリッジ起動時刻：{t}。",
+      ch_btpc_dl: "BTIPC 下り",
+      ch_btpc_dl_sub: "ゲームの Image パネルが /btipc/dl をポーリング",
+      ch_console: "BTIPC 上り",
+      ch_console_sub: "console.log 内の [LCT] 行",
+      ch_nav: "HTML ブリッジページ読込",
+      ch_nav_sub: "ゲーム内ブラウザが /bridge を開く",
+      ch_fetch: "HTML ブリッジ取得",
+      ch_fetch_sub: "ゲーム内ページが /api/v1/* を呼ぶ",
+      tr_title: "翻訳サービス",
+      tr_provider: "プロバイダ",
+      tr_key: "API Key（空欄 = 変更なし）",
+      tr_key_saved: "保存済み（空欄 = 変更なし）",
+      tr_key_unset: "未設定",
+      tr_nokey_note: "このプロバイダは公開の無料エンドポイントを使うため Key は不要です。品質やレート制限が厳しい場合は Microsoft か OpenAI 互換に切り替えてください。",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint（空欄 = 既定）",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "フォールバック（カンマ区切り）",
+      tr_fallback_ph: "例：google, deepl",
+      tr_timeout: "ブリッジ要求タイムアウト（ms）",
+      tr_srclang: "既定の原文言語",
+      tr_targetlang: "訳文の言語（受信メッセージ）",
+      tr_own: "自分の発言も翻訳する",
+      tr_chatlog: "チャット原文を保存（logs/chat）",
+      tr_save: "config.json に保存",
+      tr_reload: "再読み込み",
+      tr_test: "接続テスト",
+      st_reading: "読み込み中…",
+      st_loaded: "読み込み完了（Key はマスク）",
+      st_loadfail: "読み込み失敗：{err}",
+      st_saving: "保存中…",
+      st_saved: "config.json に保存しました(ゲームは約 10 秒以内に反映)",
+      st_savefail: "保存失敗：{err}",
+      st_testing: "テスト中（実際に一度プロバイダを呼びます）…",
+      st_testok: "テスト成功",
+      st_testfail: "テスト失敗",
+      test_result: "訳文：{t}",
+      test_error: "エラー：{e}",
+      bh_title: "ゲーム内の動作",
+      bh_enabled: "翻訳のMaster(送受信とも停止)",
+      bh_on: "オン",
+      bh_off: "オフ",
+      bh_display: "表示モード（受信メッセージ）",
+      bh_display_bilingual: "バイリンガル（原文 + 訳文）",
+      bh_display_only: "訳文のみ",
+      bh_outgoing: "送信前翻訳",
+      bh_out_off: "オフ（原文を送信）",
+      bh_out_translation: "訳文のみ",
+      bh_out_bilingual: "バイリンガル（原文 | 訳文）",
+      bh_target: "送信先の言語",
+      bh_custom: "カスタム…",
+      bh_custom_label: "カスタム言語（BCP-47、例 pt-BR）",
+      bh_custom_ph: "例：pt-BR",
+      bh_force: "強制翻訳（言語判定をスキップ）",
+      bh_ui_timeout: "ゲーム側の待機タイムアウト（ms）",
+      bh_note: "送信前翻訳：Enter を押すと入力欄はすぐ空になり、原文が翻訳に送られ、訳文が自動で送信されます（バイリンガル = 「原文 | 訳文」、合計 400 文字を超えると訳文を切り詰め）。上の「翻訳スイッチ」がオンの必要があります。",
+      bh_sync: "保存後数秒以内にゲームへ自動反映されます(再起動不要)。ゲームが未起動、または BTIPC に落ちた場合は最大 1 分程度かかります。",
+      adv_summary: "詳細：設定全体（マスク済み JSON、編集して保存可）",
+      adv_label: "現在の設定（apiKey はマスク済み。******** をそのまま残せば保存済みの Key を維持）",
+      adv_save: "この JSON で保存",
+      adv_badjson: "JSON 解析エラー：{err}",
+      time_just: "たった今",
+      time_sec: "{n} 秒前",
+      time_min: "{n} 分前",
+      time_hour: "{n} 時間前",
+      time_never: "未受信",
+      footer_note: "ゲーム内 /tr パネルとこのページは同じ config.json を見ています:保存後数秒以内にゲーム側が自動同期します(パネルの表示も更新されます)。再起動は不要です。"
+    },
+    "ko": {
+      title: "Babel Tower 설정",
+      top_note: "이 페이지는 브리지가 직접 제공합니다(HTTP로 127.0.0.1에 연결, 게임 내 인터페이스 미사용). 여기서 확인되는 것은 \u201c브라우저 ↔ 브리지\u201d이며, \u201c게임 ↔ 브리지\u201d는 아래 하트비트 표에서 확인하세요.",
+      lang_label: "언어",
+      lang_auto: "자동(게임 따르기)",
+      health_title: "채널 상태",
+      health_game_on: "게임 실행 중",
+      health_game_off: "게임 프로세스 없음",
+      health_bridge_down: "브리지 연결 불가",
+      health_game_lang: "게임 UI 언어: {lang}",
+      health_note: "하트비트는 게임에서 실제로 채팅/패널 열기/번역할 때만 갱신됩니다. 대기 중에 몇 분 전으로 남아 있는 것이 정상입니다. \u201c없음\u201d은 이 브리지 시작 후 해당 방향 트래픽이 없었다는 뜻입니다. 브리지 시작: {t}.",
+      ch_btpc_dl: "BTIPC 하행",
+      ch_btpc_dl_sub: "게임 Image 패널이 /btipc/dl 폴링",
+      ch_console: "BTIPC 상행",
+      ch_console_sub: "console.log 의 [LCT] 줄",
+      ch_nav: "HTML 브리지 페이지 로드",
+      ch_nav_sub: "게임 내 브라우저가 /bridge 접속",
+      ch_fetch: "HTML 브리지 조회",
+      ch_fetch_sub: "게임 내 페이지가 /api/v1/* 호출",
+      tr_title: "번역 서비스",
+      tr_provider: "제공자",
+      tr_key: "API Key(비우면 변경 없음)",
+      tr_key_saved: "저장됨(비우면 유지)",
+      tr_key_unset: "미설정",
+      tr_nokey_note: "이 제공자는 공개 무료 엔드포인트를 사용하므로 Key가 필요 없습니다. 품질/속도 제한이 불안하면 Microsoft 또는 OpenAI 호환으로 전환하세요.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint(비우면 기본값)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "대체 제공자(쉼표 구분)",
+      tr_fallback_ph: "예: google, deepl",
+      tr_timeout: "브리지 요청 타임아웃(ms)",
+      tr_srclang: "기본 원문 언어",
+      tr_targetlang: "번역 대상 언어(수신 메시지)",
+      tr_own: "내 메시지도 번역",
+      tr_chatlog: "채팅 원문 기록(logs/chat)",
+      tr_save: "config.json 에 저장",
+      tr_reload: "다시 읽기",
+      tr_test: "연결 테스트",
+      st_reading: "읽는 중…",
+      st_loaded: "읽음(Key 마스킹)",
+      st_loadfail: "읽기 실패: {err}",
+      st_saving: "저장 중…",
+      st_saved: "config.json 에 저장됨(게임은 약 10초 안에 반영)",
+      st_savefail: "저장 실패: {err}",
+      st_testing: "테스트 중(제공자를 실제로 한 번 호출)…",
+      st_testok: "테스트 성공",
+      st_testfail: "테스트 실패",
+      test_result: "번역: {t}",
+      test_error: "오류: {e}",
+      bh_title: "게임 내 동작",
+      bh_enabled: "번역 총 스위치(수신·발신 모두 중지)",
+      bh_on: "켜기",
+      bh_off: "끄기",
+      bh_display: "표시 모드(수신 메시지)",
+      bh_display_bilingual: "이중 언어(원문 + 번역)",
+      bh_display_only: "번역만",
+      bh_outgoing: "전송 전 번역",
+      bh_out_off: "끄기(원문 전송)",
+      bh_out_translation: "번역만",
+      bh_out_bilingual: "이중 언어(원문 | 번역)",
+      bh_target: "전송 대상 언어",
+      bh_custom: "사용자 지정…",
+      bh_custom_label: "사용자 지정 언어(BCP-47, 예: pt-BR)",
+      bh_custom_ph: "예: pt-BR",
+      bh_force: "강제 번역(언어 감지 건너뛰기)",
+      bh_ui_timeout: "게임 측 대기 타임아웃(ms)",
+      bh_note: "전송 전 번역: Enter 를 누르면 입력창이 즉시 비워지고 원문이 번역으로 전송되며 번역문이 자동 전송됩니다(이중 언어 = \u201c원문 | 번역\u201d, 총 400자를 넘으면 번역문을 자름). 위의 \u201c번역 스위치\u201d가 켜져 있어야 합니다.",
+      bh_sync: "저장 후 몇 초 안에 게임에 자동으로 반영됩니다(재시작 불필요). 게임이 꺼져 있거나 BTIPC로 폴백하면 최대 1분 정도 걸립니다.",
+      adv_summary: "고급: 전체 설정(마스킹된 JSON, 편집 후 저장 가능)",
+      adv_label: "현재 설정(apiKey 마스킹됨; ******** 를 그대로 두면 저장된 Key 유지)",
+      adv_save: "이 JSON 으로 저장",
+      adv_badjson: "JSON 파싱 실패: {err}",
+      time_just: "방금",
+      time_sec: "{n}초 전",
+      time_min: "{n}분 전",
+      time_hour: "{n}시간 전",
+      time_never: "없음",
+      footer_note: "게임 내 /tr 패널과 이 페이지는 같은 config.json 을 봅니다: 저장 후 몇 초 안에 게임이 자동 동기화합니다(패널 표시도 함께 갱신). 게임 재시작은 필요 없습니다."
+    },
+    "fr": {
+      title: "Réglages Babel Tower",
+      top_note: "Cette page est servie directement par le pont (HTTP vers 127.0.0.1, sans interface en jeu). Elle prouve que navigateur ↔ pont fonctionne, pas jeu ↔ pont : voyez le tableau de battements ci-dessous.",
+      lang_label: "Langue",
+      lang_auto: "Auto (suivre le jeu)",
+      health_title: "État des canaux",
+      health_game_on: "jeu en cours",
+      health_game_off: "processus du jeu introuvable",
+      health_bridge_down: "pont injoignable",
+      health_game_lang: "langue de l'interface du jeu : {lang}",
+      health_note: "Les battements ne se mettent à jour que lorsque vous parlez / ouvrez le panneau / traduisez en jeu ; rester à quelques minutes en veille est normal. \u00ab jamais \u00bb = aucun trafic dans ce sens depuis le démarrage du pont, à {t}.",
+      ch_btpc_dl: "BTIPC descendant",
+      ch_btpc_dl_sub: "le panneau Image interroge /btipc/dl",
+      ch_console: "BTIPC montant",
+      ch_console_sub: "lignes [LCT] dans console.log",
+      ch_nav: "Chargement de la page du pont",
+      ch_nav_sub: "navigateur en jeu → /bridge",
+      ch_fetch: "Requêtes du pont HTML",
+      ch_fetch_sub: "page en jeu → /api/v1/*",
+      tr_title: "Service de traduction",
+      tr_provider: "Fournisseur",
+      tr_key: "Clé API (vide = inchangée)",
+      tr_key_saved: "enregistrée (vide = inchangée)",
+      tr_key_unset: "non définie",
+      tr_nokey_note: "Ce fournisseur utilise un point d'accès public gratuit, sans clé. Passez à Microsoft ou à un point d'accès compatible OpenAI si la qualité ou les limites posent problème.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint (vide = défaut)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "Fournisseurs de secours (séparés par des virgules)",
+      tr_fallback_ph: "ex. google, deepl",
+      tr_timeout: "Délai de requête du pont (ms)",
+      tr_srclang: "Langue source par défaut",
+      tr_targetlang: "Langue cible (messages reçus)",
+      tr_own: "Traduire mes propres messages",
+      tr_chatlog: "Enregistrer le texte du chat (logs/chat)",
+      tr_save: "Enregistrer dans config.json",
+      tr_reload: "Recharger",
+      tr_test: "Tester la connexion",
+      st_reading: "lecture…",
+      st_loaded: "chargé (clé masquée)",
+      st_loadfail: "échec de lecture : {err}",
+      st_saving: "enregistrement…",
+      st_saved: "enregistré dans config.json — la game le reprend en ~10 s",
+      st_savefail: "échec de l'enregistrement : {err}",
+      st_testing: "test en cours (un appel réel au fournisseur)…",
+      st_testok: "test réussi",
+      st_testfail: "test échoué",
+      test_result: "traduction : {t}",
+      test_error: "erreur : {e}",
+      bh_title: "Comportement en jeu",
+      bh_enabled: "Interrupteur principal (coupe les deux sens)",
+      bh_on: "activée",
+      bh_off: "désactivée",
+      bh_display: "Mode d'affichage (messages reçus)",
+      bh_display_bilingual: "Bilingue (original + traduction)",
+      bh_display_only: "Traduction seule",
+      bh_outgoing: "Traduction à l'envoi",
+      bh_out_off: "Désactivée (envoyer l'original)",
+      bh_out_translation: "Traduction seule",
+      bh_out_bilingual: "Bilingue (original | traduction)",
+      bh_target: "Langue cible à l'envoi",
+      bh_custom: "Personnalisée…",
+      bh_custom_label: "Cible personnalisée (BCP-47, ex. pt-BR)",
+      bh_custom_ph: "ex. pt-BR",
+      bh_force: "Forcer la traduction (ignorer la détection)",
+      bh_ui_timeout: "Délai d'attente en jeu (ms)",
+      bh_note: "Traduction à l'envoi : appuyer sur Entrée vide aussitôt le champ, l'original part en traduction puis le résultat est envoyé automatiquement (bilingue = \u00ab original | traduction \u00bb, traduction tronquée au-delà de 400 caractères). Nécessite Traduction = activée.",
+      bh_sync: "La game les reprend automatiquement en quelques secondes (sans redémarrage) ; si le jeu est fermé ou le canal retombe sur BTIPC, comptez jusqu'à une minute.",
+      adv_summary: "Avancé : configuration complète (JSON masqué, modifiable)",
+      adv_label: "Configuration actuelle (clé masquée ; laissez ******** pour conserver la clé enregistrée)",
+      adv_save: "Enregistrer ce JSON",
+      adv_badjson: "JSON invalide : {err}",
+      time_just: "à l'instant",
+      time_sec: "il y a {n} s",
+      time_min: "il y a {n} min",
+      time_hour: "il y a {n} h",
+      time_never: "jamais",
+      footer_note: "Le panneau /tr en jeu et cette page lisent le même config.json : après l'enregistrement, le jeu se resynchronise en quelques secondes (l'affichage du panel suit) — pas besoin de redémarrer."
+    },
+    "de": {
+      title: "Babel Tower Einstellungen",
+      top_note: "Diese Seite wird direkt von der Bridge ausgeliefert (HTTP an 127.0.0.1, ohne Schnittstelle im Spiel). Sie beweist Browser ↔ Bridge, nicht Spiel ↔ Bridge – dafür die Heartbeat-Tabelle unten.",
+      lang_label: "Sprache",
+      lang_auto: "Automatisch (Spiel folgen)",
+      health_title: "Kanalzustand",
+      health_game_on: "Spiel läuft",
+      health_game_off: "Spielprozess nicht gefunden",
+      health_bridge_down: "Bridge nicht erreichbar",
+      health_game_lang: "Spiel-UI-Sprache: {lang}",
+      health_note: "Heartbeats aktualisieren sich nur, wenn du im Spiel schreibst / das Panel öffnest / übersetzt; im Leerlauf ein paar Minuten alt zu bleiben ist normal. \u201enie\u201c = seit diesem Bridge-Start kein Verkehr in dieser Richtung. Bridge gestartet: {t}.",
+      ch_btpc_dl: "BTIPC Downlink",
+      ch_btpc_dl_sub: "Spiel-Image-Panel fragt /btipc/dl ab",
+      ch_console: "BTIPC Uplink",
+      ch_console_sub: "[LCT]-Zeilen in console.log",
+      ch_nav: "HTML-Bridge-Seite geladen",
+      ch_nav_sub: "Browser im Spiel → /bridge",
+      ch_fetch: "HTML-Bridge-Abruf",
+      ch_fetch_sub: "Seite im Spiel → /api/v1/*",
+      tr_title: "Übersetzungsdienst",
+      tr_provider: "Anbieter",
+      tr_key: "API-Key (leer = unverändert)",
+      tr_key_saved: "gespeichert (leer = unverändert)",
+      tr_key_unset: "nicht gesetzt",
+      tr_nokey_note: "Dieser Anbieter nutzt einen öffentlichen kostenlosen Endpunkt und braucht keinen Key. Bei Qualitäts- oder Limitproblemen zu Microsoft oder OpenAI-kompatibel wechseln.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint (leer = Standard)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "Ausweich-Anbieter (kommagetrennt)",
+      tr_fallback_ph: "z. B. google, deepl",
+      tr_timeout: "Bridge-Anfrage-Timeout (ms)",
+      tr_srclang: "Standard-Ausgangssprache",
+      tr_targetlang: "Zielsprache (eingehend)",
+      tr_own: "Eigene Nachrichten übersetzen",
+      tr_chatlog: "Chat-Text protokollieren (logs/chat)",
+      tr_save: "In config.json speichern",
+      tr_reload: "Neu laden",
+      tr_test: "Verbindung testen",
+      st_reading: "lese…",
+      st_loaded: "geladen (Key maskiert)",
+      st_loadfail: "Laden fehlgeschlagen: {err}",
+      st_saving: "speichere…",
+      st_saved: "in config.json gespeichert — das Spiel übernimmt es in ~10 s",
+      st_savefail: "Speichern fehlgeschlagen: {err}",
+      st_testing: "Test läuft (ein echter Anbieter-Aufruf)…",
+      st_testok: "Test bestanden",
+      st_testfail: "Test fehlgeschlagen",
+      test_result: "Übersetzung: {t}",
+      test_error: "Fehler: {e}",
+      bh_title: "Verhalten im Spiel",
+      bh_enabled: "Hauptschalter (stoppt beide Richtungen)",
+      bh_on: "an",
+      bh_off: "aus",
+      bh_display: "Anzeigemodus (eingehend)",
+      bh_display_bilingual: "Zweisprachig (Original + Übersetzung)",
+      bh_display_only: "Nur Übersetzung",
+      bh_outgoing: "Übersetzung beim Senden",
+      bh_out_off: "Aus (Original senden)",
+      bh_out_translation: "Nur Übersetzung",
+      bh_out_bilingual: "Zweisprachig (Original | Übersetzung)",
+      bh_target: "Zielsprache beim Senden",
+      bh_custom: "Benutzerdefiniert…",
+      bh_custom_label: "Eigenes Ziel (BCP-47, z. B. pt-BR)",
+      bh_custom_ph: "z. B. pt-BR",
+      bh_force: "Übersetzung erzwingen (Spracherkennung überspringen)",
+      bh_ui_timeout: "Wartezeit im Spiel (ms)",
+      bh_note: "Übersetzung beim Senden: Enter leert das Feld sofort, das Original geht zur Übersetzung und das Ergebnis wird automatisch gesendet (zweisprachig = \u201eOriginal | Übersetzung\u201c, Übersetzung ab 400 Zeichen gekürzt). Erfordert Übersetzung = an.",
+      bh_sync: "Das Spiel übernimmt das automatisch binnen Sekunden (kein Neustart nötig); ist das Spiel zu oder fällt der Kanal auf BTIPC zurück, dauert es bis zu einer Minute.",
+      adv_summary: "Erweitert: komplette Konfiguration (maskiertes JSON, editierbar)",
+      adv_label: "Aktuelle Konfiguration (Key maskiert; ******** stehen lassen, um den gespeicherten Key zu behalten)",
+      adv_save: "Dieses JSON speichern",
+      adv_badjson: "ungültiges JSON: {err}",
+      time_just: "gerade eben",
+      time_sec: "vor {n} s",
+      time_min: "vor {n} min",
+      time_hour: "vor {n} h",
+      time_never: "nie",
+      footer_note: "Das /tr-Panel im Spiel und diese Seite lesen dieselbe config.json: Nach dem Speichern synchronisiert sich das Spiel binnen Sekunden (das Panel aktualisiert sich mit) — kein Neustart nötig."
+    },
+    "es": {
+      title: "Ajustes de Babel Tower",
+      top_note: "Esta página la sirve el propio puente (HTTP a 127.0.0.1, sin interfaz del juego). Demuestra navegador ↔ puente, no juego ↔ puente: para eso, mira la tabla de latidos de abajo.",
+      lang_label: "Idioma",
+      lang_auto: "Automático (seguir al juego)",
+      health_title: "Estado de canales",
+      health_game_on: "juego en ejecución",
+      health_game_off: "proceso del juego no detectado",
+      health_bridge_down: "puente inaccesible",
+      health_game_lang: "idioma de la interfaz del juego: {lang}",
+      health_note: "Los latidos solo se actualizan cuando hablas / abres el panel / traduces en el juego; quedarse en varios minutos en reposo es normal. \u00abnunca\u00bb = sin tráfico en ese sentido desde que arrancó el puente, a las {t}.",
+      ch_btpc_dl: "BTIPC descendente",
+      ch_btpc_dl_sub: "el panel Image consulta /btipc/dl",
+      ch_console: "BTIPC ascendente",
+      ch_console_sub: "líneas [LCT] en console.log",
+      ch_nav: "Carga de la página del puente",
+      ch_nav_sub: "navegador en el juego → /bridge",
+      ch_fetch: "Consultas del puente HTML",
+      ch_fetch_sub: "página en el juego → /api/v1/*",
+      tr_title: "Servicio de traducción",
+      tr_provider: "Proveedor",
+      tr_key: "Clave API (vacío = sin cambios)",
+      tr_key_saved: "guardada (vacío = sin cambios)",
+      tr_key_unset: "sin definir",
+      tr_nokey_note: "Este proveedor usa un punto público gratuito y no necesita clave. Cambia a Microsoft o a un punto compatible con OpenAI si hay problemas de calidad o límites.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint (vacío = predeterminado)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "Proveedores de reserva (separados por comas)",
+      tr_fallback_ph: "p. ej. google, deepl",
+      tr_timeout: "Tiempo de espera del puente (ms)",
+      tr_srclang: "Idioma de origen predeterminado",
+      tr_targetlang: "Idioma de destino (mensajes recibidos)",
+      tr_own: "Traducir mis propios mensajes",
+      tr_chatlog: "Guardar el texto del chat (logs/chat)",
+      tr_save: "Guardar en config.json",
+      tr_reload: "Recargar",
+      tr_test: "Probar conexión",
+      st_reading: "leyendo…",
+      st_loaded: "cargado (clave oculta)",
+      st_loadfail: "fallo al leer: {err}",
+      st_saving: "guardando…",
+      st_saved: "guardado en config.json — el juego lo aplica en ~10 s",
+      st_savefail: "fallo al guardar: {err}",
+      st_testing: "probando (una llamada real al proveedor)…",
+      st_testok: "prueba superada",
+      st_testfail: "prueba fallida",
+      test_result: "traducción: {t}",
+      test_error: "error: {e}",
+      bh_title: "Comportamiento en el juego",
+      bh_enabled: "Interruptor general (detiene ambos sentidos)",
+      bh_on: "activada",
+      bh_off: "desactivada",
+      bh_display: "Modo de visualización (recibidos)",
+      bh_display_bilingual: "Bilingüe (original + traducción)",
+      bh_display_only: "Solo traducción",
+      bh_outgoing: "Traducción al enviar",
+      bh_out_off: "Desactivada (enviar original)",
+      bh_out_translation: "Solo traducción",
+      bh_out_bilingual: "Bilingüe (original | traducción)",
+      bh_target: "Idioma de destino al enviar",
+      bh_custom: "Personalizado…",
+      bh_custom_label: "Destino personalizado (BCP-47, p. ej. pt-BR)",
+      bh_custom_ph: "p. ej. pt-BR",
+      bh_force: "Forzar traducción (omitir detección de idioma)",
+      bh_ui_timeout: "Espera en el juego (ms)",
+      bh_note: "Traducción al enviar: al pulsar Enter el campo se vacía al instante, el original va al traductor y el resultado se envía solo (bilingüe = \u00aboriginal | traducción\u00bb, la traducción se recorta si el total supera 400 caracteres). Requiere Traducción = activada.",
+      bh_sync: "El juego lo aplica automáticamente en pocos segundos (sin reiniciar); si el juego está cerrado o el canal vuelve a BTIPC, puede tardar hasta un minuto.",
+      adv_summary: "Avanzado: configuración completa (JSON oculto, editable)",
+      adv_label: "Configuración actual (clave oculta; deja ******** para conservar la clave guardada)",
+      adv_save: "Guardar este JSON",
+      adv_badjson: "JSON inválido: {err}",
+      time_just: "ahora mismo",
+      time_sec: "hace {n} s",
+      time_min: "hace {n} min",
+      time_hour: "hace {n} h",
+      time_never: "nunca",
+      footer_note: "El panel /tr del juego y esta página leen el mismo config.json: tras guardar, el juego se resincroniza en pocos segundos (el panel se actualiza también) — no hace falta reiniciar."
+    },
+    "ru": {
+      title: "Настройки Babel Tower",
+      top_note: "Эту страницу отдаёт сам мост (HTTP на 127.0.0.1, без внутриигрового интерфейса). Она доказывает «браузер ↔ мост», а не «игра ↔ мост» — для второго смотрите таблицу пульса ниже.",
+      lang_label: "Язык",
+      lang_auto: "Авто (как в игре)",
+      health_title: "Состояние каналов",
+      health_game_on: "игра запущена",
+      health_game_off: "процесс игры не найден",
+      health_bridge_down: "мост недоступен",
+      health_game_lang: "язык интерфейса игры: {lang}",
+      health_note: "Пульс обновляется, только когда вы пишете / открываете панель / переводите в игре; «несколько минут назад» в простое — норма. «никогда» = с момента запуска моста трафика в эту сторону не было. Мост запущен: {t}.",
+      ch_btpc_dl: "BTIPC вниз",
+      ch_btpc_dl_sub: "панель Image опрашивает /btipc/dl",
+      ch_console: "BTIPC вверх",
+      ch_console_sub: "строки [LCT] в console.log",
+      ch_nav: "Загрузка страницы моста",
+      ch_nav_sub: "браузер в игре → /bridge",
+      ch_fetch: "Запросы HTML-моста",
+      ch_fetch_sub: "страница в игре → /api/v1/*",
+      tr_title: "Служба перевода",
+      tr_provider: "Провайдер",
+      tr_key: "API-ключ (пусто = без изменений)",
+      tr_key_saved: "сохранён (пусто = без изменений)",
+      tr_key_unset: "не задан",
+      tr_nokey_note: "Этот провайдер использует открытый бесплатный эндпоинт и не требует ключа. Переключитесь на Microsoft или совместимый с OpenAI, если мешают качество или лимиты.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint (пусто = по умолчанию)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "Резервные провайдеры (через запятую)",
+      tr_fallback_ph: "напр. google, deepl",
+      tr_timeout: "Таймаут запроса моста (мс)",
+      tr_srclang: "Язык оригинала по умолчанию",
+      tr_targetlang: "Целевой язык (входящие сообщения)",
+      tr_own: "Переводить свои сообщения",
+      tr_chatlog: "Сохранять текст чата (logs/chat)",
+      tr_save: "Сохранить в config.json",
+      tr_reload: "Перечитать",
+      tr_test: "Проверить соединение",
+      st_reading: "чтение…",
+      st_loaded: "загружено (ключ скрыт)",
+      st_loadfail: "ошибка чтения: {err}",
+      st_saving: "сохранение…",
+      st_saved: "сохранено в config.json — игра подхватит за ~10 с",
+      st_savefail: "ошибка сохранения: {err}",
+      st_testing: "проверка (один реальный вызов провайдера)…",
+      st_testok: "проверка пройдена",
+      st_testfail: "проверка не пройдена",
+      test_result: "перевод: {t}",
+      test_error: "ошибка: {e}",
+      bh_title: "Поведение в игре",
+      bh_enabled: "Общий выключатель (останавливает оба направления)",
+      bh_on: "вкл",
+      bh_off: "выкл",
+      bh_display: "Режим показа (входящие)",
+      bh_display_bilingual: "Двуязычный (оригинал + перевод)",
+      bh_display_only: "Только перевод",
+      bh_outgoing: "Перевод при отправке",
+      bh_out_off: "Выкл (отправлять оригинал)",
+      bh_out_translation: "Только перевод",
+      bh_out_bilingual: "Двуязычный (оригинал | перевод)",
+      bh_target: "Целевой язык при отправке",
+      bh_custom: "Свой…",
+      bh_custom_label: "Свой язык (BCP-47, напр. pt-BR)",
+      bh_custom_ph: "напр. pt-BR",
+      bh_force: "Переводить всегда (без определения языка)",
+      bh_ui_timeout: "Таймаут ожидания в игре (мс)",
+      bh_note: "Перевод при отправке: по Enter поле сразу очищается, оригинал уходит на перевод, результат отправляется автоматически (двуязычный = «оригинал | перевод», перевод обрезается, если всего больше 400 символов). Нужно включить «Перевод».",
+      bh_sync: "Игра подхватывает изменения автоматически за несколько секунд (перезапуск не нужен); если игра закрыта или канал откатился на BTIPC — до минуты.",
+      adv_summary: "Дополнительно: весь конфиг (JSON со скрытыми ключами, можно править)",
+      adv_label: "Текущий конфиг (ключ скрыт; оставьте ********, чтобы сохранить прежний ключ)",
+      adv_save: "Сохранить этот JSON",
+      adv_badjson: "неверный JSON: {err}",
+      time_just: "только что",
+      time_sec: "{n} с назад",
+      time_min: "{n} мин назад",
+      time_hour: "{n} ч назад",
+      time_never: "никогда",
+      footer_note: "Внутриигровая панель /tr и эта страница читают один config.json: после сохранения игра пересинхронизируется за несколько секунд (панель обновится тоже) — перезапуск не нужен."
+    },
+    "pt-BR": {
+      title: "Configurações do Babel Tower",
+      top_note: "Esta página é servida pela própria ponte (HTTP para 127.0.0.1, sem interface do jogo). Ela prova navegador ↔ ponte, não jogo ↔ ponte — para isso, veja a tabela de batimentos abaixo.",
+      lang_label: "Idioma",
+      lang_auto: "Automático (seguir o jogo)",
+      health_title: "Saúde dos canais",
+      health_game_on: "jogo em execução",
+      health_game_off: "processo do jogo não detectado",
+      health_bridge_down: "ponte inacessível",
+      health_game_lang: "idioma da interface do jogo: {lang}",
+      health_note: "Os batimentos só se atualizam quando você fala / abre o painel / traduz no jogo; ficar alguns minutos parado é normal. \u201cnunca\u201d = sem tráfego nessa direção desde o início da ponte, em {t}.",
+      ch_btpc_dl: "BTIPC descida",
+      ch_btpc_dl_sub: "painel Image consultando /btipc/dl",
+      ch_console: "BTIPC subida",
+      ch_console_sub: "linhas [LCT] no console.log",
+      ch_nav: "Carregamento da página da ponte",
+      ch_nav_sub: "navegador no jogo → /bridge",
+      ch_fetch: "Consultas da ponte HTML",
+      ch_fetch_sub: "página no jogo → /api/v1/*",
+      tr_title: "Serviço de tradução",
+      tr_provider: "Provedor",
+      tr_key: "Chave de API (vazio = manter)",
+      tr_key_saved: "salva (vazio = manter)",
+      tr_key_unset: "não definida",
+      tr_nokey_note: "Este provedor usa um endpoint público gratuito e não precisa de chave. Mude para Microsoft ou um endpoint compatível com OpenAI se qualidade ou limites atrapalharem.",
+      tr_region: "Azure Region",
+      tr_endpoint: "Endpoint (vazio = padrão)",
+      tr_baseurl: "Base URL",
+      tr_model: "Model",
+      tr_fallback: "Provedores de reserva (separados por vírgula)",
+      tr_fallback_ph: "ex.: google, deepl",
+      tr_timeout: "Tempo limite da ponte (ms)",
+      tr_srclang: "Idioma de origem padrão",
+      tr_targetlang: "Idioma de destino (mensagens recebidas)",
+      tr_own: "Traduzir minhas próprias mensagens",
+      tr_chatlog: "Registrar o texto do chat (logs/chat)",
+      tr_save: "Salvar em config.json",
+      tr_reload: "Recarregar",
+      tr_test: "Testar conexão",
+      st_reading: "lendo…",
+      st_loaded: "carregado (chave oculta)",
+      st_loadfail: "falha ao ler: {err}",
+      st_saving: "salvando…",
+      st_saved: "salvo em config.json — o jogo aplica em ~10 s",
+      st_savefail: "falha ao salvar: {err}",
+      st_testing: "testando (uma chamada real ao provedor)…",
+      st_testok: "teste aprovado",
+      st_testfail: "teste falhou",
+      test_result: "tradução: {t}",
+      test_error: "erro: {e}",
+      bh_title: "Comportamento no jogo",
+      bh_enabled: "Chave geral (para os dois sentidos)",
+      bh_on: "ativada",
+      bh_off: "desativada",
+      bh_display: "Modo de exibição (recebidas)",
+      bh_display_bilingual: "Bilíngue (original + tradução)",
+      bh_display_only: "Somente tradução",
+      bh_outgoing: "Tradução ao enviar",
+      bh_out_off: "Desativada (enviar original)",
+      bh_out_translation: "Somente tradução",
+      bh_out_bilingual: "Bilíngue (original | tradução)",
+      bh_target: "Idioma de destino ao enviar",
+      bh_custom: "Personalizado…",
+      bh_custom_label: "Destino personalizado (BCP-47, ex.: pt-BR)",
+      bh_custom_ph: "ex.: pt-BR",
+      bh_force: "Forçar tradução (ignorar detecção de idioma)",
+      bh_ui_timeout: "Espera no jogo (ms)",
+      bh_note: "Tradução ao enviar: ao pressionar Enter o campo é esvaziado na hora, o original vai para tradução e o resultado é enviado automaticamente (bilíngue = \u201coriginal | tradução\u201d, a tradução é cortada se o total passar de 400 caracteres). Requer Tradução = ativada.",
+      bh_sync: "O jogo aplica em poucos segundos (sem reiniciar); se o jogo estiver fechado ou o canal cair para BTIPC, pode levar até um minuto.",
+      adv_summary: "Avançado: configuração completa (JSON oculto, editável)",
+      adv_label: "Configuração atual (chave oculta; mantenha ******** para preservar a chave salva)",
+      adv_save: "Salvar este JSON",
+      adv_badjson: "JSON inválido: {err}",
+      time_just: "agora mesmo",
+      time_sec: "há {n} s",
+      time_min: "há {n} min",
+      time_hour: "há {n} h",
+      time_never: "nunca",
+      footer_note: "O painel /tr do jogo e esta página leem o mesmo config.json: depois de salvar, o jogo ressincroniza em poucos segundos (o painel também se atualiza) — sem reiniciar."
+    }
+  };
+
+  // ---------- i18n ----------
+  var LANG = "zh-Hans";       // 当前生效语言
+  var storeMode = "auto";     // auto | 具体语言代码
+  var gameLang = null;        // 游戏侧语言(zh/en),由桥的 health 提供
+  var lastCfg = null;
+  var providerMeta = { bing: { requiresKey: false, acceptsKey: false } };
+  var providerSig = "";
+  var statusState = {};       // elId -> {key, params, cls}
+
+  function t(key, params) {
+    var dict = I18N[LANG] || I18N["zh-Hans"];
+    var s = dict[key];
+    if (s === undefined) s = I18N["en"][key];
+    if (s === undefined) s = key;
+    if (params) {
+      for (var k in params) {
+        if (Object.prototype.hasOwnProperty.call(params, k)) s = s.split("{" + k + "}").join(String(params[k]));
+      }
+    }
+    return s;
+  }
+
+  function langLabel(code) {
+    for (var i = 0; i < LANGS.length; i += 1) if (LANGS[i].code === code) return LANGS[i].label;
+    return code;
+  }
+
+  function detectFromNavigator() {
+    var tags = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || "en"];
+    for (var i = 0; i < tags.length; i += 1) {
+      var low = String(tags[i] || "").replace("_", "-").toLowerCase();
+      if (!low) continue;
+      if (low.indexOf("zh") === 0) {
+        return (low.indexOf("tw") >= 0 || low.indexOf("hk") >= 0 || low.indexOf("hant") >= 0) ? "zh-Hant" : "zh-Hans";
+      }
+      for (var j = 0; j < LANGS.length; j += 1) {
+        if (low.indexOf(LANGS[j].code.toLowerCase()) === 0) return LANGS[j].code;
+      }
+      if (low.indexOf("pt") === 0) return "pt-BR";
+    }
+    return "en";
+  }
+
+  function resolveLang() {
+    if (storeMode !== "auto") return storeMode;
+    if (gameLang === "zh") return "zh-Hans";
+    if (gameLang === "en") return "en";
+    return detectFromNavigator();
+  }
+
+  function applyI18n() {
+    document.documentElement.lang = LANG === "zh-Hans" ? "zh-Hans" : LANG;
+    document.title = t("title");
+    var els = document.querySelectorAll("[data-i18n]");
+    for (var i = 0; i < els.length; i += 1) els[i].textContent = t(els[i].getAttribute("data-i18n"));
+    var phs = document.querySelectorAll("[data-i18n-ph]");
+    for (var j = 0; j < phs.length; j += 1) phs[j].placeholder = t(phs[j].getAttribute("data-i18n-ph"));
+    // 重放状态文案
+    for (var id in statusState) {
+      if (!Object.prototype.hasOwnProperty.call(statusState, id)) continue;
+      var el = $(id);
+      if (!el) continue;
+      setStatus(id, statusState[id].key, statusState[id].params, statusState[id].cls, true);
+    }
+    buildLangSelect();
+    ensureProviders();
+    refreshProviderRows();
+    if (lastCfg) $("raw").value = JSON.stringify(lastCfg, null, 2);
+  }
+
+  function buildLangSelect() {
+    var sel = $("uiLang");
+    var cur = sel.value || storeMode;
+    sel.innerHTML = "";
+    var o0 = document.createElement("option");
+    o0.value = "auto";
+    o0.textContent = t("lang_auto");
+    sel.appendChild(o0);
+    for (var i = 0; i < LANGS.length; i += 1) {
+      var o = document.createElement("option");
+      o.value = LANGS[i].code;
+      o.textContent = LANGS[i].label;
+      sel.appendChild(o);
+    }
+    sel.value = cur;
+    if (!sel.value) sel.value = "auto";
+  }
+
+  function switchLang(mode) {
+    storeMode = mode;
+    try { localStorage.setItem(STORE_KEY, mode); } catch (e) {}
+    LANG = resolveLang();
+    $("uiLang").value = mode;
+    applyI18n();
+  }
+
+  // ---------- 通用 ----------
+  function fetchJson(path, opt) {
+    return fetch(path, Object.assign({ cache: "no-store" }, opt || {})).then(function (r) {
+      return r.json().then(function (j) { return { status: r.status, body: j }; });
+    });
+  }
+
+  function setStatus(id, key, params, cls, quiet) {
+    var el = $(id);
+    if (!el) return;
+    statusState[id] = { key: key, params: params, cls: cls };
+    el.textContent = t(key, params);
+    el.className = "status" + (cls ? " " + cls : "");
+    if (quiet) return;
+  }
+
+  function rel(ts, now) {
+    if (!ts) return t("time_never");
+    var s = Math.max(0, Math.round((now - ts) / 1000));
+    if (s < 3) return t("time_just");
+    if (s < 60) return t("time_sec", { n: s });
+    if (s < 3600) return t("time_min", { n: Math.round(s / 60) });
+    return t("time_hour", { n: Math.round(s / 3600) });
+  }
+
+  // ---------- 通道健康 ----------
+  function paintChannel(key, ts, now, gameRunning) {
+    var dot = $("dot-" + key);
+    var val = $("age-" + key);
+    var age = ts ? now - ts : Infinity;
+    var cls = "idle";
+    if (ts) {
+      if (age < 60000) cls = "ok";
+      else if (age < 600000) cls = "warn";
+      else cls = gameRunning ? "bad" : "idle";
+    }
+    dot.className = "dot " + cls;
+    var a = document.createElement("span");
+    a.className = "age";
+    a.textContent = rel(ts, now);
+    val.textContent = "";
+    val.appendChild(a);
+  }
+
+  function loadHealth() {
+    fetchJson("/api/v1/health").then(function (r) {
+      var j = r.body || {};
+      if (!j.ok) return;
+      $("ver").textContent = "v" + (j.version || "?");
+      var game = !!j.gameRunning;
+      $("gameState").textContent = game ? t("health_game_on") : t("health_game_off");
+      if (j.gameLang) {
+        gameLang = j.gameLang;
+        var badge = $("gameLangBadge");
+        badge.className = "badge";
+        badge.textContent = t("health_game_lang", { lang: langLabel(gameLang === "zh" ? "zh-Hans" : "en") });
+        if (storeMode === "auto") {
+          var want = resolveLang();
+          if (want !== LANG) { LANG = want; applyI18n(); }
+        }
+      }
+      var ch = (j.channels && j.channels.byChannel) || {};
+      var now = (j.channels && j.channels.now) || Date.now();
+      var started = (j.channels && j.channels.startedAt) || 0;
+      $("healthNote").textContent = t("health_note", {
+        t: started ? new Date(started).toLocaleString() : "—"
+      });
+      ["btpcDl", "consoleLog", "bridgeNav", "gameFetch"].forEach(function (k) {
+        paintChannel(k, ch[k] || 0, now, game);
+      });
+      // 服务商列表以桥为准(以后加 provider 不用改页面)
+      var provs = Array.isArray(j.providers) ? j.providers : [];
+      if (provs.length) {
+        provs.forEach(function (p) { providerMeta[p.id] = p; });
+        var sig = provs.map(function (p) {
+          return p.id + ":" + (p.requiresKey !== false) + ":" + (p.acceptsKey !== false);
+        }).join(",");
+        if (sig !== providerSig) {
+          providerSig = sig;
+          rebuildProviders(provs);
+        }
+      }
+    }).catch(function () {
+      $("gameState").textContent = t("health_bridge_down");
+    });
+  }
+
+  // ---------- 服务商 ----------
+  // 兜底清单:桥不可达(或老版本桥)时下拉也要有内容,否则整个表单没法用。
+  var DEFAULT_PROVIDERS = [
+    { id: "bing", label: "Bing (free)", requiresKey: false, acceptsKey: false },
+    { id: "microsoft", label: "Microsoft (Azure)", requiresKey: true, acceptsKey: true },
+    { id: "openai", label: "OpenAI-compatible", requiresKey: true, acceptsKey: true },
+    { id: "deepl", label: "DeepL", requiresKey: true, acceptsKey: true },
+    { id: "google", label: "Google", requiresKey: false, acceptsKey: true }
+  ];
+
+  function ensureProviders() {
+    if ($("provider").options.length) return;
+    rebuildProviders(DEFAULT_PROVIDERS);
+  }
+
+  function rebuildProviders(provs) {
+    var sel = $("provider");
+    var cur = sel.value;
+    sel.innerHTML = "";
+    provs.forEach(function (p) {
+      var o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.label || p.id;
+      sel.appendChild(o);
+    });
+    var keep = null;
+    for (var i = 0; i < provs.length; i += 1) if (provs[i].id === cur) { keep = cur; break; }
+    sel.value = keep || (lastCfg && lastCfg.provider) || provs[0].id;
+    refreshProviderRows();
+  }
+
+  function refreshProviderRows() {
+    var p = $("provider").value;
+    var meta = providerMeta[p] || {};
+    var acceptsKey = meta.acceptsKey !== false;
+    $("row-apiKey").classList.toggle("hide", !acceptsKey);
+    $("noKeyNote").classList.toggle("hide", acceptsKey);
+    $("row-region").classList.toggle("hide", p !== "microsoft");
+    $("row-endpoint").classList.toggle("hide", p !== "microsoft" && p !== "deepl");
+    $("row-baseUrl").classList.toggle("hide", p !== "openai");
+    $("row-model").classList.toggle("hide", p !== "openai");
+    if (p === "microsoft" && lastCfg) {
+      $("endpoint").value = (lastCfg.microsoft && lastCfg.microsoft.endpoint) || "";
+    } else if (p === "deepl" && lastCfg) {
+      $("endpoint").value = (lastCfg.deepl && lastCfg.deepl.endpoint) || "";
+    }
+    var has = false;
+    if (lastCfg) has = !!((lastCfg[p] || {}).hasApiKey);
+    $("apiKey").placeholder = has ? t("tr_key_saved") : t("tr_key_unset");
+    $("apiKey").value = "";
+  }
+
+  // ---------- 配置 ----------
+  function fillForm(cfg) {
+    lastCfg = cfg;
+    $("provider").value = cfg.provider || "bing";
+    $("region").value = (cfg.microsoft && cfg.microsoft.region) || "";
+    $("baseUrl").value = (cfg.openai && cfg.openai.baseUrl) || "";
+    $("model").value = (cfg.openai && cfg.openai.model) || "";
+    $("fallback").value = Array.isArray(cfg.fallbackProviders) ? cfg.fallbackProviders.join(", ") : "";
+    $("timeoutMs").value = cfg.timeoutMs || "";
+    $("sourceLanguage").value = (cfg.defaults && cfg.defaults.sourceLanguage) || "auto";
+    $("targetLanguage").value = (cfg.defaults && cfg.defaults.targetLanguage) || "zh-Hans";
+    $("translateOwn").checked = cfg.translateOwn !== false;
+    $("chatLog").checked = !(cfg.chatLog && cfg.chatLog.enabled === false);
+    var ui = cfg.ui || {};
+    $("uiEnabled").value = (ui.enabled === false) ? "0" : "1";
+    $("displayMode").value = ui.displayMode || "bilingual";
+    $("outgoing").value = ui.outgoing || "off";
+    setOutgoingTargetValue(ui.outgoingTarget || "en");
+    $("force").checked = !!ui.force;
+    $("uiTimeoutMs").value = ui.timeoutMs || 15000;
+    $("raw").value = JSON.stringify(cfg, null, 2);
+    refreshProviderRows();
+  }
+
+  var OUT_TARGETS = ["en", "zh-Hans", "zh-Hant", "ja", "ko", "fr", "de", "es", "ru", "pt-BR"];
+  function refreshOutgoingCustomRow() {
+    $("row-outgoingCustom").classList.toggle("hide", $("outgoingTarget").value !== "custom");
+  }
+  function setOutgoingTargetValue(v) {
+    var sel = $("outgoingTarget");
+    if (OUT_TARGETS.indexOf(v) !== -1) {
+      sel.value = v;
+      $("outgoingTargetCustom").value = "";
+    } else {
+      sel.value = "custom";
+      $("outgoingTargetCustom").value = v || "";
+    }
+    refreshOutgoingCustomRow();
+  }
+  function currentOutgoingTarget() {
+    if ($("outgoingTarget").value !== "custom") return $("outgoingTarget").value;
+    return $("outgoingTargetCustom").value.trim() || "en";
+  }
+
+  function loadConfig() {
+    setStatus("cfgStatus", "st_reading");
+    fetchJson("/api/v1/config?full=1").then(function (r) {
+      var j = r.body || {};
+      if (!j.ok || !j.config) throw new Error((j && j.error) || "load_failed");
+      fillForm(j.config);
+      setStatus("cfgStatus", "st_loaded", null, "ok");
+    }).catch(function (e) {
+      setStatus("cfgStatus", "st_loadfail", { err: e.message || e }, "bad");
+    });
+  }
+
+  function collectForm() {
+    var p = $("provider").value;
+    var out = {
+      provider: p,
+      fallbackProviders: $("fallback").value.split(",").map(function (s) { return s.trim(); })
+        .filter(function (s) { return !!s; }),
+      timeoutMs: Number($("timeoutMs").value) || undefined,
+      translateOwn: $("translateOwn").checked,
+      chatLog: { enabled: $("chatLog").checked },
+      openai: {
+        baseUrl: $("baseUrl").value.trim() || undefined,
+        model: $("model").value.trim() || undefined
+      },
+      microsoft: { region: $("region").value.trim() || undefined },
+      deepl: {}
+    };
+    var ep = $("endpoint").value.trim();
+    if (p === "microsoft") out.microsoft.endpoint = ep || undefined;
+    if (p === "deepl") out.deepl.endpoint = ep || undefined;
+    var meta = providerMeta[p] || {};
+    var key = $("apiKey").value.trim();
+    // 不收 Key 的 provider(bing)绝不能带扁平 apiKey:桥端扁平字段按 provider 落段,
+    // bing 会落到 microsoft 分支,把微软的 Key 改掉。
+    if (key && meta.acceptsKey !== false) out.apiKey = key;
+    // 游戏内行为:写进 ui.*(游戏侧 syncPanelFromConfig 只认 c.ui.*),面板/网页两条路同语义
+    var targetLang = $("targetLanguage").value.trim() || "zh-Hans";
+    out.defaults = { sourceLanguage: $("sourceLanguage").value.trim() || "auto", targetLanguage: targetLang };
+    out.ui = {
+      enabled: $("uiEnabled").value === "1",
+      provider: p,
+      displayMode: $("displayMode").value,
+      outgoing: $("outgoing").value,
+      outgoingTarget: currentOutgoingTarget(),
+      targetLanguage: targetLang,
+      force: $("force").checked,
+      timeoutMs: Number($("uiTimeoutMs").value) || 15000
+    };
+    return out;
+  }
+
+  function save(payload, statusElId) {
+    setStatus(statusElId, "st_saving");
+    fetchJson("/api/v1/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: payload })
+    }).then(function (r) {
+      var j = r.body || {};
+      if (!j.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+      setStatus(statusElId, "st_saved", null, "ok");
+      loadConfig();
+    }).catch(function (e) {
+      setStatus(statusElId, "st_savefail", { err: e.message || e }, "bad");
+    });
+  }
+
+  // ---------- 事件 ----------
+  $("uiLang").addEventListener("change", function () { switchLang($("uiLang").value); });
+  $("provider").addEventListener("change", refreshProviderRows);
+  $("outgoingTarget").addEventListener("change", refreshOutgoingCustomRow);
+  $("reload").addEventListener("click", loadConfig);
+  $("save").addEventListener("click", function () { save(collectForm(), "cfgStatus"); });
+
+  $("rawSave").addEventListener("click", function () {
+    var raw;
+    try { raw = JSON.parse($("raw").value); }
+    catch (e) { setStatus("rawStatus", "adv_badjson", { err: e.message }, "bad"); return; }
+    save(raw, "rawStatus");
+  });
+
+  $("test").addEventListener("click", function () {
+    var btn = $("test");
+    btn.disabled = true;
+    setStatus("cfgStatus", "st_testing");
+    $("testOut").textContent = "";
+    fetchJson("/api/v1/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Hello, this is a Babel Tower connection test." })
+    }).then(function (r) {
+      var j = r.body || {};
+      if (j.ok) {
+        setStatus("cfgStatus", "st_testok", null, "ok");
+        $("testOut").textContent = t("test_result", { t: j.translation || "" });
+      } else {
+        setStatus("cfgStatus", "st_testfail", null, "bad");
+        $("testOut").textContent = t("test_error", { e: j.error || ("HTTP " + r.status) });
+      }
+    }).catch(function (e) {
+      setStatus("cfgStatus", "st_testfail", null, "bad");
+      $("testOut").textContent = t("test_error", { e: e.message || e });
+    }).then(function () { btn.disabled = false; });
+  });
+
+  // ---------- 启动 ----------
+  try { storeMode = localStorage.getItem(STORE_KEY) || "auto"; } catch (e) { storeMode = "auto"; }
+  if (storeMode !== "auto") {
+    var ok = false;
+    for (var i = 0; i < LANGS.length; i += 1) if (LANGS[i].code === storeMode) ok = true;
+    if (!ok) storeMode = "auto";
+  }
+  LANG = resolveLang();
+  buildLangSelect();
+  $("uiLang").value = storeMode;
+  applyI18n();
+  loadConfig();
+  loadHealth();
+  refreshOutgoingCustomRow();
+  setInterval(loadHealth, HEALTH_MS);
+})();
+</script>
+</body>
+</html>

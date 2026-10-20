@@ -151,6 +151,10 @@ async function translate(text, opts) {
   if (!translation) {
     throw new Error("翻译服务返回为空");
   }
+  // 2026-10-20 自踩又撤回:曾把译文等于 "No translation" 当成"端点拒译"哨兵,改按原文处理。
+  // 错在 —— "不翻译" 的英文**就是** "No translation"(端点翻译得完全正确),而且英文短语
+  // "No translation" 本身就该被译成中文("无翻译")。真拒译时端点给的是别的反馈
+  // (HTTP 4xx/5xx,或空 translations),不是这句英文。所以这里不做任何特殊处理。
   return {
     translation: String(translation),
     detectedLanguage: entry.detectedLanguage ? String(entry.detectedLanguage.language) : null,
@@ -161,5 +165,8 @@ module.exports = {
   id: "bing",
   label: "Bing Translator(免 Key)",
   requiresKey: false, // 回退链据此判定:没 Key 也能用(2026-10-15:原来靠 pid!=="bing" 硬编码,google 会被误跳过)
+  // acceptsKey=false:接口根本不收 Key(设置页据此隐藏 Key 输入行)。
+  // 与 requiresKey 区分开 —— google 也是 requiresKey:false,但它收 Key(2026-10-19)。
+  acceptsKey: false,
   translate,
 };

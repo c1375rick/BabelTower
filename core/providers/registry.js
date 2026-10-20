@@ -17,7 +17,15 @@ function getProvider(id) {
 }
 
 function listProviders() {
-  return Object.keys(providers).map((id) => ({ id, label: providers[id].label }));
+  // requiresKey:玩家设置页(/ui)据此隐藏 Key 输入行(2026-10-19)。
+  // 免 Key 的 provider(bing)不能被当成"少填了 Key",否则用户会以为配置没保存。
+  return Object.keys(providers).map((id) => ({
+    id,
+    label: providers[id].label,
+    requiresKey: providers[id].requiresKey !== false,
+    // acceptsKey=false 表示接口不收 Key(设置页隐藏 Key 行);默认 true
+    acceptsKey: providers[id].acceptsKey !== false,
+  }));
 }
 
 module.exports = { getProvider, listProviders };
