@@ -68,7 +68,14 @@ ok(delta.set["translateOwn"] === false, "布尔值改动进 set");
 ok(!Object.prototype.hasOwnProperty.call(delta.set, "ui.outgoing"), "没变的字段不进 set");
 ok(!Object.prototype.hasOwnProperty.call(delta.set, "ui.fontSize"), "被删掉的字段不进 set");
 ok(delta.unset.indexOf("ui.fontSize") >= 0, "被删掉的字段进 unset");
-ok(delta.unset.indexOf("chatLog.enabled") >= 0, "被删掉的子树字段进 unset");
+ok(delta.unset.indexOf("chatLog") >= 0,
+  "整棵子树没了 -> unset 报顶层字段(游戏侧直接删整块,不留空壳)");
+// 只掉了一个叶子 -> 报叶子路径(父对象还有别的字段,不能整块删)
+const partDelta = JSON.parse(syncData.configDeltaPayload(
+  { microsoft: { hasApiKey: true, region: "us" } },
+  { microsoft: { hasApiKey: true } }, "y"));
+ok(partDelta.unset.indexOf("microsoft.region") >= 0, "部分叶子没了 -> unset 报叶子路径");
+ok(partDelta.unset.indexOf("microsoft") < 0, "父对象还有别的字段 -> 不整块删");
 // 值是绝对值 → 差分可重复施加(幂等)
 const again = JSON.parse(syncData.configDeltaPayload(oldVis, newVis, "abcd1234"));
 ok(JSON.stringify(again.set) === JSON.stringify(delta.set), "差分是绝对值(可重复施加)");
@@ -173,6 +180,85 @@ ok(/syncConfigDelta\(function \(ok\)/.test(pushBody), "推送唤醒走差分同�
 const iSetRev = pushBody.indexOf("State.cfgRev = rev;");
 ok(iSetRev < 0, "推送不预先改写 State.cfgRev(改了差分就没有基准了)");
 ok(/State\.cfgRev = d\.fingerprint/.test(lc), "指纹由差分载荷落地时更新");
+
+// ---------- ⑥ 游戏侧合并逻辑:把函数从脚本里抽出来真跑一遍 ----------
+// 为什么抽出来跑:游戏脚本是 Panorama 脚本(依赖 $ / $.Schedule),require 不了;
+// 但差分合并是纯逻辑,抽出来就能真验 —— 桥侧产的差分载荷能不能被游戏侧正确合并,
+// 这是"只传增删改"能不能成立的关键一环,只靠正则钉不住。
+console.log("--- 游戏侧:差分载荷 → 合并后的 mask(跨模块对拍) ---");
+function extractFn(src, name) {
+  const at = src.indexOf("function " + name + "(");
+  if (at < 0) return null;
+  let depth = 0, i = src.indexOf("{", at);
+  for (let j = i; j < src.length; j++) {
+    if (src[j] === "{") depth += 1;
+    else if (src[j] === "}") { depth -= 1; if (depth === 0) return src.slice(at, j + 1); }
+  }
+  return null;
+}
+const fnPath = extractFn(lc, "cfgPathApply");
+const fnApply = extractFn(lc, "applyConfigPayload");
+ok(!!fnPath, "抽出 cfgPathApply");
+ok(!!fnApply, "抽出 applyConfigPayload");
+if (fnPath && fnApply) {
+  // 沙箱:只给这三个依赖
+  const sandbox = {
+    State: { cfgRev: "oldfp01", cfgMask: null, cfg: {} },
+    log: function () {},
+    applied: null,
+    applyBridgeConfig: function (c, tag) { sandbox.applied = { mask: c, tag: tag }; return true; },
+  };
+  const fns = new Function("State", "log", "applyBridgeConfig",
+    "var cfgPathApply = " + fnPath + ";\nvar applyConfigPayload = " + fnApply + ";\n" +
+    "return { cfgPathApply: cfgPathApply, applyConfigPayload: applyConfigPayload };");
+  let api = null;
+  try { api = fns(sandbox.State, sandbox.log, sandbox.applyBridgeConfig); }
+  catch (e) { ok(false, "沙箱装载失败:" + (e && e.message)); }
+  if (api) {
+    ok(typeof api.cfgPathApply === "function" && typeof api.applyConfigPayload === "function", "两个函数可用");
+    // 单点路径合并/删除
+    const o = { ui: { displayMode: "a", fontSize: 14 } };
+    api.cfgPathApply(o, "ui.displayMode", "b");
+    ok(o.ui.displayMode === "b", "点路径改值");
+    api.cfgPathApply(o, "ui.fontSize", undefined);
+    ok(!("fontSize" in o.ui), "点路径删除");
+    api.cfgPathApply(o, "chatLog.enabled", true);
+    ok(o.chatLog && o.chatLog.enabled === true, "缺失子树自动建");
+    // 端到端:桥侧产的差分载荷 → 游戏侧合并
+    const base = {
+      provider: "bing",
+      ui: { displayMode: "bilingual", outgoing: true },
+      translateOwn: true,
+      chatLog: { enabled: true },
+    };
+    const next = {
+      provider: "openai",
+      ui: { displayMode: "translation_only", outgoing: true },
+      translateOwn: false,
+    };
+    sandbox.State.cfgMask = base;
+    sandbox.State.cfgRev = "oldfp01";
+    const payload = syncData.configDeltaPayload(base, next, "newfp99");
+    const applied = api.applyConfigPayload(payload, {});
+    ok(applied === true, "applyConfigPayload 返回 true");
+    const m = sandbox.applied.mask;
+    ok(m.provider === "openai", "合并后 provider 是新值");
+    ok(m.ui.displayMode === "translation_only", "合并后 displayMode 是新值");
+    ok(m.ui.outgoing === true, "没变的字段保留");
+    ok(m.translateOwn === false, "合并后 translateOwn 是新值");
+    ok(!("chatLog" in m), "被删掉的子树消失(unset 生效)");
+    ok(sandbox.State.cfgRev === "newfp99", "指纹由载荷更新");
+    ok(sandbox.State.cfgMask === m, "合并结果留作下一次差分的基准");
+    // 全量载荷也走同一条路
+    sandbox.State.cfgMask = null;
+    const fullPayload = syncData.configFullPayload(next, "newfp99");
+    const applied2 = api.applyConfigPayload(fullPayload, {});
+    ok(applied2 === true, "全量载荷也能落地");
+    ok(sandbox.State.cfgMask.provider === "openai", "全量落地后基准 = 全量内容");
+    // 坏载荷不崩、返回 false
+    ok(api.applyConfigPayload("not json", {}) === false, "坏载荷返回 false(不抛)");
+  }
+}
 
 console.log("RESULT: PASS " + pass + " / FAIL " + fail + " / SKIP " + skipped);
 process.exit(fail > 0 ? 1 : 0);

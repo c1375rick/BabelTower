@@ -5514,8 +5514,7 @@ function injectTranslation(row, sig, text, fragment) {
     }
     // btipc05b:留全量 mask 给面板秒开(openSettingsPanel 直接消费,免 24s 现场读)
     State.cfg._mask = c;
-    // btipc11:差分同步的基准(客户端手上"那一版"的完整内容)。与 _mask 分开:_mask 会被面板保存
-    // 清空(旧值作废),这份不能清 —— 清了差分就没基准了。
+    // btipc11:差分同步的基准(与 _mask 分开:_mask 会被面板保存清空,这份不能清 —— 清了差分就没基准)。
     State.cfgMask = c;
     return changed;
   }
@@ -5548,6 +5547,7 @@ function injectTranslation(row, sig, text, fragment) {
     } else if (d.config && typeof d.config === "object") { mask = d.config; }
     else { log("cfg sync: bad payload"); return false; }
     applyBridgeConfig(mask, "cfg-watch");
+    State.cfgMask = mask; // 基准 = 合并结果(下一轮差分的起点)
     if (typeof d.fingerprint === "string" && d.fingerprint) State.cfgRev = d.fingerprint;
     log("cfg sync applied: " + (d.delta ? "delta" : "full") + " (rev=" + State.cfgRev + ")");
     return true;
@@ -5593,8 +5593,8 @@ function injectTranslation(row, sig, text, fragment) {
         }
         State.cfgWatchSkip = 0;
         State.cfgPollNext = true;
-        // btipc11:轮询本身走差分同步 —— 没变时握手 1 帧就回,变了才取差分片。
-        // (旧路:revOnly 指纹读 → 变了再拉一次全量。慢通道 = 20s 轮询 + 26s 全量 ≈46s。)
+        // btipc11:轮询本身走差分同步 —— 没变时握手 1 帧就回,变了才取差分片(旧路:revOnly 指纹读
+        // → 变了再拉全量;慢通道 = 20s 轮询 + 26s 全量 ≈46s)。
         try {
           syncConfigDelta(function (ok) {
             if (ok) {

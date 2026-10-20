@@ -179,12 +179,22 @@ function configDeltaPayload(oldVisible, newVisible, fp) {
   const o = flattenConfig(oldVisible);
   const n = flattenConfig(newVisible);
   const set = {};
-  const unset = [];
+  const removed = [];
   for (const k of Object.keys(n)) {
     if (!Object.prototype.hasOwnProperty.call(o, k) || JSON.stringify(o[k]) !== JSON.stringify(n[k])) set[k] = n[k];
   }
   for (const k of Object.keys(o)) {
-    if (!Object.prototype.hasOwnProperty.call(n, k)) unset.push(k);
+    if (!Object.prototype.hasOwnProperty.call(n, k)) removed.push(k);
+  }
+  // unset 报"整棵子树都没了"的**顶层字段**:游戏侧直接删整个字段,不留空壳
+  // (例如 chatLog 整块没了 → unset "chatLog",而不是 "chatLog.enabled" 留下个 {})。
+  const unset = [];
+  for (const k of removed) {
+    const top = k.split(".")[0];
+    const topLeaves = Object.keys(o).filter((x) => x.split(".")[0] === top);
+    const whole = topLeaves.every((x) => removed.indexOf(x) >= 0);
+    const target = whole ? top : k;
+    if (unset.indexOf(target) < 0) unset.push(target);
   }
   return JSON.stringify({ ok: true, kind: "config", delta: true, fingerprint: fp, set: set, unset: unset });
 }
