@@ -33,8 +33,10 @@ No registration needed - the default provider is Bing's public free translation 
 FEATURES
 - Real-time translation of incoming chat, golden text shown below each message
 - Outgoing translation: Off / Translation-only / Bilingual (original | translation)
-- Settings panel: press Enter, type /tr, or click the "译" button next to the chat input
-- All settings are click-to-select (provider, target language, display mode, etc.)
+- Settings: press Enter and type /tr → your browser opens the **web settings page** (10 UI languages,
+  follows the game language; the in-game panel stays available via /tr panel as a debug fallback)
+- All settings are click-to-select (provider, target language, display mode, etc.) and reach the
+  game within a second of saving — no restart needed
 - Local bridge auto-starts with Windows and auto-exits when the game closes
 - Smart skips: own messages, commands (/), pure numbers/symbols, and text already in the target language
 - Translation cache survives chat scroll recycling
@@ -48,7 +50,9 @@ INSTALLATION (3 steps)
      (bridge auto-starts at login, auto-exits when the game closes)
    - Temporary: double-click StartDeadlock.bat before playing
 
-4. In game: open chat (Enter), type /tr, click Test (测试) - it should show "测试成功: 你好", click Save (保存), close with ESC. Done!
+4. In game: open chat (Enter), type /tr → your browser opens the web settings page; click
+   "Test connection" (测试连接) - it should report success - then "Save" (保存). The game picks
+   the change up within a second; no restart needed. Done!
 
 No Node.js installation needed - a portable runtime is bundled.
 
@@ -90,7 +94,8 @@ Babel Tower - Deadlock 聊天翻译 Mod
 功能
 - 入站消息实时翻译，译文以金色粗体显示在原文下方
 - 发送前翻译：关 / 仅译文 / 双语（原文 | 译文）三态
-- 设置面板：聊天输入 /tr 回车，或点聊天框右侧「译」按钮
+- 设置：聊天输入 /tr 回车 → 系统浏览器打开**网页设置页**（10 种界面语言，默认跟随游戏语言；
+  游戏内旧面板保留为调试/兜底，/tr panel 打开）
 - 所有选项均为点击选择（服务商 / 目标语言 / 显示模式 / 发送模式），减少误操作
 - 本地桥随 Windows 登录自启，游戏退出自动关闭
 - 智能跳过：自己的消息、指令（/ 开头）、纯数字符号、已是目标语言的文本

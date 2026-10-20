@@ -2,8 +2,8 @@
 
 ## 1. 当前状态与验证情况
 
-**发布状态**:`1.2.0 (2026-10-16)` 本地构建已出包自测,GitHub Release 待发;
-版本号跨渠道共用、口径见 `ipc-checklist-6726.md` §16.7。上一版 `1.0.9 (2026-10-09)`。
+**发布状态**:`1.2.1 (2026-10-20)` 开发版(网页设置页 + 配置即时下发),本地构建已出包;
+版本号跨渠道共用、口径见 `ipc-checklist-6726.md` §16.7。上一版 `1.2.0 (2026-10-16)`。
 
 **本地桥(core/)**:零依赖 Node.js,已通过本地端到端测试
 (health / config 读写与打码回传 / translate 与 test 的真实 HTTP 链路;
@@ -74,9 +74,14 @@ Bing 免 Key 与 Microsoft 双服务商均已实测,真实译文验证通过)。
    + `boot: config synced from bridge`(配置读通,探针定论后约 2 秒落地)
 4. 训练场/机器人房间打开聊天,发一条外语消息
 5. 期望:几秒内消息下方出现译文;`logs\bridge.log` 出现 `translate ok`
-6. 设置面板:`/tr` 打开 → 服务商 bing → 测试 → 保存(无需任何 Key)
+6. 设置:`/tr` 打开桌面网页(或 `/tr panel` 开旧面板)→ 服务商 bing → 测试 → 保存(无需任何 Key)
    日志应出现 `diag-nav … op=test / op=config` + `config saved`(经 https 同秒落盘);
    证书未信任时走位泵慢通道,保存以数十秒计,属预期(见 `docs/btipc-https-v1.md` §7)
+6b. **配置下发链路**(网页设置页):游戏日志应出现
+   `cfg watch(push): armed (请求面板长轮询…)`;此时在网页改任意「游戏内行为」选项并保存,
+   游戏日志应在**1 秒内**出现 `cfg watch(push): config changed (rev=…)` + `applied (…)`
+   (机制见 `docs/btipc-https-v1.md` §9;若只看到 `cfg watch: bridge config changed`,
+   说明推送没挂上、正在走 15s 轮询兜底)
 7. 打字发一条本已是目标语言的短语(如 `ggwp`)→ HUD 顶栏气泡下应挂出译文
 8. 快捷语音轮盘发几条(如 `上了` / `攻击 1 级` / `谢了!`)→ 应**不**被翻译
 9. 聊天滚动(消息多到回收)后,译文应从缓存重建

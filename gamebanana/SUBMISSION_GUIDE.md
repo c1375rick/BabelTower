@@ -20,7 +20,7 @@
   - `dist\BabelTower-0.1.0-win64.zip`(完整安装包,35.1 MB)
   - 建议同时注明"源代码见 GitHub:https://github.com/c1375rick/BabelTower"
 - **Images(强烈建议 2-3 张)**:
-  - 设置面板截图(进游戏 /tr 打开面板后截图)
+  - 网页设置页截图(进游戏 /tr 用浏览器打开设置页后截图)
   - 翻译效果截图(聊天里有外语消息 + 金色译文)
   - 占位图:`banner_placeholder.png`(本目录,可先用;建议之后换真截图)
 - **Version**: 0.1.0(与文件版本一致)

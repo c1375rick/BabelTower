@@ -44,7 +44,8 @@
 1. 轮询扫描 `ChatMessages` 子面板(快节奏 0.2s / 慢节奏 0.8s)
 2. 从每行提取:频道(ChannelName)、发送者(SenderName)、正文(MessageContents)
 3. 签名 = `channel \x00 sender \x00 text`,用于去重(Set)与缓存(Map)
-4. 过滤:空/短文本、纯数字符号、`/` 指令、自己的消息、已为目标语言(启发式)
+4. 过滤:空/短文本、纯数字符号、`/` 指令、自己的消息、已为目标语言(启发式);
+   **总开关 `enabled=false` 时收发都不翻**(见 §5)
 5. 入队 → 串行翻译(MAX_ACTIVE=1)→ 成功追加译文 Label / 失败红字(重试 1 次);
    翻译请求经 §4.2 的通道送桥(https 优先,BTIPC 兜底)、译文从同一条信道读回
 6. 聊天滚动回收后,签名命中缓存则自动重建译文
@@ -54,7 +55,9 @@
 ## 3. 消息流(发)
 
 - `chat.xml` 的 TextEntry `oninputsubmit` 改由 `LCTOnChatSubmit()` 接管
-- `/tr` → 打开设置面板,不发送
+- `/tr` → 让桥用系统默认浏览器打开桌面设置页 `/ui`(不发送);`/tr panel` → 只开游戏内旧面板
+- **网页设置页**(`core/web/ui.html`,由桥在 8791 提供):10 种界面语言(默认跟随游戏界面语言)、
+  翻译服务表单、游戏内行为卡片、通道健康卡;保存后经 §4.3 的推送链路 <1 秒生效
 - 发送前翻译开启 → 先翻译输入文本(经 §4.2 的通道,超时/通道不可用则**按原文发送**),
   再派发 `CitadelChatInputSubmitted` 事件触发原版发送(该事件路径在 poker 系 mod 中已验证可用)
 - 其余情况直接派发事件,行为与原版一致
@@ -68,9 +71,13 @@
 | `/btipc/dl?w&r&p&t` | GET | **① BTIPC 下行**:位=1 → 200 PNG,位=0 → 404(见 [btipc-v1.md](btipc-v1.md)) |
 | `[LCT] BTIPC REQ/CAN ...` | console.log tail | **① BTIPC 上行**:游戏写结构化行,桥轮询 `console.log` 读回 |
 | `/bridge?id=..&op=..&text=..&source=..&target=..` | GET | **③** 隐藏面板页面;结果写回 document.title = `LCT<id>+JSON` |
+| `/bridge?op=watch&rev=..` | GET | **配置变更长轮询**:页面把标题写成 `lct-watch`,桥在配置变化时立刻回 `LCTW{…}`(见 §4.3) |
+| `/api/v1/watch?rev=..` | GET | 配置指纹长轮询(同上,页面内部 fetch 用) |
 | `/api/v1/translate` | POST | `{operation,provider,text,sourceLanguage,targetLanguage}` → `{ok,translation,detectedLanguage}` |
 | `/api/v1/test` | POST | 用当前配置翻译固定文本,验证 Key |
-| `/api/v1/config` | GET/POST | 读(打码)/写(支持打码回传)配置 |
+| `/api/v1/config` | GET/POST | 读(打码)/写(支持打码回传)配置;POST 带 `{"revOnly":true}` 时只回 8 位配置指纹(约 30B) |
+| `/watch` | GET | 网页/游戏用的配置指纹页:标题里直接带指纹,零 JS 立即返回(轮询兜底用) |
+| `/ui` | GET | **网页设置页**(`core/web/ui.html`):`/tr` 用系统浏览器打开的就是它 |
 | `/api/v1/health` | GET | 健康检查 |
 | `/api/v1/quickchat` | GET | 快捷语音模板语料(桥从本机游戏 loc 实时生成,含指纹) |
 | `/api/v1/gamenames` | GET | 英雄/物品名保护名单(`config/gamenames.json`) |
@@ -122,11 +129,35 @@
   (`gamenames sync: fingerprint match` / `quickchat templates delta applied`);
   打包内置兜底(快捷语音 fallback 模板、硬编码 `PROTECT_NAMES`)仅在桥不可达时生效。
 
+### 4.3 配置下发:网页保存 → 游戏 <1 秒生效(2026-10-20)
+
+设置搬到**网页设置页**(`/tr` 用系统浏览器打开 `http://127.0.0.1:8791/ui`)后,网页保存只落
+`config/config.json`;游戏侧原本**只在开机读一次**(`boot: config synced from bridge`),
+于是"网页改了游戏不认"。现在的下发链路:
+
+```
+网页点保存 ──POST /api/v1/config──▶ 桥落盘 + 记下新指纹(configRev)
+                                    │
+                                    ├─▶ 叫醒游戏挂在桥上的长轮询 /api/v1/watch?rev=<上次指纹>
+                                    │      (指纹已变 → 立刻回 {ok,rev,changed:true};没变 → 挂住 ≤20s)
+                                    ▼
+        页面把应答写进 document.title = LCTW{…} ──引擎事件──▶ 游戏读到 → 重读配置 → 落地
+```
+
+- **信号走标题通道,整份配置不走**:标题通道约 512 字符上限,配置约 400 字节,塞不下也不该塞。
+- 指纹由 `maskCompact` 派生(`core/config.js` 的 `configRev()`):内容不变则指纹不变,
+  桥重启后指纹也不变(内容派生,不是计数器)。
+- 兜底:15s 一次的指纹轮询(推送没挂上时顶班)。
+- 面板标题的三个引擎行为(经**事件**送达/同帧标题变更会合并/第二个 HTML 面板的标题事件收不到)
+  与最终实现,见 [btipc-https-v1.md](btipc-https-v1.md) §9。
+- 实测:网页保存 → 桥落盘 <100ms → 游戏读到信号 <200ms → 重读落地 ~100ms ⇒ **合计 <1 秒**。
+
 ## 5. 配置
 
-- **桥配置**(`config/config.json`,含 apiKey):由设置面板经桥写回,或手动编辑
+- **桥配置**(`config/config.json`,含 apiKey):由**网页设置页**或游戏内旧面板经桥写回,或手动编辑
 - **游戏侧 UI 偏好**(enabled/displayMode/outgoing/outgoingTarget/force/timeoutMs):
   存于根面板属性 + convar `lct_ui`,不包含任何密钥
+- **"启用翻译"是总开关**:关掉后**收发都不翻译**(2026-10-20 修:此前它只管发送前翻译)
 
 ## 6. 翻译服务商
 

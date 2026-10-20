@@ -246,9 +246,9 @@
 | **4. 保存扩围到面板通道** | 用户反馈「OpenAI 的 API 老是保存不上」。根因纯算术:带 Key 载荷 ≈600B,位泵 10B/帧 → 61 帧 ≈ **38s**,而写死线只有 **8s**(死线按**应答** 1 帧定,没算上行 61 帧)→ 必然 `REQ_TIMEOUT`。同根因的 `op=log`(600B 批)与读配置(7.8–26s)一并接入。**代价:BTIPC 兜底那条路的 8s 写死线未动**(判死退回位泵时保存会照旧失败) |
 | **5. 日志打码** | 保存载荷经 URL 查询串 `?d=` 带 Key 进来 → `core/bridge_https.js` 的 `redactUrl()` 与游戏侧 `diag-nav` **按值打码**,不靠截断长度(实测 Key 在第 ~132 字符而日志取 96 —— 那是算术余量,字段一变短就没了)。**BTIPC 侧**:上行 b64 是运输通道(`transport.js` 的 `REQ_RE` 从该行解析)不能改 → 改为桥抄进 `bridge.log` 时打码,协议侧仍收原样行 |
 | **6. 证书信任实测** | 对照实验双向验证(撤销信任不重启 Steam 仍 `ALIVE` vs 完全退出 Steam 报 `not usable` + `TLS_ALERT_CERTIFICATE_UNKNOWN`)。结论:**游戏确实校验证书;信任缓存在 Steam 进程,只重启游戏无效;撤销信任同样要重启 Steam;不需要管理员** |
-| **7. 版本口径** | `VERSION` / `lingua_chat.js const VERSION` / README 三处同步 1.2.0。**升版两处必须一起改**的护栏再次验证(只改一处 → 全链挂)。**构建标 btipc09**:BTIPC 路由语义变了(config/test/log/读 在面板判活时不再走位泵),与 btipc08 线区分;`core/btipc/*` 零改动 |
+| **7. 版本口径** | `VERSION` / `lingua_chat.js const VERSION` / README 三处同步 1.2.1(README 版本行改 1.2.1 时**另两处必须一起改**的护栏再次验证:只改一处→全链路红)。**构建标 btipc10**:BTIPC 请求语义变了(op=config 新增 `{"revOnly":true}` 轻量读,约 30B 只回 8 位指纹),与 1.2.0 的 btipc09 线区分;`core/btipc/*` 零改动 |
 | **8. 发行包补 VERSION** | 打包脚本只读 `VERSION` 命名 zip 从不拷它 → 1.0.9~1.2.0 **全部发行包都没有 VERSION** → 用户侧 health 恒报 `unknown`、version-check 的 `currentVersion` 恒为 `null`(而它是"有没有新版本"的比较基准)。已修并加进 `$requiredUserEntry`(缺一个拒绝出包)。**放错位置也踩一次**:拷贝放在断言之后 → 断言当场拦下出包 |
 | **9. 测试入口加语法关** | 护栏只读源码做正则、不 require 产品模块 → `bridge_server.js` 正则语法错时**全链 33/33 全绿而桥起不来**。`tests/run-tests.js` 加**第 0 关**:对 19 个随包 JS 做 `node --check`,语法错直接红 |
 | **护栏** | 新增 `https_panel_guard`(85 项)/`release_entry_guard`(73 项)/`log_redaction`(8 项);`run-tests.js` 显式清单登记(33 项,**全链 33/33**) |
 | **发行** | `BabelTower-1.2.0-win64.zip` 35.4MB,sha256 `584875C8…`,56→57 条目(补 VERSION);冒烟通过;装车 pak15_dir.vpk 494888B(sha `7DA5CBB2…`)与包内 pak 一致;addons 扫内容标记确认仅此一份、无双载 |
-| **版本口径表** | 1.1.0 → btipc08;**1.2.0 → btipc09** |
+| **版本口径表** | 1.1.0 → btipc08;**1.2.0 → btipc09**;**1.2.1 → btipc10** |

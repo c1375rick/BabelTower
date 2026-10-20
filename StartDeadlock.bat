@@ -73,5 +73,5 @@ rem (steam://rungameid/ has no argument slot). One-time alternative:
 rem Steam library -> Deadlock -> Properties -> Launch Options -> -condebug
 start "" "steam://run/1422450//-condebug"
 
-echo [LCT] Done. In game: open chat (Enter), type /tr to open settings.
+echo [LCT] Done. In game: open chat (Enter), type /tr to open the web settings page.
 endlocal

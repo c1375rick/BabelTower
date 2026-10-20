@@ -5,6 +5,8 @@
 
 - 架构:全景(游戏内 Panorama 界面)+ 本地翻译桥(Node.js 本地服务)+ 翻译服务商
 - 默认服务商:**Bing Translator(公共免费接口,免 Key,国内直连可用)**;可选 Microsoft / DeepL / OpenAI 兼容
+- **设置入口:本地网页**(`/tr` 用系统浏览器打开 `http://127.0.0.1:8791/ui`),
+  10 种界面语言,改完**游戏里 <1 秒生效**;游戏内旧面板保留为调试/兜底(`/tr panel`)
 - 原理:聊天行扫描 → 去重/缓存 → **BTIPC 本地信道**送本地桥 → 译文追加显示
   (游戏移除 `$.AsyncWebRequest`、6726 更新废掉面板导航后,BTIPC 是唯一在用的通道;
   三条通道与派发顺序见 [docs/architecture.md](docs/architecture.md) §4.2)
@@ -12,7 +14,14 @@
   拉全量名单(292 条,随游戏更新刷新),拉不到时用打包内置的 60 条兜底名单
 - 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
-> 版本:1.2.0 (2026-10-15)
+> 版本:1.2.1 (2026-10-20)
+>
+> **1.2.1**:设置面板搬到**本地网页** —— `/tr` 用系统默认浏览器打开 `http://127.0.0.1:8791/ui`
+> (10 种界面语言,默认跟随游戏界面语言;游戏内旧面板保留为调试/兜底,`/tr panel` 打开);
+> 配置下发从"只开机读一次"改成**推送**:网页保存后游戏 **<1 秒**生效,不用重启游戏
+> (桥主动推"配置变了"的信号,游戏再自己去读配置 —— 机制与踩过的三个引擎行为坑见
+> [docs/btipc-https-v1.md](docs/btipc-https-v1.md) §9);
+> "启用翻译"改为**总开关**(关掉后收发都不翻译)。
 >
 > **1.2.0**:新增 **https 面板通道**并已转正 —— 翻译下行从位泵的 3.0–27.4s 降到 **1 秒以内**
 > (BTIPC 保留为兜底,证书未信任时体感与旧版一致);修掉"翻译慢 8 秒"的真因(bing 命中限流在
@@ -26,13 +35,14 @@
 ```
 BabelTower/
 ├── mod/panorama/          游戏内 UI 源码(需编译成 VPK 安装)
-│   ├── layout/chat.xml      聊天布局覆盖(含设置面板)
+│   ├── layout/chat.xml      聊天布局覆盖(含游戏内旧设置面板)
 │   ├── scripts/lingua_chat.js  主逻辑:扫描/去重/缓存/桥接/设置(内部代号 LCT)
-│   └── styles/lingua_chat.css  译文与设置面板样式
+│   └── styles/lingua_chat.css  译文与旧设置面板样式
 ├── core/                  本地翻译桥(Node.js,零依赖)
-│   ├── bridge_server.js      桥服务器(/api/v1/* + /bridge + BTIPC 路由)
+│   ├── bridge_server.js      桥服务器(/api/v1/* + /bridge + /watch + BTIPC 路由)
+│   ├── web/ui.html           网页设置页(10 种语言;/tr 用系统浏览器打开它)
 │   ├── btipc/                BTIPC 信道实现(crc16 / framer / window / transport)
-│   ├── config.js             本地配置管理(apiKey 打码)
+│   ├── config.js             本地配置管理(apiKey 打码 + 配置指纹 configRev)
 │   ├── dictionary.js         自适应学习词典(短词直译,见下方教程)
 │   └── providers/            Bing(免 Key)/ Microsoft 双服务商
 ├── config/config.example.json  桥配置示例(复制为 config.json 使用)
@@ -67,7 +77,7 @@ BabelTower/
    - **推荐**：用 Deadlock Mod Manager 导入（自动分配空闲 pak 槽位）
    - 或手动：把包里的 `pak01_dir.vpk` 复制到 `game/citadel/addons/` 目录（改名为空闲的 `pakNN_dir.vpk`，**不要覆盖其它 mod，也不要同时放两份我们的包**）
 3. （推荐）安装 [Universal Mod Manager](https://gamebanana.com/mods/693642)：
-   游戏内设置窗口，调 Babel Tower 选项不用开 `/tr` 面板（见下方 [UMM 设置联动](#ummuniversal-mod-manager设置联动)）
+   游戏内设置窗口，调 Babel Tower 选项不用开 `/tr`（见下方 [UMM 设置联动](#ummuniversal-mod-manager设置联动)）
 4. 给 Deadlock 加 `-condebug` 启动参数（**必做，只需设置一次**）—— 游戏不带它就不会写
    `game/citadel/console.log`，而桥只能从该文件读回游戏侧消息（BTIPC 上行的唯一通路），
    缺了它 mod 表现为**装了完全没反应**：
@@ -90,14 +100,35 @@ BabelTower/
 
 | 操作 | 说明 |
 | --- | --- |
-| 聊天输入 `/tr` 回车 | 打开设置面板(鼠标锁定也能用) |
-| 输入框右侧 **译** 按钮 | 打开设置面板(鼠标可用时) |
-| 设置面板 | 选项均为**点击选择**,改完点**保存**生效;点右下角 **X** 关闭 |
-| [UMM](https://gamebanana.com/mods/693642) 设置窗口 | **装了 UMM 的用户推荐用这个**(见下),不用再开 `/tr` |
+| 聊天输入 `/tr` 回车 | **用系统默认浏览器打开网页设置页** `http://127.0.0.1:8791/ui`(鼠标锁定也能用) |
+| 聊天输入 `/tr panel` 回车 | 只开**游戏内旧设置面板**(调试/兜底用,见下方[网页设置页](#网页设置页桌面浏览器)) |
+| 输入框右侧 **译** 按钮 | 打开游戏内旧设置面板(鼠标可用时) |
+| 网页设置页 | 选项均为**点击选择**,改完点**保存**生效,**游戏里 <1 秒内生效**,不用重启游戏 |
+| [UMM](https://gamebanana.com/mods/693642) 设置窗口 | **装了 UMM 的用户推荐用这个**(见下),不用再开 `/tr`;网页设置页(`/tr`)功能更全,两者共用同一份配置 |
 
-设置项:
+### 网页设置页(桌面浏览器)
 
-- **启用翻译**:总开关
+`/tr` 打开的是**本地网页**(`http://127.0.0.1:8791/ui`,由本地桥提供,不走游戏内任何通道),
+比游戏内面板好用得多:
+
+- **多语言**:页面支持 简体中文 / 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch /
+  Español / Русский / Português (Brasil) 共 10 种;右上角可手动切换,默认**跟随游戏界面语言**
+  (游戏每次与桥通信都会报上自己的界面语言,见 `docs/btipc-https-v1.md` §9)。
+- **翻译服务**:选服务商(Bing 免 Key / Microsoft / DeepL / OpenAI 兼容 / Google)、填 Key、
+  回退链、超时、源/目标语言 —— Key 只写本地 `config/config.json`,页面上永远是打码的。
+- **游戏内行为**:翻译总开关(关掉后**收发都不翻译**)、显示模式、发送前翻译、发送目标语言、
+  强制翻译、游戏侧等待超时。**保存后游戏 <1 秒内生效**(桥主动推送"配置变了"的信号,
+  游戏再自己去读配置,机制见 `docs/btipc-https-v1.md` §9)。
+- **通道健康**:一张表实时显示游戏↔桥的四条通路(BTIPC 下行/上行、HTML 桥页加载、桥页取数)
+  的最近活跃时间,用来判断"是没连上,还是只是没说话"。
+- **高级**:整份配置(打码 JSON)可直接编辑保存。
+
+> 游戏内的旧面板还在(`/tr panel` 或点 **译** 按钮),保留为**调试/兜底**入口:
+> 它读的是开机缓存,改配置后要重启游戏才刷新;日常设置请用网页。
+
+设置项(网页与游戏内面板共用同一份 `config/config.json`):
+
+- **启用翻译**:总开关(关掉后收发都不翻译)
 - **服务商**:`bing(免 Key)` 默认 ⇄ `microsoft(Azure Key)`
 - **API Key / 区域**:仅 Microsoft 需要填写(Key 只保存在本地 `config/config.json`,打码显示)
 - **目标语言**:下拉选择(简中/繁中/英/日/韩/法/德/西 + 自定义)
@@ -201,7 +232,9 @@ BabelTower/
 - planned **统一通信通道**:health / 快捷语音语料 / 名称保护同步也迁到 BTIPC,
   清掉旧面板通道每 15s 一条的死链日志
 - planned **翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默
-- planned **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
+- ✅ **网页设置页**:设置面板搬到本地网页(`/tr` 用系统浏览器打开),10 种界面语言
+  (默认跟随游戏语言),保存后游戏 **<1 秒**生效;游戏内旧面板保留为调试/兜底
+  (见 [docs/btipc-https-v1.md](docs/btipc-https-v1.md) §9)
 - planned **Linux 移植**:支持 Steam Deck / Proton 环境
 
 ### UMM(Universal Mod Manager)设置联动
@@ -259,7 +292,8 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 遇到翻译失败/不显示/桥连不上时,按下面的步骤收集调试信息再反馈
 (详细图文教程见 **[docs/debugging.md](docs/debugging.md)**):
 
-1. **看桥状态**:游戏内 `/tr` 打开设置面板,「本地桥状态」绿色=运行中,红色=未运行
+1. **看桥状态**:浏览器打开 `http://127.0.0.1:8791/ui`(游戏内 `/tr` 同址),
+   页面顶部的「通道健康」卡片会显示游戏↔桥四条通路的最近活跃时间
    (未运行先双击 `restart_bridge.bat`)
 2. **看桥日志**:用记事本打开 `logs\bridge.log`,找 `translate failed:` 开头的行,
    那就是失败原因(如 `翻译失败(429)`=限流、`接口拒绝访问(401/403)`=接口拒绝)
@@ -279,7 +313,7 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 | 译文显示"本地桥未运行" | 确认桥在运行(自启/StartDeadlock.bat/手动 node);或看 `logs\bridge.log` |
 | 翻译失败,日志出现 429 | 公共接口限流,桥会自动退避重试;频繁出现可切 Microsoft 或稍后再试 |
 | 401/403(用 Microsoft 时) | Key 错误;403 检查是否需填区域 |
-| 完全不翻译 | 检查"启用翻译"、目标语言;确认桥日志有请求进来 |
+| 完全不翻译 | 检查"启用翻译"(总开关)、目标语言;网页设置页顶部「通道健康」看游戏是否连着桥;游戏内 `/tr panel` 看旧面板的状态行 |
 | 聊天发不出去 | 见 docs/development.md 的回退方案 |
 | 装了/卸了其它 mod 后翻译失效 | Mod Manager 里检查 Babel Tower 是否仍"已启用";pak 槽位可能被重新分配,重新用 Mod Manager 导入一次即可,无需重下完整包 |
 | 其它 | 按[调试教程](docs/debugging.md)收集信息后[提 Issue](https://github.com/c1375rick/BabelTower/issues) |

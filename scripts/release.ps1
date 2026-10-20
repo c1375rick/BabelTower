@@ -108,7 +108,7 @@ $logSection
 ## 安装(3 步)
 1. 解压 zip,Mod Manager 导入 pak01_dir.vpk
 2. powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
-3. 游戏内 /tr → 测试 → 保存
+3. 游戏内 /tr → 浏览器打开网页设置页 → 测试连接 → 保存(游戏 1 秒内生效)
 
 详细说明见包内《安装使用说明.txt》。
 "@
