@@ -267,6 +267,7 @@ if ($Status) {
 Say ("证书(可选提速): " + $(if ($certTrusted) { "已信任 " + $certThumb } else { "未信任 —— 翻译仍走 BTIPC,功能不受影响" }))
 if (-not $Status) {
   Say ("https 面板通道: " + $(if ($httpsOk) { "端口通;进游戏看 console.log 有没有 https panel: ALIVE" } else { "不可用 —— 翻译走 BTIPC 位泵(3~27s)" }))
+  Say ("网页设置页    : " + $(if ($httpOk) { "http://127.0.0.1:8791/ui  (游戏内按 /tr 就打开它)" } else { "桥不通,先修桥" }))
 }
 Write-Host ""
 if ($certTrusted) {
@@ -274,12 +275,16 @@ if ($certTrusted) {
   Write-Host "  1) **完全退出 Steam**(托盘图标也退掉)"
   Write-Host "  2) 重新打开 Steam"
   Write-Host "  3) 启动游戏,进对局发一条消息"
+  Write-Host "  设置:游戏内按 /tr —— 浏览器会打开网页设置页(服务商/语言/游戏内行为都在那儿;"
+  Write-Host "        改完点保存,**游戏 1 秒内生效**,不用重启)"
   Write-Host "  原因:信任库由 Steam 宿主缓存,**只重启游戏不生效**(实测)。"
   Write-Host "  验没验上:游戏 console.log 里出现 [LCT] https panel: ALIVE 即成功;"
   Write-Host "           出现 https panel: not usable 说明还有问题,把那一行发给我们。"
 } else {
   Write-Host "下一步:把上面的 pak01_dir.vpk 复制到 addons\pak15_dir.vpk(游戏退出状态下),"
   Write-Host "        然后启动游戏即可。想要低延迟通道,再跑一次本脚本并同意加入证书信任。"
+  Write-Host "设置:游戏内按 /tr —— 浏览器会打开网页设置页(服务商/语言/游戏内行为都在那儿;"
+  Write-Host "      改完点保存,游戏 1 秒内生效,不用重启。"
 }
 Write-Host ""
 Say "日志: $LogFile"

@@ -198,7 +198,7 @@ try {
   Say ("解压失败: " + $_.Exception.Message) "error"
   exit 1
 }
-$need = @("core\bridge_server.js", "core\bridge_https.js", "portable-node\node.exe", "pak01_dir.vpk",
+$need = @("core\bridge_server.js", "core\bridge_https.js", "core\web\ui.html", "portable-node\node.exe", "pak01_dir.vpk",
   "scripts\restart_bridge.ps1", "scripts\gen_bridge_cert.ps1", "scripts\update_babeltower.ps1")
 $missing = @()
 foreach ($f in $need) { if (-not (Test-Path (Join-Path $unzip $f))) { $missing += $f } }
@@ -283,4 +283,5 @@ Say ("版本: " + $localVer + " -> " + $remoteVer)
 Say ("下载包保留在: " + $zipPath)
 if ($pakSwap) { Say ("旧 mod 包备份: " + $pakSwap + "(要回滚就把它改回原名)") }
 Say "建议接着跑一次 diagnose-babeltower.bat 确认各项正常。"
+  Say "设置:游戏内按 /tr —— 浏览器打开网页设置页(1.2.1 起;游戏内旧面板用 /tr panel)。"
 exit 0

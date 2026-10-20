@@ -125,6 +125,17 @@ if ($health -and $health.ok) {
 } else {
   Bad "桥 http" "不通(8791 无响应或返回非 ok)" "健康检查 3 秒内必须 200 且 ok:true" "双击 install-autostart.bat 或 restart_bridge.bat"
 }
+# 网页设置页(1.2.1 起:游戏内 /tr 打开的就是它)
+try {
+  $ui = Invoke-WebRequest -Uri "http://127.0.0.1:8791/ui" -UseBasicParsing -TimeoutSec 3
+  if ($ui.StatusCode -eq 200 -and $ui.Content -match 'id="uiLang"') {
+    Ok "网页设置页" "可达(http://127.0.0.1:8791/ui)" "1.2.1 起:游戏内按 /tr 用浏览器打开这个页面;服务商/语言/游戏内行为都在那儿,保存后游戏 1 秒内生效"
+  } else {
+    Warn "网页设置页" "返回了 " + $ui.StatusCode + ",但不是预期的设置页" "core\web\ui.html 缺失或被改坏;游戏内 /tr 会打开一个打不开的页面"
+  }
+} catch {
+  Warn "网页设置页" "打不开" "桥不通或 core\web\ui.html 缺失;游戏内 /tr 会打不开浏览器页面"
+}
 
 # 桥配置:只报"设没设",绝不报值
 $cfgPath = Join-Path $Root "config\config.json"
