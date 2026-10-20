@@ -581,10 +581,10 @@ if (record.quick) {
 
 | 位置 | 含义 | 当前值 |
 |---|---|---|
-| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.0-6726-btipc09`(已发布;构建标 **btipc09** —— BTIPC 路由语义变了:config/test/log/读 在面板通道判活时不再走位泵,与 btipc08 线必须区分) |
-| `VERSION` 文件 | 开发/发布号 | `1.2.0`(已发布) |
-| GitHub Release tag | **已发布版** | `v1.2.0` = **Latest**(@ `482c70a`,发布 `2026-10-16T03:54:07Z`),资产 `BabelTower-1.2.0-win64.zip`(37,095,525B)+ `pak01_dir.vpk`(501,053B),双资产字节数与本地逐字节一致 |
-| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.0`(文件 `babeltower-120-win64_3df0e.zip` / `File_1850082`;条目 `700107`;更新条目已发,列表页 Updates 最新 = 1.2.0) |
+| `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.1-6726-btipc10`(已发布;构建标 **btipc10** —— BTIPC 请求语义变了:op=config 新增 `{"revOnly":true}` 轻量读,约 30B 只回 8 位指纹,与 btipc09 线必须区分) |
+| `VERSION` 文件 | 开发/发布号 | `1.2.1`(已发布) |
+| GitHub Release tag | **已发布版** | `v1.2.1` = **Latest**(@ `dbdd9c4`,发布 `2026-10-20T13:52:40Z`,target `push/code-only`),资产 `BabelTower-1.2.1-win64.zip`(37,128,950B)+ `pak01_dir.vpk`(507,458B),双资产字节数与本地逐字节一致 |
+| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.1`(文件 `babeltower-121-win64_0b6da.zip` / `File_1856731`;条目 `700107`;更新条目 `466593` 已发,列表页 Updates 最新 = 1.2.1;1.2.0 的历史条目保留) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
 > **1.0.8 起断言不再写死具体版本号**:原来 `/1\.0\.7-6726-btipc\d/` 每次升版都得手改一次、
@@ -716,6 +716,31 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 填 `Note` select 不接受、落库为无类型(显示 `-`),已改 `Adjustment` 并在 `gb_add_update5.js` 注记;
 ② PS5.1 下 `[IO.File]::Replace($src,$dst,$null)` 的 `$null` 绑成空串抛「路径的形式不合法」,必须传真实备份路径(§12 探针);
 ③ `package_release.ps1` 压缩撞实时防护扫描窗口重试即过(已知窗口,1.0.10 记录同源);新增 `scripts/gb_add_update5.js`。
+
+#### 1.2.1 发版记录(2026-10-20)
+
+**发版前查重(铁律,两渠道都查)**:`gh release list` 最新为 `v1.2.0`;GB 列表页文件列表无 1.2.1 —— 两渠道均未消费,可发。
+
+| 渠道 | 落位结果 |
+|---|---|
+| GitHub | 代码推 `origin/push/code-only`(`122c961` feat + `dbdd9c4` docs);`v1.2.1` = **Latest**(发布 `2026-10-20T13:52:40Z`),资产 `BabelTower-1.2.1-win64.zip`(37,128,950B)+ `pak01_dir.vpk`(507,458B),`gh release view` 回读双资产字节数与本地逐字节一致 |
+| GameBanana | 上传 `babeltower-121-win64_0b6da.zip`(`File_1856731`);文件行版本 `1.2.1`;**全局版本 `1.2.1`**(回读探针 `GLOBAL VERSION: "1.2.1"`);更新条目 `466593`(标题「1.2.1 网页设置页(10 种语言) + 配置即时下发(保存后 1 秒生效)」)含 **5 条 changelog**(1×Feature 设置面板搬到本地网页 / 1×Feature 配置即时下发 / 1×Bugfix 启用翻译改为总开关 / 1×Improvement 通道健康卡+高级 JSON+免 Key 判定 / 1×Adjustment /tr 语义)+ blurb,并绑定本版文件;1.2.0 的历史条目保留未动 |
+| 包内自报 | `README.md` 记 `1.2.1 (2026-10-20)`;zip 内 `VERSION` = `1.2.1`(package_release.ps1 的 `$requiredUserEntry` 强制携带),`core/web/ui.html` 在包内(网页设置页,缺它 `/tr` 会开 404) |
+| 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `2842631F…`);备份 `pak15_dir.vpk.bak-20261020-v121` |
+| 一致性 | 34/34 全链(停桥铁律:`git checkout -- config/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`) |
+
+**本版内容(三条主线)**
+
+1. **设置面板搬到本地网页**(`core/web/ui.html`,桥 8791 提供):`/tr` 用系统默认浏览器打开网页设置页(`/tr panel` 保留游戏内旧面板作调试/兜底);10 种界面语言(默认跟随游戏界面语言,游戏每次与桥通信带 `&lang=` 上报,右上角可覆盖);服务商表单(免 Key 判定改用 `acceptsKey`,bing 不收 Key 不再误显示输入框)/ 测试连接 / 回退链 / 通道健康卡(游戏↔桥四条通路最近活跃时间)/ 高级 JSON。
+2. **配置即时下发**:此前网页保存只落 `config/config.json`、游戏只在开机读一次 → 「网页改了游戏不认」。改为桥主动推「配置变了」的信号(长轮询 `/api/v1/watch?rev=<指纹>` + 保存时叫醒),游戏再自己去读配置,**网页保存 → 游戏生效 <1 秒**。三个引擎行为坑(标题经**事件**送达而非 `panel.title` 属性;同一帧两次标题变更被合并;第二个 HTML 面板的标题事件收不到)记在 `docs/btipc-https-v1.md` §9。
+3. **「启用翻译」改为总开关**:此前它只管发送前翻译(收消息照翻),标签却写着「启用翻译」,语义对不上;现在关掉后收发都不翻。
+
+**发版过程新获事实**
+
+- `github.com:443` 直连不通(本机 10809 代理在跑)→ `git push`/`gh release` 需带代理;`scripts/release.ps1` 已自带代理探测,`git push` 需 `-c http.proxy=…`。
+- 打包时 `portable-node\node.exe` 被正在运行的桥占用 → `Compress-Archive` 报「文件正在使用」,**先停桥再打包**(release.ps1 不含这一步)。
+- GB 编辑页上传文件:直接给隐藏 `<input type=file>` 赋文件**不会**新建版本行(rows 18→18、页面上也搜不到文件名);必须点页面自己的「Select files」按钮走 fileChooser(自动化的 fileChooser 路由也不稳,最终**人工点**才落位)。版本号只能填在**最后一行**(新行),否则会覆盖上一版的版本行。
+- GB 的 cookie 文件会过期而浏览器 profile 的会话仍有效 → 脚本先看表单在不在,不在再补 cookie 重载(别用过期 cookie 顶掉新会话)。
 
 #### 1.2.0 发版记录(2026-10-16)
 
