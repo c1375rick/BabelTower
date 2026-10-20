@@ -583,8 +583,8 @@ if (record.quick) {
 |---|---|---|
 | `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.1-6726-btipc10`(已发布;构建标 **btipc10** —— BTIPC 请求语义变了:op=config 新增 `{"revOnly":true}` 轻量读,约 30B 只回 8 位指纹,与 btipc09 线必须区分) |
 | `VERSION` 文件 | 开发/发布号 | `1.2.1`(已发布) |
-| GitHub Release tag | **已发布版** | `v1.2.1` = **Latest**(@ `dbdd9c4`,发布 `2026-10-20T13:52:40Z`,target `push/code-only`),资产 `BabelTower-1.2.1-win64.zip`(37,128,950B)+ `pak01_dir.vpk`(507,458B),双资产字节数与本地逐字节一致 |
-| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.1`(文件 `babeltower-121-win64_0b6da.zip` / `File_1856731`;条目 `700107`;更新条目 `466593` 已发,列表页 Updates 最新 = 1.2.1;1.2.0 的历史条目保留) |
+| GitHub Release tag | **已发布版** | `v1.2.1` = **Latest**(@ `dbdd9c4`,发布 `2026-10-20T13:52:40Z`,target `push/code-only`),资产 `BabelTower-1.2.1-win64.zip`(37,129,507B,sha256 `B29BC830…`)+ `pak01_dir.vpk`(507,458B),双资产字节数与本地逐字节一致;**该 zip 在 23:03 因安装/诊断脚本改动重打包重发过一次**(`--clobber` 覆盖,发布说明同步更新) |
+| GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.1`(文件 `babeltower-121-win64_cf16c.zip` / `File_1856759`;条目 `700107`;更新条目 `466602` 已发,列表页 Updates 最新 = 1.2.1;1.2.0 的历史条目保留) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
 > **1.0.8 起断言不再写死具体版本号**:原来 `/1\.0\.7-6726-btipc\d/` 每次升版都得手改一次、
@@ -723,10 +723,11 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 
 | 渠道 | 落位结果 |
 |---|---|
-| GitHub | 代码推 `origin/push/code-only`(`122c961` feat + `dbdd9c4` docs);`v1.2.1` = **Latest**(发布 `2026-10-20T13:52:40Z`),资产 `BabelTower-1.2.1-win64.zip`(37,128,950B)+ `pak01_dir.vpk`(507,458B),`gh release view` 回读双资产字节数与本地逐字节一致 |
-| GameBanana | 上传 `babeltower-121-win64_0b6da.zip`(`File_1856731`);文件行版本 `1.2.1`;**全局版本 `1.2.1`**(回读探针 `GLOBAL VERSION: "1.2.1"`);更新条目 `466593`(标题「1.2.1 网页设置页(10 种语言) + 配置即时下发(保存后 1 秒生效)」)含 **5 条 changelog**(1×Feature 设置面板搬到本地网页 / 1×Feature 配置即时下发 / 1×Bugfix 启用翻译改为总开关 / 1×Improvement 通道健康卡+高级 JSON+免 Key 判定 / 1×Adjustment /tr 语义)+ blurb,并绑定本版文件;1.2.0 的历史条目保留未动 |
+| GitHub | 代码推 `origin/push/code-only`(`122c961` feat + `dbdd9c4` docs);`v1.2.1` = **Latest**(发布 `2026-10-20T13:52:40Z`),资产 `BabelTower-1.2.1-win64.zip`(37,129,507B,sha256 `B29BC830…`)+ `pak01_dir.vpk`(507,458B),`gh release view` 回读双资产字节数与本地逐字节一致;**该 zip 在 23:03 因安装/诊断脚本改动重打包重发过一次**(`gh release upload --clobber`,发布说明同步更新) |
+| GameBanana | 上传 `babeltower-121-win64_cf16c.zip`(`File_1856759`);文件行版本 `1.2.1`;**全局版本 `1.2.1`**(回读探针 `GLOBAL VERSION: "1.2.1"`);更新条目 `466602`(标题「1.2.1 网页设置页(10 种语言) + 配置即时下发(保存后 1 秒生效)」)含 **5 条 changelog**(1×Feature 设置面板搬到本地网页 / 1×Feature 配置即时下发 / 1×Bugfix 启用翻译改为总开关 / 1×Improvement 通道健康卡+高级 JSON+免 Key 判定 / 1×Adjustment /tr 语义)+ blurb,并绑定本版文件;1.2.0 的历史条目保留未动。**首发的更新条目 `466593` 因换包(旧文件被删除)而解绑,已 trash 并按新文件重发为 `466602`** |
 | 包内自报 | `README.md` 记 `1.2.1 (2026-10-20)`;zip 内 `VERSION` = `1.2.1`(package_release.ps1 的 `$requiredUserEntry` 强制携带),`core/web/ui.html` 在包内(网页设置页,缺它 `/tr` 会开 404) |
 | 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `2842631F…`);备份 `pak15_dir.vpk.bak-20261020-v121` |
+| 补发 | 23:03 安装/更新/诊断脚本补上「网页设置页」这条线(commit `7538e94`)→ 重打发行包(37,129,507B)→ GitHub `--clobber` 覆盖 + GB 换文件(`0b6da` → `cf16c`,条目 `466593` → `466602`)。**VPK 未变**(脚本改动不进 VPK),装车不需重做 |
 | 一致性 | 34/34 全链(停桥铁律:`git checkout -- config/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`) |
 
 **本版内容(三条主线)**
