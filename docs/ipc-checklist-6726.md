@@ -583,7 +583,7 @@ if (record.quick) {
 |---|---|---|
 | `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.1-6726-btipc10`(已发布;构建标 **btipc10** —— BTIPC 请求语义变了:op=config 新增 `{"revOnly":true}` 轻量读,约 30B 只回 8 位指纹,与 btipc09 线必须区分) |
 | `VERSION` 文件 | 开发/发布号 | `1.2.1`(已发布) |
-| GitHub Release tag | **已发布版** | `v1.2.1` = **Latest**(@ `dbdd9c4`,发布 `2026-10-20T13:52:40Z`,target `push/code-only`),资产 `BabelTower-1.2.1-win64.zip`(37,129,507B,sha256 `B29BC830…`)+ `pak01_dir.vpk`(507,458B),双资产字节数与本地逐字节一致;**该 zip 在 23:03 因安装/诊断脚本改动重打包重发过一次**(`--clobber` 覆盖,发布说明同步更新) |
+| GitHub Release tag | **已发布版** | `v1.2.1` = **Latest**(@ `2e5f6c4`,发布 `2026-10-20T13:52:40Z`;**tag 已归位**,见下方发版新获事实),资产 `BabelTower-1.2.1-win64.zip`(37,129,507B,sha256 `B29BC830…`)+ `pak01_dir.vpk`(507,458B),双资产字节数与本地逐字节一致;**该 zip 在 23:03 因安装/诊断脚本改动重打包重发过一次**(`--clobber` 覆盖,发布说明同步更新) |
 | GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.1`(文件 `babeltower-121-win64_cf16c.zip` / `File_1856759`;条目 `700107`;更新条目 `466602` 已发,列表页 Updates 最新 = 1.2.1;1.2.0 的历史条目保留) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
@@ -723,7 +723,7 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 
 | 渠道 | 落位结果 |
 |---|---|
-| GitHub | 代码推 `origin/push/code-only`(`122c961` feat + `dbdd9c4` docs);`v1.2.1` = **Latest**(发布 `2026-10-20T13:52:40Z`),资产 `BabelTower-1.2.1-win64.zip`(37,129,507B,sha256 `B29BC830…`)+ `pak01_dir.vpk`(507,458B),`gh release view` 回读双资产字节数与本地逐字节一致;**该 zip 在 23:03 因安装/诊断脚本改动重打包重发过一次**(`gh release upload --clobber`,发布说明同步更新) |
+| GitHub | 代码推 `origin/push/code-only`(`122c961` feat + `dbdd9c4` docs + `7538e94` 脚本 + `2e5f6c4` 补发记录);`v1.2.1` = **Latest**(发布 `2026-10-20T13:52:40Z`,**tag @ `2e5f6c4`**)；主页 `main` 已快进到 `2e5f6c4`(README 是 1.2.1 版),资产 `BabelTower-1.2.1-win64.zip`(37,129,507B,sha256 `B29BC830…`)+ `pak01_dir.vpk`(507,458B),`gh release view` 回读双资产字节数与本地逐字节一致;**该 zip 在 23:03 因安装/诊断脚本改动重打包重发过一次**(`gh release upload --clobber`,发布说明同步更新) |
 | GameBanana | 上传 `babeltower-121-win64_cf16c.zip`(`File_1856759`);文件行版本 `1.2.1`;**全局版本 `1.2.1`**(回读探针 `GLOBAL VERSION: "1.2.1"`);更新条目 `466602`(标题「1.2.1 网页设置页(10 种语言) + 配置即时下发(保存后 1 秒生效)」)含 **5 条 changelog**(1×Feature 设置面板搬到本地网页 / 1×Feature 配置即时下发 / 1×Bugfix 启用翻译改为总开关 / 1×Improvement 通道健康卡+高级 JSON+免 Key 判定 / 1×Adjustment /tr 语义)+ blurb,并绑定本版文件;1.2.0 的历史条目保留未动。**首发的更新条目 `466593` 因换包(旧文件被删除)而解绑,已 trash 并按新文件重发为 `466602`** |
 | 包内自报 | `README.md` 记 `1.2.1 (2026-10-20)`;zip 内 `VERSION` = `1.2.1`(package_release.ps1 的 `$requiredUserEntry` 强制携带),`core/web/ui.html` 在包内(网页设置页,缺它 `/tr` 会开 404) |
 | 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `2842631F…`);备份 `pak15_dir.vpk.bak-20261020-v121` |
@@ -738,6 +738,7 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 
 **发版过程新获事实**
 
+- **`gh release create` 默认把 tag 打在**远端默认分支(`main`)**的顶端**,不是本地 HEAD:1.2.1 首次发版时 tag 落到了 `main` 的 `f8e72d2`(1.1.0 状态)——发布页的 README 与 Source code 都指向旧代码,资产却是新的。已 `git tag -f` + `--force` 归位到 `2e5f6c4`;**发版后必须回读 `git rev-list -n 1 v<版本>` 与 tag 是否等于本地 HEAD**。
 - `github.com:443` 直连不通(本机 10809 代理在跑)→ `git push`/`gh release` 需带代理;`scripts/release.ps1` 已自带代理探测,`git push` 需 `-c http.proxy=…`。
 - 打包时 `portable-node\node.exe` 被正在运行的桥占用 → `Compress-Archive` 报「文件正在使用」,**先停桥再打包**(release.ps1 不含这一步)。
 - GB 编辑页上传文件:直接给隐藏 `<input type=file>` 赋文件**不会**新建版本行(rows 18→18、页面上也搜不到文件名);必须点页面自己的「Select files」按钮走 fileChooser(自动化的 fileChooser 路由也不稳,最终**人工点**才落位)。版本号只能填在**最后一行**(新行),否则会覆盖上一版的版本行。
