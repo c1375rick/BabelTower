@@ -155,6 +155,37 @@ function readSyncBaseline(kind) {
   }
 }
 
+// btipc11:配置版本历史 —— 给"配置差分同步"当基线。
+// 客户端上报自己的指纹 → 桥按指纹查"它手上那一版"的可见配置 → 只算差分(增删改)。
+// 为什么不像 gamenames/quickchat 那样读客户端的 *_fallback.js:配置是**运行时**被网页改的,
+// 客户端手上那一版的内容桥侧只能靠自己的历史反推(每存一版记一版)。
+// 桥重启后历史清空 → 客户端指纹查不到 → 退全量(慢但正确),下一次保存后历史重新长起来。
+const CONFIG_HISTORY_MAX = 16;
+const configHistory = [];
+
+function configHistoryPush(visible, fp) {
+  const last = configHistory[configHistory.length - 1];
+  if (last && last.fingerprint === fp) return; // 同指纹不重复记
+  configHistory.push({ fingerprint: fp, visible: visible });
+  while (configHistory.length > CONFIG_HISTORY_MAX) configHistory.shift();
+}
+
+function configHistoryBaseline(fp) {
+  if (!fp) return null;
+  for (let i = configHistory.length - 1; i >= 0; i--) {
+    if (configHistory[i].fingerprint === fp) return { fingerprint: fp, visible: configHistory[i].visible };
+  }
+  return null;
+}
+
+// 把当前配置记进历史(幂等);顺带覆盖"有人直接改了 config.json"的情况。
+function configHistoryNote() {
+  try {
+    const cfg = configStore.load();
+    configHistoryPush(configStore.maskCompact(cfg), configStore.configRev(cfg));
+  } catch (e) {}
+}
+
 function runBtipcGet(o) {
   const kind = String(o.get || "");
   if (kind === "health") {
@@ -170,11 +201,20 @@ function runBtipcGet(o) {
     }
     return r;
   }
+  const clientFp = typeof o.fp === "string" && o.fp ? o.fp : null;
+  const expect = typeof o.exp === "string" && o.exp ? o.exp : null;
+  // btipc11:配置差分同步(游戏可见配置)。两段式:握手报本地指纹 → same(1 帧)或只传增删改。
+  // 桥侧 kind 用 "config";游戏侧 op 名用 "configsync"(与 op=config 的**写**语义区分开)。
+  if (kind === "config" || kind === "configsync") {
+    const cfg = configStore.load();
+    const visible = configStore.maskCompact(cfg);
+    const fp = configStore.configRev(cfg);
+    configHistoryPush(visible, fp); // 自愈:历史缺当前版就补上
+    return syncData.syncGet("config", { visible: visible, fp: fp }, configHistoryBaseline(clientFp), clientFp, o.off, o.lim, expect);
+  }
   if (kind !== "gamenames" && kind !== "quickchat") return { ok: false, error: "unknown_get" };
   const current = readSyncConfig(kind);
   if (!current) return { ok: false, error: kind + "_not_found" };
-  const clientFp = typeof o.fp === "string" && o.fp ? o.fp : null;
-  const expect = typeof o.exp === "string" && o.exp ? o.exp : null;
   return syncData.syncGet(kind, current, readSyncBaseline(kind), clientFp, o.off, o.lim, expect);
 }
 
@@ -811,6 +851,8 @@ function notifyConfigWatchers() {
 
 // 保存后叫醒等待者(网页保存 / 面板保存两条路径共用)
 function onConfigSaved() {
+  // btipc11:记一版配置历史(差分同步的基线来源)
+  configHistoryNote();
   try { notifyConfigWatchers(); } catch (e) {}
 }
 

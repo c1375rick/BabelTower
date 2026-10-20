@@ -149,6 +149,46 @@ function quickchatDeltaPayload(oldList, newList, fp) {
   });
 }
 
+// ---------- config(游戏可见配置) ----------
+// 与 gamenames/quickchat 同一套两段式,但差分的"基线"来源不同:
+//   gamenames/quickchat 的基线 = 打包进客户端的 *_fallback.js(桥读它知道客户端手上是哪一版);
+//   config 的基线 = **桥侧自己保留的配置版本历史**(按客户端上报的指纹查)——
+//     配置是运行时被网页改的,客户端手上那一版的内容桥只能靠历史反推。
+// 指纹口径与 configStore.configRev 同源(游戏侧 State.cfgRev 就是它),两边必须同一把尺。
+// 体积账:全量 maskCompact ≈400B = 40 帧 ≈ 26s(BTIPС 下行 10B/帧 ×0.65s);
+//   差分通常只有 1~3 个字段(≈100B) → 6 帧 ≈ 4s;没变则握手 1 帧 ≈ 0.65s。
+function flattenConfig(obj, prefix, out) {
+  const res = out || {};
+  const p = prefix || "";
+  for (const k of Object.keys(obj || {})) {
+    const v = obj[k];
+    const key = p ? p + "." + k : k;
+    // 数组当叶子(整体替换,不逐项差分):fallbackProviders 这类字段改了就整份换
+    if (v && typeof v === "object" && !Array.isArray(v)) flattenConfig(v, key, res);
+    else res[key] = v;
+  }
+  return res;
+}
+
+function configFullPayload(visible, fp) {
+  return JSON.stringify({ ok: true, kind: "config", fingerprint: fp, config: visible });
+}
+
+// 差分载荷:set = 变了的字段(**绝对值**,可重复施加)、unset = 被删掉的字段路径
+function configDeltaPayload(oldVisible, newVisible, fp) {
+  const o = flattenConfig(oldVisible);
+  const n = flattenConfig(newVisible);
+  const set = {};
+  const unset = [];
+  for (const k of Object.keys(n)) {
+    if (!Object.prototype.hasOwnProperty.call(o, k) || JSON.stringify(o[k]) !== JSON.stringify(n[k])) set[k] = n[k];
+  }
+  for (const k of Object.keys(o)) {
+    if (!Object.prototype.hasOwnProperty.call(n, k)) unset.push(k);
+  }
+  return JSON.stringify({ ok: true, kind: "config", delta: true, fingerprint: fp, set: set, unset: unset });
+}
+
 // ---------- 客户端兜底文件解析 ----------
 // 从 mod/panorama/scripts/*_fallback.js 里抽出 "NAME = <JSON字面量>;"。
 // 扫描要认得字符串字面量:模板/译名里会出现 ; [ ] { } , 等字符。
@@ -221,6 +261,7 @@ function evictPayloadCache() {
  * @returns {{fp,count,mode,text}}
  */
 function encodeFor(kind, current, baseline, clientFp) {
+  if (kind === "config") return encodeConfigFor(current, baseline, clientFp);
   const fp = kind === "gamenames" ? namesFingerprint(current) : quickchatFingerprint(current);
   const count = kind === "gamenames" ? namesCount(current) : quickchatTemplates(current).length;
   const canDelta = !!(baseline && typeof baseline.fingerprint === "string" &&
@@ -237,6 +278,29 @@ function encodeFor(kind, current, baseline, clientFp) {
       ? quickchatDeltaPayload(baseline.data, quickchatTemplates(current), fp)
       : quickchatFullPayload(current);
   }
+  const out = { fp: fp, count: count, mode: mode, text: text };
+  payloadCache.set(key, out);
+  evictPayloadCache();
+  return out;
+}
+
+// 配置专用:current = { visible, fp }(visible = maskCompact 的结果,fp = configRev)
+// 缓存键要带上基线指纹 —— 差分载荷取决于"客户端手上是哪一版",只按 fp 缓存会串味。
+function encodeConfigFor(current, baseline, clientFp) {
+  const visible = (current && current.visible) || {};
+  const fp = (current && typeof current.fp === "string") ? current.fp : null;
+  const count = Object.keys(visible).length;
+  const canDelta = !!(baseline && baseline.visible && clientFp && baseline.fingerprint === clientFp);
+  const full = configFullPayload(visible, fp);
+  let mode = "full";
+  let text = full;
+  if (canDelta) {
+    const d = configDeltaPayload(baseline.visible, visible, fp);
+    if (d.length < full.length) { mode = "delta"; text = d; } // 差分更大就回全量(小配置常常如此)
+  }
+  const key = "config|" + fp + "|" + mode + "|" + (canDelta ? baseline.fingerprint : "-");
+  const hit = payloadCache.get(key);
+  if (hit) return hit;
   const out = { fp: fp, count: count, mode: mode, text: text };
   payloadCache.set(key, out);
   evictPayloadCache();
@@ -307,6 +371,7 @@ module.exports = {
   fnv1a32, fingerprintOf, fingerprintTemplates,
   namesSorted, namesCount, namesFingerprint, namesFullPayload, namesDeltaPayload,
   quickchatTemplates, quickchatFingerprint, quickchatFullPayload, quickchatDeltaPayload,
+  flattenConfig, configFullPayload, configDeltaPayload,
   extractAssignment, gzipB64, clampLim, slicePart, sliceByJsonBytes,
   encodeFor, syncGet,
 };

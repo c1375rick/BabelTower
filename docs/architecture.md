@@ -75,7 +75,7 @@
 | `/api/v1/watch?rev=..` | GET | 配置指纹长轮询(同上,页面内部 fetch 用) |
 | `/api/v1/translate` | POST | `{operation,provider,text,sourceLanguage,targetLanguage}` → `{ok,translation,detectedLanguage}` |
 | `/api/v1/test` | POST | 用当前配置翻译固定文本,验证 Key |
-| `/api/v1/config` | GET/POST | 读(打码)/写(支持打码回传)配置;POST 带 `{"revOnly":true}` 时只回 8 位配置指纹(约 30B) |
+| `/api/v1/config` | GET/POST | 读(打码)/写(支持打码回传)配置;POST 带 `{"revOnly":true}` 时只回 8 位配置指纹(约 30B);POST 带 `{"get":"configsync"}` 时走**差分同步**(两段式,见 §4.4) |
 | `/watch` | GET | 网页/游戏用的配置指纹页:标题里直接带指纹,零 JS 立即返回(轮询兜底用) |
 | `/ui` | GET | **网页设置页**(`core/web/ui.html`):`/tr` 用系统浏览器打开的就是它 |
 | `/api/v1/health` | GET | 健康检查 |
@@ -151,6 +151,25 @@
 - 面板标题的三个引擎行为(经**事件**送达/同帧标题变更会合并/第二个 HTML 面板的标题事件收不到)
   与最终实现,见 [btipc-https-v1.md](btipc-https-v1.md) §9。
 - 实测:网页保存 → 桥落盘 <100ms → 游戏读到信号 <200ms → 重读落地 ~100ms ⇒ **合计 <1 秒**。
+
+### 4.4 配置差分同步(2026-10-21,btipc11)
+
+推送只在**快通道**(https 面板)上成立;仍在 BTIPC 慢通道的用户(证书未信任 / Steam 没重启)
+原来要"20s 轮询 + 26s 全量读 ≈46s"才看到网页的改动。现在游戏取配置走**差分**
+(复用 gamenames/quickchat 的两段式,`core/sync_data.js`):
+
+```
+游戏报自己的配置指纹(State.cfgRev) ──op=config {"get":"configsync","fp":…}──▶ 桥
+   指纹相同 → {same:true}                        (0B,1 帧 ≈0.65s)
+   指纹不同 → {mode:"delta"|"full", total:…}     → 游戏按 90B 一片取回
+              delta = 只含变了的字段(set=绝对值/unset=删除),典型 120B ≈12 帧 ≈7.8s
+              (全量 392B ≈40 帧 ≈26s;差分不比全量小则退回全量)
+```
+
+- **差分基线在桥侧**:桥保留最近 16 版配置历史(每次保存记一版),按客户端上报的指纹查 ——
+  配置是运行时被网页改的,客户端手上那一版的内容桥只能靠自己的历史反推。
+- 机制、实测与两个易踩点(不能先改指纹 / 基准不能被清空)见
+  [btipc-https-v1.md](btipc-https-v1.md) §10。
 
 ## 5. 配置
 

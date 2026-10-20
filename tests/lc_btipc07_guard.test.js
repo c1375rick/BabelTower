@@ -33,8 +33,12 @@ const bridge = fs.readFileSync(BRIDGE, "utf8");
 
 // ---------- ① 信封折叠:三个 op 必须走 op=config 的 "get" 字段 ----------
 console.log("--- 信封折叠(core/btipc 信封白名单冻结,新语义只能进 body) ---");
-ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1 \};/.test(lc),
+// 2026-10-21(btipc11):配置差分同步也走 get 折叠,但 op 名用 **configsync**(与 op=config
+// 的**写**语义分开 —— 桥端 op=config 分支按 get 优先解释 body,写与 get 不能共用一个 op 名)。
+ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1/.test(lc),
   "BTIPC_GET_OPS 覆盖 health / gamenames / quickchat");
+ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1, configsync: 1 \};/.test(lc),
+  "BTIPC_GET_OPS 含 configsync(btipc11 配置差分同步)");
 ok(/enqueueBridge\(isGet \? "config" : op, data, done, isGet\)/.test(lc),
   "bridgePost 把 get 折进 op=config");
 ok(/enqueueBridge\(op, data, done, isRead\)/.test(lc) || /done, isRead\);/.test(lc),

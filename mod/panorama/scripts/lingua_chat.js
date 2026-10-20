@@ -15,14 +15,14 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.2.1-6726-btipc10"; // 1.2.1 (2026-10-20) 内容: ① 设置面板搬到**本地网页**(core/web/ui.html,桥 8791 提供;/tr 用系统默认
-  //   浏览器打开,/tr panel 保留游戏内旧面板作调试兜底):10 种界面语言(默认跟随游戏界面语言)+ 右上角
-  //   可覆盖;服务商表单/游戏内行为卡片/通道健康卡/高级 JSON;
-  //   ② 配置下发从"只开机读一次"改成**推送**:网页保存 → 桥叫醒游戏长轮询 → 游戏 <1 秒生效
-  //   (指纹见 core/config.js configRev();三个引擎行为见 docs/btipc-https-v1.md §9);
-  //   ③ "启用翻译"改为**总开关**(关掉后收发都不翻译);BTIPC op=config 新增 {"revOnly":true} 轻量读
-  //   (约 30B,只回 8 位指纹)→ 构建标 btipc10(BTIPC 请求语义变了,与 1.2.0 的 btipc09 线区分)
-  // 1.2.0 (2026-10-15) 内容: ① https 面板通道转正(新增 core/bridge_https.js 独立 TLS 终结进程 8792 + 自签证书; 客户端开机探针定通道 + 硬/软失败分类 + 连击 3 次降级;翻译下行从位泵 3.0-27.4s 降到 1s 以内, 实测服务端侧仅 55-76ms;BTIPC 保留为兜底,证书未信任时体感与本通道上线前完全一致); ② B1 跨站闸自伤修复(面板同源 fetch 带的 https Origin 不在白名单 -> 翻译全线失败; 改用惰性 isLocalOrigin()); ③ 翻译慢 8 秒的三层归因与修复(bing 命中 429 后在 provider 内部睡 1s->2s->4s 共 7 秒且不抛错, 回退链根本没机会接手 -> 改短等一次并抛 rateLimited;fallbackProviders 由空配成 google; provider 的 console 诊断接进 logs/bridge.log 并加自证标记); ④ 设置面板保存改走面板通道(用户实机反馈 OpenAI 的 API 老是保存不上: 带 Key 的载荷 ~600B,位泵 10B/帧 -> 61 帧 ~38 秒,而写死线只有 8 秒 (死线当初按应答 1 帧定的,没算上行 61 帧) -> 必然 REQ_TIMEOUT; 同根因的 op=log(600B 批)与读配置(7.8-26s)一并接入); ⑤ 日志打码(URL 走 ?d= 带 Key -> 两处日志按值打码,不靠截断长度; BTIPC 上行 b64 是运输通道不能改,改为桥抄进 bridge.log 时打码); ⑥ 证书信任结论转为实测(游戏确实校验证书/TLS 告警为证;信任缓存在 Steam 进程, 只重启游戏无效,撤销信任同样要重启 Steam;不需要管理员); ⑦ bridge_https.log 时间戳由 UTC 改本地时(与 bridge.log 差 8 小时曾致误判); ⑧ 用户侧四件套脚本(install/update/diagnose/uninstall + 四个 .bat)+打包必需文件断言; ⑨ 护栏:新增 https_panel_guard(85 项)/release_entry_guard(73 项)/log_redaction(6 项),均登记进 tests/run-tests.js 显式清单。 构建标 btipc09:BTIPC 路由语义变了(config/test/log/读 在面板通道判活时不再走位泵),故与 1.1.0 的 btipc08 线区分开; core/btipc/* 冻结面四件仍零改动。 升版时 VERSION 文件 / 本常量 / README 版本行 三处同步 (lc_btipc_guard 锁形态 + 主版本与 VERSION 文件比对,不写死) // 1.1.0 (2026-10-13) 发布 GitHub(tag v1.1.0) + GameBanana(前版 1.0.10 于 2026-10-10 发布 tag v1.0.10;1.0.11 消耗为未发布内部开发版,内容并入本版);1.1.0 内容:B6 配置原子写(core/config.js writeFileAtomic:tmp+fsync+rename+EPERM 降级直写,config_atomic_write 护栏)+ simtest TRQ 回程补齐(68/0:waitBootSync 等开机配置同步、applyScenarioCfg 应用套件配置、test20 换语料真模板 Stun {s:hero_name};纯 harness 零产品码,真桥真传输非 mock)+ BTIPC 回声拥塞豁免(State.btipcLastStormAt + BTIPC_ECHO_STORM_WINDOW_MS=15000:回声 catch 中 kind∈{timeout,crc_dead} 且风暴窗内 → 只记拥塞日志不调 onBridgeDown;8s 死线/STORM 常数/冻结面 core/btipc 四件零动;实弹 6 次回声超时 6 次分类全对 + 3/3 链不丢不重不乱序,echo_storm_guard 钉)+ 脚本层加固(装车换 [IO.File]::Replace 原子换、备份由交换产出;重启桥 $proc.HasExited 验尸 + Mutex 互斥 + 杀净复查;autostart vbs 模板 5 引号语法错误修复 —— 每装一次自启即打坏;端口改 ConvertFrom-Json;script_hardening_guard)+ 风险登记表 docs/risk_register.md(B6/simtest/transport/端点/P4b 五项性质/风险/状态/解冻范围;compatibility.md §9-§12 记档);统一测试入口 30 项;1.0.11 原内容:P1 桥侧耦合面收口(core/btipc/index.js 统一门 + transport/GameChannel 零逻辑壳,冻结四件零动)+ P2 op=log 聊天日志迁 BTIPC(桥侧 matchChatLogTrq + runBtipcOp log 分支镜像 /api/v1/log;客户端并入 BTIPC op 通道 + 600B 切批;装车窗实弹抓获客户端 viaBtipc 路由谓词漏 log —— 2655 路由 + 2631 兜底,op 集合谓词 4 处只补 2 处 → log op 落死通道,真机聊天日志 11 天从未落盘 —— 已修 + op_log_guard 钉)+ P3 收口审计(compatibility.md §7 端点/耦合面清点);前版 1.0.10 内容:B1 安全修复(删 GET ?d= 写通道→410 + 跨站守卫三闸 + ACAO 10 处收敛)+ F6($.Schedule 取消改走 $.CancelScheduled + ctprobe-v2,修 clearTimeout 实测无效→双 finishJob 超发)+ P0-2 doneFail/pumpQueue 双结算修复(settle 留痕)+ 统一测试入口 tests/run-tests.js(24 项,决策 node:test)+ compatibility.md 基线存档与冻结清单;前版 1.0.9 内容:/tr 面板 660x600->580x520 + 关闭按钮从标题栏移到底部 footer + 5 处口径改「点右下角 X 关闭」+ 7 项脚本缺陷修复;前版 1.0.8 内容:btipc07(health/quickchat/gamenames 迁 BTIPC + 292 条名称保护动态同步)+ 崩溃修复(TargetHeroImage)+ 缺陷 A(dispatchJob 同步异常补记账,修单槽泄漏致出站队列停摆);更早版本(btipc05 系列读写死线/重试风暴诸修)见 docs/compatibility.md 与 docs/ipc-checklist-6726.md §16;升版时 VERSION 文件 / 本常量 / README L15 三处同步(lc_btipc_guard 锁形态 + 主版本与 VERSION 文件比对,不写死)
+  const VERSION = "1.2.2-6726-btipc11"; // 1.2.2 (2026-10-21) 内容:① 配置同步走**差分**(只传增删改,不传全量):复用
+  //   gamenames/quickchat 的两段式(握手报本地指纹 → same 或只传变更字段);桥侧保留最近 16 版配置历史当差分
+  //   基线(按客户端指纹查)。慢通道实测:没变 = 1 帧 ≈0.65s、改一个字段 = 120B ≈12 帧 ≈7.8s(旧路是全量
+  //   392B = 40 帧 ≈26s,再加 20s 轮询)。→ 构建标 btipc11(BTIPС 请求语义变了,与 1.2.1 的 btipc10 线区分)
+  // 1.2.1 (2026-10-20) 内容: ① 设置面板搬到**本地网页**(core/web/ui.html,桥 8791;/tr 用系统默认浏览器打开,
+  //   /tr panel 保留游戏内旧面板作调试兜底):10 种界面语言(默认跟随游戏界面语言)+ 右上角可覆盖;服务商表单/
+  //   游戏内行为卡片/通道健康卡/高级 JSON;② 配置下发从"只开机读一次"改成**推送**:网页保存 → 桥叫醒游戏长轮询
+  //   → 游戏 <1 秒生效(三个引擎行为见 docs/btipc-https-v1.md §9);③ "启用翻译"改为**总开关**;BTIPC op=config
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -105,29 +105,18 @@
   const BRIDGE_PORT = 8791; // 与 core/config.json 保持一致
 
   // ---- https 面板通道(2026-10-15):主路,但**有则用、无则退 BTIPC** ----
-  // 【路线来源】(详见 docs/btipc-https-v1.md §2)
-  //   ① 这条回程(隐藏 HTML 面板 SetURL → /bridge + document.title 轮询)是**我们自己的**
-  //      设计,早于 BTIPC 就写在 docs/architecture.md §4.2 的通道③里,当时定位是
-  //      "②不可用时的回退"。本段没有发明新路线,只是把它从"回退"提到"主路"并加了
-  //      探针与降级纪律。
-  //   ② "给面板一个受信任的本机 https"(自签证书 + 写入 CurrentUser\Root + 信任后完全
-  //      重启 Steam)这个**方案本身**来自一款 GPL-3.0 同类实现,我们此前没有;证书 SAN
-  //      布局也是同款。逐项对账(含我们更正过的两处表述)见 docs/btipc-https-v1.md §2。
-  //   ③ 拦点是证书链这个定位是本仓实机抓到的。我们与该实现零代码重叠(§2.5)。
-  //
-  // 事实:隐藏 HTML 面板只接受证书有效的 https。http://127.0.0.1 与 http://localhost
-  // 在 LoadPage 之前就被引擎拒掉(6726 起 SetURL 后 src=""、页面从不加载,只有死链日志)。
-  // 桥侧新增 core/bridge_https.js(TLS 终结 + 反代回 8791,独立进程:证书出问题绝不能连带
-  // BTIPC 一起死);证书由 scripts\gen_bridge_cert.ps1 生成,首次需 -Trust 并
-  // **完全退出并重启 Steam**(信任库由 Steam 宿主缓存,只重启游戏不生效 —— 实测)。
-  //
-  // 为什么值得当主路:面板页面在**桥这一侧**同源 fetch 完 /api/v1/translate,把整条结果
-  // 一次写进 document.title,下行只剩一个 RTT;而 BTIPC 位泵是
-  // FIRST_SHOT(1200ms) + 帧数 × tClose(600ms) —— 短句 3.0s、17 帧 11.6s、38 帧 24.4s。
-  //
-  // 为什么绝不拿掉 BTIPC:证书未信任 / Steam 没重启的用户,这条通道必然是死的,
-  // 他们必须原样留在 BTIPC 上(零摩擦)。所以本通道的失败路径只有一条:
-  // 原样把 job 交回 BTIPC 重做,且**不消耗 job.attempts**(不是翻译失败,不该扣重试)。
+  // 【路线来源/事实/逐项对账】详见 docs/btipc-https-v1.md §2(来源与零代码重叠)、§4(通道选择)。
+  // ① 这条回程(隐藏 HTML 面板 SetURL → /bridge + document.title 轮询)是**我们自己的**设计,早于 BTIPC
+  //    就写在 docs/architecture.md §4.2 的通道③(当时定位是"回退");本段只是把它提到"主路"并加探针。
+  // ② "给面板一个受信任的本机 https"(自签证书 + CurrentUser\Root + 完全重启 Steam)这个**方案本身**
+  //    来自一款 GPL-3.0 同类实现,我们此前没有;证书 SAN 布局同款(§2.5 零代码重叠)。
+  // 事实:面板只接受证书有效的 https(http://127.0.0.1/localhost 在 LoadPage 前就被引擎拒);
+  //   桥侧 core/bridge_https.js 独立进程做 TLS 终结(证书出问题绝不能连带 BTIPC 一起死);
+  //   首次需 -Trust 并**完全退出并重启 Steam**(信任库由 Steam 宿主缓存,只重启游戏不生效)。
+  // 值得当主路:面板在**桥这一侧**同源 fetch 完把结果一次写进 document.title,下行只剩一个 RTT;
+  //   BTIPC 位泵则是 FIRST_SHOT(1200ms)+帧数×tClose(600ms) —— 短句 3.0s、38 帧 24.4s。
+  // 绝不拿掉 BTIPC(证书未信任/Steam 没重启的用户那条通道必然是死的,必须零摩擦留在 BTIPC):
+  //   失败路径只有一条 —— 原样把 job 交回 BTIPC 重做,且**不消耗 job.attempts**(不是翻译失败)。
   const HTTPS_PANEL_ENABLED = true; // 总开关;现场排障时置 false 即刻全量退回 BTIPC
   const HTTPS_PANEL_HOST = "localhost"; // 证书 SAN 含 DNS:localhost 与 IP:127.0.0.1
   const HTTPS_PANEL_PORT = 8792; // 与 core/bridge_https.js 的默认端口一致
@@ -344,6 +333,7 @@
     cfgSyncStarted: false, // 2026-10-16:配置同步启动门(boot 与 onBridgeAlive 共用 once,等探针先定论)
     cfgSyncWaitTries: 0, // 2026-10-16:等探针定论的轮询次数(8 次约 8s 无定论则走老路,不无限等)
     cfgDirty: null, // 2026-10-16:用户脏标记 {provider:true...},同步落地/_mask 回填时跳过这些键
+    cfgMask: null, // btipc11:桥侧"游戏可见配置"的当前副本(差分施加的基准;_mask 会被保存动作清空,这份不清)
     gamenamesLoaded: false, // 启动后是否已从桥拉取过游戏名保护名单(healthCheck 补触发用)
     gamenamesLoading: false, // 名单拉取是否进行中(防 healthCheck 重复触发叠加)
     quickchatLoading: false, // 语料同步是否进行中(同上)
@@ -1413,17 +1403,15 @@
   }
 
   // ================= 快捷语音模板匹配(2026-09-17 重构,免正则) =================
-  // 快捷语音/轮盘消息网络上传输的是本地化 key+参数,每个客户端用自己的游戏语言渲染
-  // (中文玩家看到 "我看到 McGinnis",英文玩家看到 "I see McGinnis")——
-  // 官方本地化层就是翻译本身,mod 再翻一遍都只是劣质重复译文。
-  //
-  // 旧方案(已废弃的屎山):桥生成 253 条巨型正则 + 客户端硬编码兑底正则。
-  //   参数转义/量词(叠标点漏网 "Venator不见了！！！")/双语覆盖/新模板跟随,每个维度都是漏网面。
-  // 新方案:模板 = token 序列(param | fixed)。匹配 = 归一化(去空白/小写)后 token 走查:
-  //   fixed 必须逐字命中;param 消费 ≥1 字符且只允许【已知游戏名(英/中)】或【不含 CJK 的短 latin 连串】
-  //   ——防任意 CJK 通配误杀真人消息("他也不见了")。尾部标点先剥(兼容 HUD 叠标点渲染)。
-  //   语料:桥同步(/api/v1/quickchat,游戏更新自动跟随);兑底 lingua_chat_quickchat_fallback.js(自动生成)。
-  //   参数约束表:lingua_chat_gamenames_fallback.js(英雄/物品/能力名,自动生成)。
+  // 快捷语音/轮盘消息网络上传输的是本地化 key+参数,每个客户端用自己的游戏语言渲染(中文玩家看到
+  // "我看到 McGinnis",英文玩家看到 "I see McGinnis")—— 官方本地化层就是翻译本身,mod 再翻一遍
+  // 都只是劣质重复译文。
+  // 旧方案(已废弃的屎山):桥生成 253 条巨型正则 + 客户端硬编码兜底正则 —— 参数转义/量词(叠标点
+  // 漏网)/双语覆盖/新模板跟随,每个维度都是漏网面。
+  // 新方案:模板 = token 序列(param | fixed);匹配 = 归一化(去空白/小写)后 token 走查:fixed 逐字
+  // 命中;param 消费 ≥1 字符且只允许【已知游戏名(英/中)】或【不含 CJK 的短 latin 连串】(防 CJK
+  // 通配误杀真人消息);尾部标点先剥(兼容 HUD 叠标点)。语料:桥同步 + 自动生成的
+  // lingua_chat_quickchat_fallback.js;参数约束表:lingua_chat_gamenames_fallback.js。
   // 结构化识别(Ping class/PingLabel)仍在 shouldSkip 先行,这里只兜"以 Text 形态渲染的轮盘消息"。
   if (typeof LCT_QUICKCHAT_FALLBACK_TEMPLATES === "undefined") {
     $.Msg("[LCT] quickchat fallback templates missing!");
@@ -1710,17 +1698,14 @@
     // 语义对不上,用户以为没生效)。只认显式 false(缺省按开)。
     if (State.cfg.enabled === false) return true;
     if (record.quick) {
-      // 游戏原生快捷短语/Ping 已由游戏本地化,不调用翻译接口。
-      // 但 DOM 标记的可信度分容器:
+      // 游戏原生快捷短语/Ping 已由游戏本地化,不调用翻译接口。但 DOM 标记的可信度分容器:
       //   · 聊天/大厅行 → PingLabel 是专用标记,直接可信(16/26 红 fixture 基线原样不动);
       //   · HUD 顶栏行 → 统一模板:10-02 exp6738 dump 实锤 PingStyleIcon(+SubjectIcon/
-      //     CooldownTimer/ResponseHeroes)是常驻槽位,打字消息同样命中 → 标记不可信,
-      //     必须由文本侧再确认"已本地化"才跳过。否则 HUD 气泡 100% 拿不到译文 ——
-      //     不止 L3408 直接 return,连 L3378/L3389 的缓存恢复也被 !skipTranslation 拦住,
-      //     缓存里有译文也注入不进去。
-      //     10-03 实车:hi/gg/防守分路/FOR THE KING RAAAAH 全部 `diag: quick row hud=1` 后
-      //     无下文,当天 `translated [hud]` = 0;而 !lcttest ok(无 ping 标记的构造行)
-      //     全链路走通 → 管线无问题,是判定过宽。
+      //     CooldownTimer/ResponseHeroes)是常驻槽位,打字消息同样命中 → 标记不可信,必须由文本侧
+      //     再确认"已本地化"才跳过。否则 HUD 气泡 100% 拿不到译文(不止直接 return,连缓存恢复
+      //     也被 !skipTranslation 拦住)。10-03 实车:hi/gg/防守分路/FOR THE KING RAAAAH 全部
+      //     `diag: quick row hud=1` 后无下文,当天 `translated [hud]` = 0;而无 ping 标记的构造行
+      //     全链路走通 → 管线没问题,是判定过宽。
       const textLocalized = isQuickChatTemplate(text) || (!State.cfg.force && isTargetLanguageText(text));
       if (!record.hud || textLocalized) return true;
       // HUD 行 + 标记存疑(既非已知轮盘语料、也不是目标语言)→ 落到下面的正常判定
@@ -2332,15 +2317,12 @@ function injectTranslation(row, sig, text, fragment) {
 
   // ===== https 面板通道:失败分类、降级交接、开机探针(2026-10-15)=====
   // 通道级失败分两类,这个区分决定了"该不该重做",是本段代码的全部要点:
-  //
-  //   硬失败(通道压根没通)—— 页面从未加载(SetURL 被引擎拒:证书未受信 / Steam 没重启)、
-  //     面板找不到、导航抛异常、桥离线。请求**从未到达桥**,所以把 job 原样交回 BTIPC
-  //     重做是零风险的,而且不消耗 job.attempts(它不是翻译失败)。
-  //
-  //   软失败(通道通了但这次没成)—— bridge_timeout / timeout / bad_bridge_payload。
-  //     页面 alive 且 fetch 已经发出,只是翻译慢或应答解析不了。此时重做一遍等于把
-  //     用户已经等了 OUTGOING_TIMEOUT_MS 的出站请求再拖一个 3~27s(BTIPC 位泵),
-  //     所以**不重做**:交回 handleBridgePayload 按既有语义结算(出站发原文)。
+  //   硬失败(通道压根没通)—— 页面从未加载(SetURL 被引擎拒:证书未受信 / Steam 没重启)、面板找不到、
+  //     导航抛异常、桥离线。请求**从未到达桥**,把 job 原样交回 BTIPC 重做零风险,且不消耗
+  //     job.attempts(它不是翻译失败)。
+  //   软失败(通道通了但这次没成)—— bridge_timeout / timeout / bad_bridge_payload。页面 alive 且
+  //     fetch 已发出,只是慢或解析不了;重做等于把用户已等了 OUTGOING_TIMEOUT_MS 的出站请求再拖
+  //     3~27s(BTIPC 位泵),所以**不重做**:交回 handleBridgePayload 按既有语义结算(出站发原文)。
   const PANEL_HARD_FAIL = {
     bridge_nav_failed: 1,
     bridge_offline: 1,
@@ -2374,17 +2356,12 @@ function injectTranslation(row, sig, text, fragment) {
     if (!HTTPS_PANEL_ENABLED) return false;
     if (State.httpsPanelOk !== true) return false;
     if (job.kind === "outgoing" || job.kind === "chat") return true;
-    // 2026-10-15:设置面板的「保存」也接进本通道(用户实机反馈「OpenAI 的 API 老是保存不上,
-    // 要反复好几次」)。根因是纯算术,不是玄学:
-    //   带 Key 的保存载荷 ≈ 600B,位泵每帧有效 10B → 约 61 帧 × 600ms + 首发起跑 1200ms ≈ 38 秒;
-    //   而写的死线只有 8 秒(死线当初是按**应答** 1 帧 ≈3s 定的,没算上行请求本身要 61 帧)
-    //   → 必然 REQ_TIMEOUT → 面板显示「保存失败」;反复重试只是把 38 秒的活排进单槽队列。
-    // 本通道是整条 JSON 一次 fetch,同一份载荷 ~1 秒。
-    //
-    // 为什么连 op=test / op=log / 读也一起接:它们是同一个根因(载荷大 vs 死线小)。
-    // 读本来就走 50 秒死线因而"能用",但一次要 7.8~26 秒;op=log 的批 600B 与保存同量级、同死线,
-    // 属于同一个坏掉的地方。**按"根因相同"划线,不按"哪个 op 眼下没报障"划线。**
-    // 通道判死时全部原样交回 BTIPC(见 demoteToBtipc),兜底语义与翻译路径完全一致。
+    // 2026-10-15:设置面板的「保存」也接进本通道(用户实机「OpenAI 的 API 老是保存不上,得反复好几次」)。
+    // 根因是纯算术:带 Key 的载荷 ≈600B、位泵每帧 10B → 61 帧×600ms + 起跑 1200ms ≈38 秒,而写的死线
+    // 只有 8 秒(当初按**应答** 1 帧 ≈3s 定的,没算上行要 61 帧)→ 必然 REQ_TIMEOUT → 面板显示「保存失败」;
+    // 反复重试只是把 38 秒的活排进单槽队列。本通道整条 JSON 一次 fetch,同一份载荷 ~1 秒。
+    // 为什么连 op=test / op=log / 读也一起接:同一个根因(载荷大 vs 死线小)。读靠 50s 死线"能用"但一次要
+    // 7.8~26 秒。**按"根因相同"划线,不按"哪个 op 眼下没报障"划线。** 通道判死时全部原样交回 BTIPC。
     if (job.kind === "bridge") return true;
     return false;
   }
@@ -2638,22 +2615,17 @@ function injectTranslation(row, sig, text, fragment) {
   // 目标语言必须随请求走:桥 config 的 defaults.targetLanguage 是入站目标(zh-Hans),
   // 出站 outgoingTarget 默认 en,不带就会译反方向。
   // 返回 true = 本 job 由 BTIPC 接管(结算在回调内闭环);false = 回落旧通道(直连/HTML 面板)。
-  // 失败语义对齐旧通道(spec §8 + 既有 attempts 策略):响应型失败(桥收到请求但翻译失败,
-  // 空 END 帧 → translate_error)走 handleBridgePayload 重试 ≤1 次;传输型失败
-  // (timeout/crc_dead/bridge_down)按原文发送不重试;busy/too_long/目标语言不安全 → 回落旧通道。
+  // 失败语义对齐旧通道(spec §8 + 既有 attempts 策略):响应型失败(桥收到请求但翻译失败,空 END 帧
+  // → translate_error)走 handleBridgePayload 重试 ≤1 次;传输型失败(timeout/crc_dead/bridge_down)
+  // 按原文发送不重试;busy/too_long/目标语言不安全 → 回落旧通道。
 
   // ---- 写(以及 log 批)的死线:按上行载荷算,不按固定值 ----
-  // 2026-10-15 教训(用户实机反馈「OpenAI 的 API 老是保存不上」):原来写死 8000,
-  // 是按"写应答已瘦到 {ok:true}(9B/1帧≈3s)"定的 —— **只量了应答,没量请求本身**。
-  // 而位泵的耗时几乎全在上行:
-  //   每帧有效载荷 10B、每帧 tClose=600ms、首发起跑 1200ms;
-  //   带 API Key 的保存载荷 ≈600B → 60 帧 → 1200 + 60×600 = 37.2s;
-  //   8s 死线 → 必然 REQ_TIMEOUT → 面板显示「保存失败」,于是用户反复点。
-  // 模型与真机日志逐条吻合:47B/5帧=4210ms、110B/11帧=7821ms、113B/12帧=8435ms、
-  // 162B/17帧=11620ms、406B/41帧=26105ms —— 即 1200 + 帧数×600,误差 <0.5%。
-  // 所以:按帧数算出"物理下限",再叠加余量给 CRC 重试与 STORM 罚时(实测约 +15~20%)。
-  // 小载荷仍保留 8000 地板 —— 快速失败这个特性对小请求仍然成立,不无谓拖长。
-  // 常量 BTIPC_T_CLOSE_MS / BTIPC_FIRST_SHOT_DELAY_MS 是模块级 const(函数声明可提升)。
+  // 2026-10-15 教训(用户实机「OpenAI 的 API 老是保存不上」):原来写死 8000 是按"写应答 1 帧"定的,
+  // **只量了应答,没量请求本身**。位泵耗时几乎全在上行:每帧有效载荷 10B、tClose=600ms、首发起跑
+  // 1200ms → 带 Key 的保存载荷 ≈600B = 60 帧 ≈ 37.2s,8s 死线必然 REQ_TIMEOUT → 面板显示「保存失败」。
+  // 实测帧耗时吻合(47B=4.2s … 406B=26.1s,误差<0.5%)。所以:按帧数算"物理下限",再叠加余量给 CRC
+  // 重试与 STORM 罚时(实测约 +15~20%);小载荷保留 8000 地板(快速失败对小请求仍成立)。
+  // 推导与逐条实测见 docs/btipc-v1.md §8。
   function btipcWriteDeadlineMs(payloadBytes) {
     const bytes = Number(payloadBytes) || 0;
     const frames = Math.max(1, Math.ceil(bytes / 10));
@@ -2723,17 +2695,13 @@ function injectTranslation(row, sig, text, fragment) {
           payload = "op=log\n" + raw;
           timeoutMs = btipcWriteDeadlineMs(btipcUtf8Bytes(payload).length);
         } else {
-          // btipc05b:读/写死线分离。读应答 maskCompact ≈400B=40 帧 × 真机 600ms/帧
-          // ≈24s —— 原 8s 必超时(实车 config FAIL 34 连败的根因);写应答已瘦到
-          // {ok:true}(9B/1帧≈3s)维持 8s 快速失败。
-          // btipc05c:此 `else` 曾被误删 → op=config 整块跳过、payload 停在 undefined
-          // → L2369 btipcUtf8Bytes(undefined).length 必炸(实车 dispatch THREW ×23),
-          // 且 op=test 会被随后的 config 赋值覆盖成 "op=config\n{}"(测试按钮发错载荷)。
-          // btipc05d:35s → 50s。05c 实车首验:成功那读 total=30229ms,而另一次
-          // 正好卡在 35025ms、帧只到 seq=22/38 —— 首发起跑竞态(r=1 全 404/混 BUSY)
-          // 会白烧 5~6 轮 ×2.5s(STORM 罚时),再叠加中途 CRC 重试,35s 余量仅 4.8s,
-          // 实测约 1/3 概率超时 → 白等 35s 再重试。50s 覆盖「竞态 15s + 38 帧 23s +
-          // 中途 2 次 STORM 5s」≈43s 的最坏情形。
+          // btipc05b:读/写死线分离。读应答 maskCompact ≈400B=40 帧 × 真机 600ms/帧 ≈24s ——
+          // 原 8s 必超时(实车 config FAIL 34 连败的根因);写应答已瘦到 {ok:true}(9B/1帧≈3s)维持快速失败。
+          // btipc05c:此 `else` 曾被误删 → op=config 整块跳过、payload 停在 undefined →
+          // btipcUtf8Bytes(undefined).length 必炸(实车 dispatch THREW ×23),且 op=test 会被
+          // 随后的 config 赋值覆盖成 "op=config\n{}"(测试按钮发错载荷)。别删这个 else。
+          // btipc05d:35s → 50s。35s 实测约 1/3 概率超时(首发起跑竞态白烧 5~6 轮 ×2.5s STORM
+          // 罚时 + 中途 CRC 重试);50s 覆盖「竞态 15s + 38 帧 23s + 2 次 STORM 5s」≈43s 的最坏情形。
           // 2026-10-15:写死线从固定 8000 改为**按载荷算**(见 btipcWriteDeadlineMs)。
           // 原来写死 8s 是按"写应答 1 帧"定的,没算上行请求本身要 61 帧 —— 带 Key 的
           // 保存必然 REQ_TIMEOUT。现在 600B 载荷 → 约 45s,与读的 50s 同量级。
@@ -3053,11 +3021,12 @@ function injectTranslation(row, sig, text, fragment) {
       if (j && typeof j.rev === "string") rev = j.rev;
     } else { rev = s; }
     if (rev && rev !== State.cfgRev) {
-      State.cfgRev = rev;
+      // btipc11:这里**不能**先把 State.cfgRev 改成新指纹 —— 那样差分就没基准了
+      // (桥以为客户端已是最新 → 回 same → 配置永远落不下来)。指纹由差分同步落地后再更新。
       log("cfg watch(push): config changed (rev=" + rev + "), re-syncing");
       try {
-        syncBridgeConfig(function () {
-          log("cfg watch(push): applied (outgoing=" + State.cfg.outgoing + ")");
+        syncConfigDelta(function (ok) {
+          log("cfg watch(push): " + (ok ? "applied (outgoing=" + State.cfg.outgoing + ")" : "sync failed"));
         });
       } catch (e) { log("cfg watch(push) THREW " + expErr(e)); }
     }
@@ -5359,7 +5328,9 @@ function injectTranslation(row, sig, text, fragment) {
   // (core/btipc/transport.js 只认 op=config|test),所以新语义一律塞进 op=config 的
   // JSON body 的 "get" 字段,由桥端 runBtipcGet 解释 —— 信封/帧/状态机零改动,
   // 上层(healthCheck / syncGameNames / syncQuickChat)的调用方式也完全不变。
-  const BTIPC_GET_OPS = { health: 1, gamenames: 1, quickchat: 1 };
+  // configsync(btipc11):配置差分同步。op 名与 op=config 的**写**语义分开 ——
+  // 桥端 op=config 分支按 get 优先解释 body,写与 get 不能共用一个 op 名。
+  const BTIPC_GET_OPS = { health: 1, gamenames: 1, quickchat: 1, configsync: 1 };
 
   function bridgePost(op, payload, done) {
     const isGet = !!BTIPC_GET_OPS[op];
@@ -5543,7 +5514,49 @@ function injectTranslation(row, sig, text, fragment) {
     }
     // btipc05b:留全量 mask 给面板秒开(openSettingsPanel 直接消费,免 24s 现场读)
     State.cfg._mask = c;
+    // btipc11:差分同步的基准(客户端手上"那一版"的完整内容)。与 _mask 分开:_mask 会被面板保存
+    // 清空(旧值作废),这份不能清 —— 清了差分就没基准了。
+    State.cfgMask = c;
     return changed;
+  }
+
+  // ================= 配置差分同步(btipc11)=================
+  // 与 gamenames/quickchat 同一套两段式(桥端 core/sync_data.js):握手报本地指纹 → same(1 帧)或只传
+  // **变了的字段**(set=绝对值/unset=删除,典型 1~3 个 ≈100B)。差分基准 = State.cfgMask(与指纹同版),
+  // 桥侧按客户端指纹查自己的版本历史算差分。
+  // 为什么值得:全量 maskCompact ≈400B=40 帧≈26s(BTIPС 下行 10B/帧),慢通道上"网页改了游戏不认"要等 20s 轮询 + 26s 全量 ≈46s;差分后 ≈1 帧(没变)或 6 帧(变了)。
+  function cfgPathApply(obj, path, value) {
+    const ps = String(path).split(".");
+    let cur = obj;
+    for (let i = 0; i < ps.length - 1; i++) {
+      if (!cur[ps[i]] || typeof cur[ps[i]] !== "object") cur[ps[i]] = {};
+      cur = cur[ps[i]];
+    }
+    if (value === undefined) delete cur[ps[ps.length - 1]];
+    else cur[ps[ps.length - 1]] = value;
+  }
+  function applyConfigPayload(text, res) {
+    let d = null;
+    try { d = JSON.parse(text); } catch (e) { d = null; }
+    if (!d || typeof d !== "object") { log("cfg sync: payload not JSON"); return false; }
+    let mask = null;
+    if (d.delta) {
+      mask = JSON.parse(JSON.stringify(State.cfgMask || {}));
+      const set = d.set || {};
+      for (const p of Object.keys(set)) cfgPathApply(mask, p, set[p]);
+      for (const p of (d.unset || [])) cfgPathApply(mask, p, undefined);
+    } else if (d.config && typeof d.config === "object") { mask = d.config; }
+    else { log("cfg sync: bad payload"); return false; }
+    applyBridgeConfig(mask, "cfg-watch");
+    if (typeof d.fingerprint === "string" && d.fingerprint) State.cfgRev = d.fingerprint;
+    log("cfg sync applied: " + (d.delta ? "delta" : "full") + " (rev=" + State.cfgRev + ")");
+    return true;
+  }
+  function syncConfigDelta(onDone) {
+    syncViaBtipc("configsync", State.cfgRev || "",
+      function () { log("cfg sync: fingerprint match, no transfer"); return true; },
+      applyConfigPayload,
+      function (ok) { if (onDone) onDone(ok); });
   }
 
   // ================= 运行时配置监听(2026-10-19, 2026-10-20 提速) =================
@@ -5580,25 +5593,19 @@ function injectTranslation(row, sig, text, fragment) {
         }
         State.cfgWatchSkip = 0;
         State.cfgPollNext = true;
-        bridgePost("config", { revOnly: true }, function (res) {
-          if (res && res.ok) {
-            State.cfgWatchBackoffIdx = 0;
-            if (typeof res.rev !== "string") log("cfg watch: poll reply has no rev");
-            else if (res.rev !== State.cfgRev) {
-              State.cfgRev = res.rev;
-              log("cfg watch: bridge config changed (rev=" + res.rev + "), re-syncing");
-              try {
-                syncBridgeConfig(function () {
-                  log("cfg watch: applied new config from bridge (outgoing=" + State.cfg.outgoing + ")");
-                });
-              } catch (eW) { log("cfg watch THREW " + expErr(eW)); }
+        // btipc11:轮询本身走差分同步 —— 没变时握手 1 帧就回,变了才取差分片。
+        // (旧路:revOnly 指纹读 → 变了再拉一次全量。慢通道 = 20s 轮询 + 26s 全量 ≈46s。)
+        try {
+          syncConfigDelta(function (ok) {
+            if (ok) {
+              State.cfgWatchBackoffIdx = 0;
+            } else {
+              log("cfg watch: poll failed");
+              State.cfgWatchBackoffIdx = Math.min((State.cfgWatchBackoffIdx || 0) + 1, CFG_WATCH_BACKOFF_S.length - 1);
             }
-          } else {
-            log("cfg watch: poll failed: " + ((res && res.error) || "no_reply"));
-            State.cfgWatchBackoffIdx = Math.min((State.cfgWatchBackoffIdx || 0) + 1, CFG_WATCH_BACKOFF_S.length - 1);
-          }
-          again();
-        });
+            again();
+          });
+        } catch (eP) { log("cfg watch: poll THREW " + expErr(eP)); again(); }
       } catch (e) {
         log("cfg watch: tick THREW " + expErr(e));
         again();
@@ -5669,14 +5676,11 @@ function injectTranslation(row, sig, text, fragment) {
     // BUGFIX 0.1.3:boot 时主动从桥拉取已保存配置,同步进 State.cfg,
     // 否则游戏重启后 outgoing 等偏好回落到 UI_DEFAULTS(发送前翻译默认关)。
     // boot 时 UI 树可能尚未构建,面板找不到会立即失败 -> 延迟重试。
-    // BUGFIX 0.1.3 (again):不能依赖 State.bridgeUp 决定是否重试——
-    // bridgeUp 为 true 时一次拉取失败会静默放弃,translateOwn 永远不同步。
-    // 改为:只要没同步成功就持续重试(最多 30 次/60 秒),成功后置 State.cfgSynced。
-    //
-    // btipc07 防重入(2026-10-04 07:00 实车):boot() 和 onBridgeAlive() 都会调它,
-    // 而 cfgSyncing 以前只在 onBridgeAlive 里置位 —— 当晚 config 被并行拉了 3 次
-    // (07:00:02 超时 / 07:00:33 一次 25.6s / 07:00:59 一次 28.4s),单槽队列白占 85s,
-    // 把 gamenames/quickchat 握手从 07:00:33 挤到 07:01:27 才开始。
+    // BUGFIX 0.1.3 (again):不能依赖 State.bridgeUp 决定是否重试——bridgeUp 为 true 时
+    // 一次拉取失败会静默放弃,translateOwn 永远不同步。改为:没同步成功就持续重试(≤30 次/60 秒)。
+    // btipc07 防重入(2026-10-04 07:00 实车):boot() 与 onBridgeAlive() 都会调它,而 cfgSyncing 以前
+    // 只在 onBridgeAlive 里置位 —— 当晚 config 被并行拉 3 次(07:00:02 超时 / 07:00:33 一次 25.6s /
+    // 07:00:59 一次 28.4s),单槽队列白占 85s,把 gamenames/quickchat 握手挤到 07:01:27 才开始。
     // 改为:cfgSyncing 由本函数自管,已在途时直接把 callback 挂到等待列(不新开循环)。
     if (State.cfgSyncing) {
       if (callback) {
