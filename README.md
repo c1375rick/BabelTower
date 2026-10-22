@@ -78,7 +78,7 @@ BabelTower/
 ## 安装
 
 1. 获取发行包（GitHub Release 附件 `BabelTower-<版本>-win64.zip`），解压到任意目录（路径可含中文/空格，**保持压缩包内目录结构**）。
-   包里自带 `portable-node/`，开箱即用不用另装 Node；自行构建见下方 [从源码构建](#从源码构建-vpk)。
+   包里自带 `portable-node/`（Node.js 运行时，1.2.2 起为 **v26.12.1**），开箱即用不用另装 Node；自行构建见下方 [从源码构建](#从源码构建-vpk)。
 2. mod 装进 Deadlock（**二选一**）:
    - **推荐**：用 Deadlock Mod Manager 导入（自动分配空闲 pak 槽位）
    - 或手动：把包里的 `pak01_dir.vpk` 复制到 `game/citadel/addons/` 目录（改名为空闲的 `pakNN_dir.vpk`，**不要覆盖其它 mod，也不要同时放两份我们的包**）

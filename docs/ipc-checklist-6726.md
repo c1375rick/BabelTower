@@ -1052,3 +1052,31 @@ Steam 没重启)走的是「20s 轮询 + 26s 全量读 ≈46s」。被问到「�
 - 核心脚本 6000 行上限:本次为腾位置压缩了几处**与文档重复**的叙述性注释(https 面板路线 /
   写死线推导 / 读死线 / 失败分类 / 快捷语音匹配 / HUD ping 判定),事实与文档指针都保留
 (对应 docs/btipc-https-v1.md §2/§4、docs/btipc-v1.md §8)。
+
+### 18.6 随包 Node 运行时升级 26.1.0 → 26.12.1(2026-10-22)
+
+Node.js 于 2026-10-21 发安全公告(26.12.1 / 24.22.1 / 22.23.4),我们随包的
+`portable-node/node.exe` 是 **26.1.0**(落后 11 个补丁版)。逐条对本仓用法核对:
+
+| CVE | 严重度 | 本仓是否触及 | 结论 |
+|---|---|---|---|
+| CVE-2026-111497 Brotli 解码 OOB 写(RCE) | high | 否 —— 出站全是 `https.request`,Node 的 http 客户端**默认不发** `Accept-Encoding`,服务端不会回 br;代码里无 `fetch()`/Brotli 解码 | 不可达 |
+| CVE-2026-105481 keep-alive 提前写的应答被当成本次应答 | medium | **是**(bing 显式 keep-alive agent;其余 provider 走全局 agent,Node 19+ 默认 keep-alive) | 理论相关:影响是应答错配(翻译/配置串味),不是 RCE |
+| CVE-2026-105483 / 106069 / 106072 TLS 证书主机名校验绕过 | high/medium | 本仓是 TLS **客户端**(连 provider 与 api.github.com):host 固定;用户可改的只有 openai baseUrl / deepl endpoint(自填 URL,属自伤) | 需先攻破 DNS/hosts 才能 MITM |
+| CVE-2026-105482 `dns.resolve` 遇 NUL 截断 | high | 否 —— 全仓不 require dns | 不适用 |
+| CVE-2026-106074 randomUUID/randomInt 熵被存进 SEA | medium | 否 —— 不用 crypto.randomUUID/randomInt/randomBytes | 不适用 |
+| CVE-2026-106070 ZipFile 前缀字节 | low | 否 —— 不用 node:zip | 不适用 |
+| CVE-2026-106071 / 106073 Permission Model 绕过 | low | 否 —— 不用 `--experimental-permission` | 不适用 |
+
+- 依赖更新里 **ca-cert(eMudhra Intermediate CA 被曝 compromised)** 与 OpenSSL 也在内 → 出站 TLS
+  信任库一并更新 ✓。
+- 处置:替换 `portable-node/node.exe` 为官方 v26.12.1 win-x64(下载后按官方 `SHASUMS256.txt`
+  校验 `b3efd5c70cba3308ed46e7e699a9b8aac075bbc6b027fcb39c84c31acc25e2b4`);`portable-node/`
+  在 .gitignore 里(不进 git,只随包分发,用户不必自装 Node)。
+- 升级后全链路实测:全链 35/35 ✓;诊断脚本报 Node v26.12.1 ✓;http 8791 ✓、https 8792
+  (TCP+TLS+HTTP 200)✓、出站 bing 翻译 ✓、api.github.com 版本检查 ✓、BTIPC 位泵 ✓。
+- **踩坑记一笔(与 node 无关,但同一天踩到)**:测前若桥在跑,桥会重写 `config/quickchat.json`
+  (指纹 `fnv1a-f9ec2bc3` → `fnv1a-197a3523`),兜底指纹随即对不上 → `btipc07_sync` 与
+  `quickchat_handshake` **假红**。按铁律「停桥 → `git checkout -- config/quickchat.json` →
+  测 → 启桥」即可复绿。这条以前只在本机踩过,这次差点被误判成 node 升级引入的回归。
+- **发布影响**:已发布的 1.2.1 随包仍是 26.1.0;本次升级随 **1.2.2** 出。

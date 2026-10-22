@@ -252,3 +252,16 @@
 | **护栏** | 新增 `https_panel_guard`(85 项)/`release_entry_guard`(73 项)/`log_redaction`(8 项);`run-tests.js` 显式清单登记(33 项,**全链 33/33**) |
 | **发行** | `BabelTower-1.2.0-win64.zip` 35.4MB,sha256 `584875C8…`,56→57 条目(补 VERSION);冒烟通过;装车 pak15_dir.vpk 494888B(sha `7DA5CBB2…`)与包内 pak 一致;addons 扫内容标记确认仅此一份、无双载 |
 | **版本口径表** | 1.1.0 → btipc08;**1.2.0 → btipc09**;**1.2.1 → btipc10**;**1.2.2(开发中) → btipc11** |
+
+## 16. 随包 Node 运行时(1.2.2 开发中;2026-10-22 升级)
+
+| 项 | 内容 |
+|---|---|
+| 随包运行时 | `portable-node/node.exe`(**不进 git**,`.gitignore` 第 17 行;只随发行包分发,用户不需要自装 Node)|
+| 升级前 | v26.1.0(1.2.0 ~ 1.2.1 随包版本)|
+| 升级后 | **v26.12.1**(官方 win-x64 zip,下载后按官方 `SHASUMS256.txt` 校验 `b3efd5c7…`)|
+| 为什么升级 | Node.js 2026-10-21 发安全公告(26.12.1 / 24.22.1 / 22.23.4),修 4 条 high + 3 条 medium;我们随包的 26.1.0 落后 11 个补丁版|
+| 本仓是否被波及 | **基本不波及**(逐条核对见 checklist §18.6):不触 dns.resolve / Brotli / ZipFile / Permission Model / crypto.randomUUID;真正沾边的只有 keep-alive 应答错配(medium)与 TLS 主机名校验(high,但需先攻破 DNS/hosts)|
+| 依赖更新 | 随公告更新了 ca-cert(eMudhra Intermediate CA 被曝 compromised)、OpenSSL、c-ares、Undici → **出站 TLS 信任库一并翻新**|
+| 升级后实测 | 全链 35/35 ✓;诊断脚本报 Node v26.12.1 ✓;http 8791 ✓、https 8792(TCP+TLS+HTTP 200)✓、出站 bing 翻译 ✓、api.github.com 版本检查 ✓、BTIPC 位泵 ✓|
+| 发布影响 | **已发布的 1.2.1 随包仍是 26.1.0**;本次升级随 **1.2.2** 出|

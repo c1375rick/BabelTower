@@ -97,6 +97,17 @@ if ($prevTag) {
   $log = git log --oneline --no-decorate 2>$null
   $logSection = "提交记录:`n`n$log"
 }
+# 随包 Node 版本:portable-node/ 不进 git,版本号不会留在 git log 里 —— 必须写进更新日志留痕
+# (2026-10-22 起;Node 安全公告是独立于本仓版本的,见 docs/risk_register.md 条目 6)。
+$nodeVer = "unknown"
+try {
+  $nodeExe = Join-Path $Root "portable-node\node.exe"
+  if (Test-Path $nodeExe) {
+    $v = (& $nodeExe --version 2>$null | Select-Object -First 1)
+    if ($v) { $nodeVer = ($v -replace '^v', '').Trim() }
+  }
+} catch { $nodeVer = "unknown" }
+
 $notes = @"
 Babel Tower v$Version
 
@@ -104,6 +115,9 @@ Babel Tower v$Version
 
 ## 更新内容
 $logSection
+
+## 运行环境
+- 内置 Node.js **$nodeVer**(包内 portable-node,用户无需自装 Node)
 
 ## 安装(3 步)
 1. 解压 zip,Mod Manager 导入 pak01_dir.vpk
