@@ -235,6 +235,11 @@
 | 判定口径 | **认自己的包只能看内容标记**(`Babel Tower` / `LCTBridgePanel` / `BTIPC TRQ`),不能看文件名 —— 手工安装的 `pakNN_dir.vpk` 与 workshop 的 `<id>_pakNN_dir.vpk` 混在同一目录,名字完全不可靠。装车前固定先扫一遍 |
 | 游戏资源完整性 | 本次只动 addon 目录,`game\citadel\gameinfo.gi`(sha `2d168be3d114301b03bb`)与 `pak01_dir.vpk`(sha `e449bce1eb96d293d673`)未触碰 |
 | 遗留 | 该旧包是否曾属 Steam 订阅项未查(改名后 Steam 未重新下载,暂看不像订阅物);若日后它自己回来,说明是订阅项,需改用取消订阅或更新发布版,而不是继续改名 |
+| **2026-10-22 更正 + 修好** | 上文"手工残件"的判断**只对了一半**:那份 247,963 B 的旧 BabelTower 内容确实来路不明,但**文件名 `650634_pak04_dir.vpk` 不是随手起的** —— 它是 **QOL Lock(mod 650634)的 pak04 槽位**,DMM 的"已禁用"命名约定正是 `<modid>_<原文件名>`(所以 `650634_pak05/pak11/pak15/pak16/pak47/pak67/pak68/pak92_dir.vpk` 都是它的禁用件,只有 pak04 被我们改了名)。改名 ⇒ DMM 清单 `.dmm.json` 的 `650634.disabledVpks` 指向一个不存在的文件 |
+| 报错现象 | DMM 于 2026-10-22 更新(exe 06:24)后新增"备份必须自证一致"的校验:创建备份时先读回 staging 快照,逐条核对清单引用 ⇒ `backupCreationFailed: Created backup is inconsistent: Failed to restore backup: Mod is invalid: Manifest entry 650634 references missing VPKs: …\addons\650634_pak04_dir.vpk`。旧版 DMM 不校验,所以 10-15 改名后到 10-21 的备份一直没报(10-21 那份快照里同样只有 `.dup-20261015`) |
+| 修法(2026-10-22 已执行) | ① 用 GameBanana 原档补回**正确内容**:`optional_announcer_slot1_seven_josefumivo.zip`(dl `1680726`,md5 `4fae5844…` 与 DMM 记录逐字节一致)→ 解出 `pak04_dir.vpk` 1,667,455 B(sha256 `27F677C0…`,与盘上 `pak09_dir.vpk` **同一份**)→ 放回 `650634_pak04_dir.vpk`;② 旧 BabelTower 残件改名 `babeltower-old-copy-20261015.bak`(不再以 `*_dir.vpk` 结尾 ⇒ 游戏不加载、清单不引用、仍可逆)。体检:`.dmm.json` 全量 **29 处文件引用 0 缺失** |
+| 口径(新增) | **改 addons 里任何文件名之前,先查 `.dmm.json` 有没有引用它** —— DMM 认**文件名**,不认内容;它自己更新后还会校验清单与磁盘的一致性。反过来,`<modid>_pakNN_dir.vpk` 这种带前缀的名字 = 该 mod 处于**禁用**态(不会被游戏加载),手工装车用的无前缀 `pakNN_dir.vpk` 才是生效的 |
+| 遗留(次要) | 盘上 `pak09_dir.vpk` 与 QOL 的 pak04 是同一份播报包(不同 mod 各占一个槽);QOL 现处禁用态,若日后启用会连带加载这 9 个件(含 47 MB pak47),启用前先确认优先级与 pak15 上的 BabelTower 不冲突 |
 
 ## 13. https 面板通道转正 + 保存修复 + 日志打码(1.2.0 窗口;2026-10-15)
 
