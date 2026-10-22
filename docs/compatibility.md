@@ -264,6 +264,6 @@
 | 本仓是否被波及 | **基本不波及**(逐条核对见 checklist §18.6):不触 dns.resolve / Brotli / ZipFile / Permission Model / crypto.randomUUID;真正沾边的只有 keep-alive 应答错配(medium)与 TLS 主机名校验(high,但需先攻破 DNS/hosts)|
 | 依赖更新 | 随公告更新了 ca-cert(eMudhra Intermediate CA 被曝 compromised)、OpenSSL、c-ares、Undici → **出站 TLS 信任库一并翻新**|
 | 升级后实测 | 全链 35/35 ✓;诊断脚本报 Node v26.12.1 ✓;http 8791 ✓、https 8792(TCP+TLS+HTTP 200)✓、出站 bing 翻译 ✓、api.github.com 版本检查 ✓、BTIPC 位泵 ✓|
-| 发布影响 | **已发布的 1.2.1 随包仍是 26.1.0**;本次升级随 **1.2.2** 出|
+| 发布影响 | **1.2.2 已发布**(GitHub `v1.2.2` @ `58ed2eb` = Latest;GameBanana 全局版本 1.2.2,文件 `File_1858768`,更新条目 `467168`)。**1.2.1 及更早的发行包随包仍是 26.1.0** —— 建议尽快升级 |
 | 第二道护栏 | `core/tls_guard.js`:出站 TLS 走自定义 `checkServerIdentity` —— 主机名含 Unicode 点号 / 全角数字 / 非规范或十六进制 IP 写法时**明确失败并说清原因**,其余委托 Node 默认校验。5 个 provider + 桥的版本检查全部接上(`tests/tls_guard.test.js` 钉住接线)|
 | 出包闸 | `scripts/package_release.ps1` 校验随包 Node 版本 **≥ 26.12.1**,低于就拒绝出包 —— `portable-node/` 在 .gitignore 里(版本不进 git log),不设闸就可能悄悄出个旧运行时|

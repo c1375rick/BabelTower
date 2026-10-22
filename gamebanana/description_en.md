@@ -2,6 +2,8 @@
 
 Teammates' messages translated in ~1 second, shown right below the original. Translate your own messages before sending, too. Bing works out of the box with no key; Microsoft / OpenAI-compatible / DeepL / Google supported, with automatic fallback if the main provider fails.
 
+**1.2.2**: config sync now transfers only the fields that changed (slow channel: worst case ~46s -> 0.65-7.8s); the bundled Node runtime is upgraded to **26.12.1** (2026-10-21 security release).
+
 ## Install
 
 1. Extract anywhere, double-click `BabelTower-维护菜单.bat` → 1 (sets up certificate + bridge)
