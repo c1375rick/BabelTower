@@ -146,10 +146,24 @@ git push origin main 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail "git push 失败,请手动推送" }
 
 Step "创建 GitHub Release..."
-$args = @("release", "create", $Tag, $Zip, $Vpk, "--title", "Babel Tower v$Version", "--notes-file", $notesFile)
+# 2026-10-22:必须显式 --target(1.2.1 踩过):`gh release create` 不带 --target 时,
+#   会把 tag 打在**远端默认分支(main)的顶端**,不是本地 HEAD —— 1.2.1 因此把 tag 落到了
+#   main 的 f8e72d2(1.1.0 状态),发布页的 README 与 "Source code" 全是旧代码(资产却是新的),
+#   事后只能 git tag -f 强推归位。这里显式指定本地 HEAD,并在发完回读核对。
+$releaseTarget = (git rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
+if (-not $releaseTarget) { Fail "取不到本地 HEAD 提交号" }
+Write-Host "  tag 目标提交: $releaseTarget"
+$args = @("release", "create", $Tag, $Zip, $Vpk, "--target", $releaseTarget, "--title", "Babel Tower v$Version", "--notes-file", $notesFile)
 if ($Draft) { $args += "--draft" }
 gh @args 2>&1 | Select-Object -Last 2
 if ($LASTEXITCODE -ne 0) { Fail "gh release create 失败" }
+
+# 回读核对:tag 必须指向本地 HEAD(1.2.1 的教训,见上方注释)
+$tagCommit = (git rev-list -n 1 $Tag 2>$null | Select-Object -First 1).Trim()
+if ($tagCommit -ne $releaseTarget) {
+  Fail "tag $Tag 指向 $tagCommit,与本地 HEAD $releaseTarget 不一致!请 git tag -f $Tag $releaseTarget && git push --force origin refs/tags/$Tag 归位"
+}
+Write-Host "  ✓ tag $Tag 已归位到 $tagCommit" -ForegroundColor Green
 
 # ---------- 收尾 ----------
 # (原"版本号自增"段已于 2026-10-10 停用,见上方推送节说明;VERSION 停在已发版本)
