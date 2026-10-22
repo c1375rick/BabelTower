@@ -583,7 +583,7 @@ if (record.quick) {
 |---|---|---|
 | `lingua_chat.js` 的 `const VERSION` | **打进 pak 的版本串**(玩家日志 `loaded …` 看的就是它) | `1.2.2-6726-btipc11`(**开发中,未发布**;构建标 **btipc11** —— BTIPC 请求语义变了:op=config 新增 `{"get":"configsync"}` **差分同步**(只传增删改),与 btipc10 线必须区分;机制见 docs/btipc-https-v1.md §10) |
 | `VERSION` 文件 | 开发/发布号 | `1.2.2`(**已发布** 2026-10-22) |
-| GitHub Release tag | **已发布版** | `v1.2.2` = **Latest**(@ `58ed2eb`,发布 `2026-10-22T01:50:00Z`;**tag 由 `--target` 显式指向本地 HEAD 并自动回读核对**),资产 `BabelTower-1.2.2-win64.zip`(39,925,662B)+ `pak01_dir.vpk`(509,440B),双资产字节数与本地逐字节一致;前一版 `v1.2.1`(@ `2e5f6c4`)保留 |
+| GitHub Release tag | **已发布版** | `v1.2.2` = **Latest**(@ `58ed2eb`,发布 `2026-10-22T01:50:00Z`;**tag 由 `--target` 显式指向本地 HEAD 并自动回读核对**),资产 `BabelTower-1.2.2-win64.zip`(39,925,662B,sha256 `097C5EFC…` = GitHub 侧 asset digest,逐字节一致)+ `pak01_dir.vpk`(509,440B),双资产字节数与本地逐字节一致;前一版 `v1.2.1`(@ `2e5f6c4`)保留 |
 | GameBanana 全局版本 / 文件行版本 | **已发布版** | `1.2.2`(文件 `babeltower-122-win64.zip` / **File_1858768**;条目 `700107`;更新条目 **467168** 已发,列表页 Updates 最新 = 1.2.2;1.2.1(466602)/1.2.0(464639)历史条目与文件保留) |
 | `tests/lc_btipc_guard.test.js` 断言 | 锁死 `const VERSION` **形态 + 主版本等于 `VERSION` 文件**,**升版两处必须同步改**,否则测试红 | 形态 `/^\d+\.\d+\.\d+-6726-btipc\d/`,主版本与 `VERSION` 比对 |
 
