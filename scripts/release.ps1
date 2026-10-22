@@ -88,6 +88,10 @@ if (-not (Test-Path $Vpk)) { Fail "缺少 VPK: $Vpk" }
 Step "生成更新日志..."
 cd $Root
 git fetch --tags 2>&1 | Out-Null
+# 2026-10-22:git log 的输出编码必须显式设 UTF8 —— Windows 控制台默认代码页是 GBK(936),
+# PowerShell 读原生命令输出时按它解码 → 中文提交信息整段变乱码(1.2.1 的发布页就是这么坏的:
+# 乱码已经写进线上,不可无损恢复,只能重写)。设完再读,字符串里才是真汉字。
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $prevTag = ""
 try { $prevTag = (git describe --tags --abbrev=0 2>&1 | Select-Object -First 1).Trim() } catch {}
 if ($prevTag) {
