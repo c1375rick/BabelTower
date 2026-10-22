@@ -193,7 +193,8 @@ if (fs.existsSync(TRANSPORT)) {
   skip("core/btipc/transport.js");
 }
 ok(/require\("\.\/sync_data\.js"\)/.test(bridge), "bridge 引入 sync_data");
-ok(/\.\/sync_data\.js"\]/.test(bridge), "sync_data 进入模块完整性自检(_m 列表缺了就起不来)");
+ok(/"\.\/sync_data\.js"/.test(bridge), "sync_data 进入模块完整性自检(_m 列表缺了就起不来)");
+ok(/"\.\/tls_guard\.js"/.test(bridge), "tls_guard 进入模块完整性自检(_m 列表缺了就起不来)");
 
 // ---------- ⑦ 启动即装配 ----------
 console.log("--- 启动装配 ---");

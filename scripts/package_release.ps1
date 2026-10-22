@@ -40,6 +40,27 @@ if (-not (Test-Path $vpk)) { Fail "缺少 $vpk,请先运行 scripts\build.ps1" }
 if (-not (Test-Path (Join-Path $Root "portable-node\node.exe"))) { Fail "缺少 portable-node\node.exe(内置 Node 运行时)" }
 if (-not (Test-Path (Join-Path $Root "core\bridge_server.js"))) { Fail "缺少 core\bridge_server.js" }
 
+# ---- 随包 Node 版本下限(2026-10-22 加)----
+# 为什么要有闸:portable-node/ 在 .gitignore 里(不进 git),版本号不会留在 git log 里,
+#   谁都能往里塞一个旧版本然后直接出包 —— 用户拿到的就是一个有已知高危漏洞的运行时。
+#   2026-10-21 Node 安全公告修了 4 条 high(含 TLS 主机名校验绕过 CVE-2026-105483/
+#   106069/106072),我们随包的必须 ≥ 26.12.1。
+#   下限记录在 docs/compatibility.md §16;升级 Node 后记得同步改这里。
+$MIN_NODE = "26.12.1"
+try {
+  $nodeExe = Join-Path $Root "portable-node\node.exe"
+  $nodeRaw = (& $nodeExe --version 2>$null | Select-Object -First 1)
+  $nodeVer = if ($nodeRaw) { ($nodeRaw -replace '^v', '').Trim() } else { "" }
+  if (-not $nodeVer) { Fail "读不到随包 Node 版本($nodeExe --version 无输出)" }
+  if ([version]$nodeVer -lt [version]$MIN_NODE) {
+    Fail "随包 Node $nodeVer 低于安全下限 $MIN_NODE(2026-10-21 安全公告:4 条 high,含 TLS 主机名校验绕过)。请先升级 portable-node\node.exe 再出包;下限记录见 docs/compatibility.md §16"
+  }
+  Write-Host "[release] 随包 Node 版本 $nodeVer(下限 $MIN_NODE)OK"
+} catch {
+  if ($_.Exception.Message -like "读不到随包 Node*") { throw }
+  Fail "校验随包 Node 版本失败: $($_.Exception.Message)"
+}
+
 # ---- 组装暂存目录 ----
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
 New-Item -ItemType Directory -Path (Join-Path $Stage "core\providers") -Force | Out-Null
@@ -55,7 +76,7 @@ Write-Host "==> 复制本地桥(core 递归整包)..."
 # 每次用户侧症状都是桥启动即崩且无日志(开发机 core 完整从未复现)。改为递归整包,新增文件不再漏。
 Copy-Item (Join-Path $Root "core\*") (Join-Path $Stage "core\") -Recurse -Force -Exclude "*.bak*"
 # 启动依赖断言: 递归之外的保险丝,缺任一必需文件当场 Fail
-$requiredCore = @("bridge_server.js","config.js","dictionary.js","name_protect.js","game_names.js","quickchat.js","loc_parser.js","hero_names.js","steam_paths.js","sync_data.js")
+$requiredCore = @("bridge_server.js","config.js","dictionary.js","name_protect.js","game_names.js","quickchat.js","loc_parser.js","hero_names.js","steam_paths.js","sync_data.js","tls_guard.js")
 foreach ($f in $requiredCore) {
   if (-not (Test-Path (Join-Path $Stage "core\$f"))) { Fail "core\$f 缺失(桥启动必需)" }
 }

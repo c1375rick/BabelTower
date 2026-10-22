@@ -61,7 +61,7 @@ const fs = require("fs");
 const { execFile } = require("child_process");
 // 打包/安装完整性自检: 缺任一必需内部模块立即给出可读错误并退出,
 // 避免 "Cannot find module" 原始堆栈吓用户(且现在的 uncaughtException 会把堆栈落盘)。
-for (const _m of ["./config", "./providers/registry", "./dictionary", "./name_protect", "./quickchat", "./loc_parser.js", "./steam_paths.js", "./sync_data.js"]) {
+for (const _m of ["./config", "./providers/registry", "./dictionary", "./name_protect", "./quickchat", "./loc_parser.js", "./steam_paths.js", "./sync_data.js", "./tls_guard.js"]) {
   try { require(_m); } catch (e) {
     console.error("[LCT] 安装不完整: 加载 " + _m + " 失败。请重新解压完整安装包,不要手动删除 core 内任何文件。");
     writeCrashLog("module-load-failed", e);
@@ -78,6 +78,7 @@ const quickchat = require("./quickchat");
 const steamPaths = require("./steam_paths.js");
 // btipc07:health / gamenames / quickchat 的载荷编码(指纹协商 + gzip 分片 + delta)
 const syncData = require("./sync_data.js");
+const tlsGuard = require("./tls_guard.js");
 // ---------- BTIPC v1(规格 docs/btipc-v1.md)----------
 // 窗口表(§6 状态机/§14.2 隔离)+ console.log tail 的 REQ/TRQ/CAN 解析(§14.1 校验,非法静默 drop 只记 WARN)。
 // 两条传输路径完全分离,共用同一套帧/窗口/重试核心:
@@ -698,6 +699,8 @@ function fetchGitHubRelease() {
       req = https.get(
         GITHUB_API_URL,
         {
+          // 出站 TLS 主机名校验走本地护栏(见 core/tls_guard.js)
+          checkServerIdentity: tlsGuard.checkServerIdentity,
           headers: {
             "User-Agent": "BabelTower/1.0",
             "Accept": "application/vnd.github+json",

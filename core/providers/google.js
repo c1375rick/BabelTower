@@ -7,6 +7,7 @@
 "use strict";
 
 const https = require("https");
+const tlsGuard = require("../tls_guard");
 
 function mapLang(lang) {
   const main = String(lang || "zh-Hans").toLowerCase().split("-")[0];
@@ -51,6 +52,7 @@ function postJson(url, apiKey, payload, timeoutMs) {
     const req = https.request(
       url,
       {
+        checkServerIdentity: tlsGuard.checkServerIdentity,
         method: "POST",
         headers: {
           "Content-Type": "application/json",

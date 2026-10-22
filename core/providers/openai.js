@@ -10,6 +10,7 @@
 
 const https = require("https");
 const http = require("http");
+const tlsGuard = require("../tls_guard");
 
 const DEFAULT_BASE = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -38,6 +39,7 @@ function requestJson(url, apiKey, payload, timeoutMs) {
     const req = mod.request(
       url,
       {
+        checkServerIdentity: tlsGuard.checkServerIdentity,
         method: "POST",
         headers: {
           "Content-Type": "application/json",

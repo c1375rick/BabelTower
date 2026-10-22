@@ -64,6 +64,9 @@
   Node 的安全公告是独立于本仓版本的 —— 1.2.0 ~ 1.2.1 随包的是 26.1.0,2026-10-21 公告后落后 11 个补丁版。
   桥是**长驻本机 HTTP/TLS 服务**(8791/8792)且会主动出站连 provider,运行时本身就是攻击面。
 - **本次处置**:升级到 v26.12.1(官方包 + SHASUMS256 校验),随 1.2.2 出。
+- **两道闸**(防复发):① `core/tls_guard.js` —— 出站 TLS 走自定义 `checkServerIdentity`,
+  畸形主机名(Unicode 点号/全角数字/非规范 IP)明确失败;② `scripts/package_release.ps1` 的
+  出包闸 —— 随包 Node 版本 < 26.12.1 直接拒绝出包(版本不进 git log,不设闸就会悄悄出旧运行时)。
 - **残余风险(逐条核对,见 checklist §18.6)**:不触 dns.resolve / Brotli / ZipFile / Permission Model /
   crypto.randomUUID → 那几条 high 漏洞在本仓**不可达**;仍有两条沾边:
   ① keep-alive 应答错配(medium)—— 影响是翻译/配置串味,不是 RCE;

@@ -16,6 +16,7 @@
 "use strict";
 
 const https = require("https");
+const tlsGuard = require("../tls_guard");
 
 // keep-alive agent:复用 TLS 连接,省掉每次请求的 TCP+TLS 握手(实测每请求省 ~200-400ms)
 const agent = new https.Agent({ keepAlive: true, maxSockets: 4 });
@@ -27,7 +28,7 @@ const EDGE_TRANSLATE_URL = "https://edge.microsoft.com/translate/translatetext";
 
 function request(url, { method = "GET", headers = {}, body = null, timeoutMs = 15000, redirects = 0 } = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.request(url, { method: method, headers: headers, agent: agent }, (res) => {
+    const req = https.request(url, { method: method, headers: headers, agent: agent, checkServerIdentity: tlsGuard.checkServerIdentity }, (res) => {
       // 跟随重定向(最多 3 跳)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects < 3) {
         res.resume();

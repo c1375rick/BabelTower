@@ -265,3 +265,5 @@
 | 依赖更新 | 随公告更新了 ca-cert(eMudhra Intermediate CA 被曝 compromised)、OpenSSL、c-ares、Undici → **出站 TLS 信任库一并翻新**|
 | 升级后实测 | 全链 35/35 ✓;诊断脚本报 Node v26.12.1 ✓;http 8791 ✓、https 8792(TCP+TLS+HTTP 200)✓、出站 bing 翻译 ✓、api.github.com 版本检查 ✓、BTIPC 位泵 ✓|
 | 发布影响 | **已发布的 1.2.1 随包仍是 26.1.0**;本次升级随 **1.2.2** 出|
+| 第二道护栏 | `core/tls_guard.js`:出站 TLS 走自定义 `checkServerIdentity` —— 主机名含 Unicode 点号 / 全角数字 / 非规范或十六进制 IP 写法时**明确失败并说清原因**,其余委托 Node 默认校验。5 个 provider + 桥的版本检查全部接上(`tests/tls_guard.test.js` 钉住接线)|
+| 出包闸 | `scripts/package_release.ps1` 校验随包 Node 版本 **≥ 26.12.1**,低于就拒绝出包 —— `portable-node/` 在 .gitignore 里(版本不进 git log),不设闸就可能悄悄出个旧运行时|

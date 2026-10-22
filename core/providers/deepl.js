@@ -9,6 +9,7 @@
 "use strict";
 
 const https = require("https");
+const tlsGuard = require("../tls_guard");
 
 const DEFAULT_ENDPOINT = "https://api-free.deepl.com/v2/translate";
 
@@ -42,6 +43,7 @@ function postForm(url, fields, timeoutMs) {
     const req = https.request(
       url,
       {
+        checkServerIdentity: tlsGuard.checkServerIdentity,
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
