@@ -72,7 +72,7 @@
   const PENDING_FILL_TTL_MS = 5000; // 6726:空行观察窗 TTL(气泡先建、文本延迟填充;超时移除防空行永久占用)
   const HUD_OVERLAY_LIMIT = 10; // HUD 译文浮层上限(超过则清理最旧,防内存泄漏)
   const TITLE_POLL_SECONDS = 0.3;
-  const BRIDGE_ALIVE_SECONDS = 1.5;
+  const BRIDGE_ALIVE_SECONDS = 3.0; // nav 存活窗口:开局 3s 内 CEF 忙(本地化重建/材质加载),1.5s 误杀率 ~6%
   // 面板通道判死:6726 起 SetURL 导航整条失效(每次 nav 都是 src="" 从不加载)。
   // 连续 N 次"页面从未开始加载"才判死通道,并进入冷却期:期间不再尝试导航(免得每 15s 打一条
   // `bridge nav failed: panel dead` 死链日志)。冷却到点自动复探,游戏改版修好可自愈。
@@ -120,8 +120,9 @@
   const HTTPS_PANEL_ENABLED = true; // 总开关;现场排障时置 false 即刻全量退回 BTIPC
   const HTTPS_PANEL_HOST = "localhost"; // 证书 SAN 含 DNS:localhost 与 IP:127.0.0.1
   const HTTPS_PANEL_PORT = 8792; // 与 core/bridge_https.js 的默认端口一致
-  const HTTPS_PANEL_PROBE_SECONDS = 3.0; // 开机探针窗口:超过仍无 lct-alive 即判本会话不可用
+  const HTTPS_PANEL_PROBE_SECONDS = 6.0; // 探针窗口:nav 后等 title 变响应的最长时间(含一次 retryNavOnce)
   const HTTPS_PANEL_DEAD_STREAK = 3; // 会话内连续几次通道级失败才永久退 BTIPC(偶发抖动不误杀)
+  const HTTPS_PANEL_REPROBE_MS = 300000; // 判死后每隔 5 分钟后台重探一次;成功即整场恢复 https(不再等重启)
   const TITLE_PREFIX = "LCT";
   const TITLE_ALIVE = "lct-alive";
   const BRIDGE_STATUS_LABEL_ID = "LCTBridgeStatusLabel";
@@ -360,7 +361,9 @@
     httpsPanelOk: null, // null=尚未探测;true=本会话走 https 面板;false=退回 BTIPC
     httpsPanelStreak: 0, // 通道级失败连击(够 HTTPS_PANEL_DEAD_STREAK 次就永久退 BTIPC)
     httpsPanelDemotedLogged: false, // 本次会话是否已打过"退 BTIPC"那条日志(避免每请求刷屏)
-    httpsPanelProbeTries: 0, // 开机探针尝试次数(有在途翻译时让路,最多让 3 次)
+    httpsPanelHardDead: false, // true=运行时连击硬判死(疑似证书级故障):不自动重探;探测偶发失败不受此限
+    probePending: null, // 探针独立槽(不占 State.pending 单槽):探针与翻译/BTIPC 位泵并行等引擎 I/O
+    probeLastAt: 0, // 上次探测发起时间(nowMs()),判死后按 HTTPS_PANEL_REPROBE_MS 节流重探
     eventsRegistered: false,
     pending: null, // 统一在途桥请求 { id, onResult, deadline, sawAlive }
     bridgeUp: false,
@@ -2355,13 +2358,10 @@ function injectTranslation(row, sig, text, fragment) {
   function httpsPanelTakes(job) {
     if (!HTTPS_PANEL_ENABLED) return false;
     if (State.httpsPanelOk !== true) return false;
+    if (State.probePending) return false; // 探针在途:面板单客户,新 job 这一条走 BTIPC(下次自动回 https)
     if (job.kind === "outgoing" || job.kind === "chat") return true;
-    // 2026-10-15:设置面板的「保存」也接进本通道(用户实机「OpenAI 的 API 老是保存不上,得反复好几次」)。
-    // 根因是纯算术:带 Key 的载荷 ≈600B、位泵每帧 10B → 61 帧×600ms + 起跑 1200ms ≈38 秒,而写的死线
-    // 只有 8 秒(当初按**应答** 1 帧 ≈3s 定的,没算上行要 61 帧)→ 必然 REQ_TIMEOUT → 面板显示「保存失败」;
-    // 反复重试只是把 38 秒的活排进单槽队列。本通道整条 JSON 一次 fetch,同一份载荷 ~1 秒。
-    // 为什么连 op=test / op=log / 读也一起接:同一个根因(载荷大 vs 死线小)。读靠 50s 死线"能用"但一次要
-    // 7.8~26 秒。**按"根因相同"划线,不按"哪个 op 眼下没报障"划线。** 通道判死时全部原样交回 BTIPC。
+    // 2026-10-15 起 op=save/test/log/读 全接进本通道,根因同一:大载荷 vs 位泵 10B/帧(保存 600B≈38s>8s 死线必炸)。
+    // 通道判死时全部原样交回 BTIPC。
     if (job.kind === "bridge") return true;
     return false;
   }
@@ -2377,9 +2377,7 @@ function injectTranslation(row, sig, text, fragment) {
     } catch (e) {
       log("https panel demote: timer cleanup threw " + expErr(e));
     }
-    // 配置监听轮询的失败不算通道病:轮询频率是翻译的百倍,一次抖动就把整个会话
-    // 永久降级到 BTIPC 不可接受(判死是给翻译路径用的健康信号)。
-    // 这里直接让这一轮失败(不交接 BTIPC —— 那会白花 ~2s 位泵)。
+    // 配置轮询的失败不算通道病(频率是翻译百倍,一次抖动不该降级整个会话):这轮直接失败,不交接 BTIPC。
     if (job && job._cfgPoll) {
       log("cfg watch: poll failed on https panel, skipping this round");
       return false;
@@ -2390,12 +2388,13 @@ function injectTranslation(row, sig, text, fragment) {
         ", handing this job back to BTIPC");
       return handToBtipc(job);
     }
-    // 连击到线:本会话永久退 BTIPC(不再每请求试一次),并在游戏内只告警一次。
+    // 连击到线:本会话退 BTIPC。打上硬判死标记(重探是白撞);游戏内只告警一次。
     State.httpsPanelOk = false;
+    State.httpsPanelHardDead = true;
     if (!State.httpsPanelDemotedLogged) {
       State.httpsPanelDemotedLogged = true;
       log("https panel: dead (" + State.httpsPanelStreak + " consecutive hard fails) — " +
-        "falling back to BTIPC for the rest of this session. If the panel channel should work, run " +
+        "falling back to BTIPC for the rest of this session. If this repeats every session, run " +
         "scripts\\gen_bridge_cert.ps1 -Trust and FULLY restart Steam (restarting the game alone is not enough).");
     }
     return handToBtipc(job);
@@ -2425,64 +2424,56 @@ function injectTranslation(row, sig, text, fragment) {
     }
   }
 
-  // 开机探针:一次性决定本会话走哪条通道。
-  // 为什么必须探而不是"每请求试":证书未信任的用户若每条请求都先撞一次死链,
-  // 会白付 BRIDGE_ALIVE_SECONDS(1.5s)——比现在的 BTIPC 还慢。探一次定生死,
-  // 未通过就直接全程 BTIPC,用户体感与今天完全一致。
-  function probeHttpsPanel() {
-    if (State.httpsPanelOk !== null) return; // 已定论
-    State.httpsPanelProbeTries += 1;
-    if (State.httpsPanelProbeTries > 3) {
-      State.httpsPanelOk = false;
-      log("https panel: probe skipped (panel slot busy), staying on BTIPC");
-      return;
+  // 探针(独立槽):与 State.pending 并行,等的是不同引擎 I/O(CEF nav vs BTIPC 帧传递),无争用。
+  function settleProbe(ok, err) {
+    const probe = State.probePending;
+    State.probePending = null;
+    State.httpsPanelStreak = 0;
+    State.httpsPanelOk = ok;
+    if (ok) {
+      State.httpsPanelHardDead = false;
+      log("https panel: ALIVE (https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
+        ") — translations now take one RTT instead of the BTIPC bit pump");
+    } else {
+      State.probeLastAt = nowMs();
+      log("https panel: not usable (" + err + ") — on BTIPC; auto re-probe every " +
+        Math.round(HTTPS_PANEL_REPROBE_MS / 60000) + "min, success restores https without restart");
     }
-    // 探针占用的是与翻译同一个单槽(State.pending),有在途请求就让路,1s 后再试。
-    if (State.pending) {
-      try { $.Schedule(1.0, probeHttpsPanel); } catch (eR) {}
-      return;
-    }
+  }
+
+  function startHttpsProbe() {
+    if (!HTTPS_PANEL_ENABLED || State.probePending) return;
     const panel = ensurePanel();
     if (!isValid(panel) || typeof panel.SetURL !== "function") {
       State.httpsPanelOk = false;
+      State.probeLastAt = nowMs();
       log("https panel: no usable HTML panel declared in chat.xml — staying on BTIPC");
       return;
     }
     ensureBridgeEvents();
-    // 顺序要紧:State.pending 先落,再启动轮询。反过来会让 pollTitle 撞上空 pending
-    // 直接 return 并把 polling 置停(State.polling=false 在函数开头),探针永远收不到结果。
-    State.pending = {
-      id: "probe",
-      onResult: function (payload) {
-        if (payload && payload.ok) {
-          State.httpsPanelOk = true;
-          State.httpsPanelStreak = 0;
-          log("https panel: ALIVE (https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
-            ") — translations now take one RTT instead of the BTIPC bit pump");
-        } else {
-          State.httpsPanelOk = false;
-          log("https panel: not usable (" + String((payload && payload.error) || "no reply") +
-            ") — translations stay on BTIPC. To enable: scripts\\gen_bridge_cert.ps1 -Trust, then FULLY restart Steam.");
-        }
-      },
-      deadline: nowMs() + HTTPS_PANEL_PROBE_SECONDS * 1000,
-      startedAt: nowMs(),
-      sawAlive: false,
-    };
+    // 顺序要紧:probePending 先落再启动轮询,否则 pollTitle 撞空槽提前停摆。
+    State.probePending = { sawAlive: false, navRetried: false, startedAt: nowMs(), navUrl: null };
     startTitlePolling();
-    try {
-      panel.visible = true;
-    } catch (e) {}
+    try { panel.visible = true; } catch (e) {}
     const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
       "/bridge?op=health&id=probe&lang=" + gameUiLang();
+    State.probePending.navUrl = probeUrl;
     try {
       panel.SetURL(probeUrl);
       log("https panel: probing " + probeUrl);
     } catch (e) {
-      State.pending = null;
-      State.httpsPanelOk = false;
-      log("https panel: probe SetURL threw " + expErr(e) + " — staying on BTIPC");
+      settleProbe(false, "seturl_threw(" + expErr(e) + ")");
     }
+  }
+
+  // 开机首探 + 判死后重探统一入口(主循环每拍调用,按状态节流)
+  function maybeProbeHttpsPanel() {
+    if (!HTTPS_PANEL_ENABLED || State.probePending) return;
+    if (State.pending || State.httpsPanelOk === true) return; // 互斥:探针只占空闲面板;通道健康则无事
+    if (State.httpsPanelHardDead) return; // 运行时连击硬判死(证书级故障嫌疑):重探是白撞,保持 BTIPC
+    if (State.httpsPanelOk === false && nowMs() - State.probeLastAt < HTTPS_PANEL_REPROBE_MS) return;
+    State.probeLastAt = nowMs();
+    startHttpsProbe();
   }
 
   // HTML 面板通道:SetURL 导航 /bridge 页面,轮询 document.title 读回
@@ -2524,11 +2515,8 @@ function injectTranslation(row, sig, text, fragment) {
       try { if (typeof panel.SetFocus === "function") panel.SetFocus(); } catch (e) {}
       try { panel.RemoveClass("LCTBridgePanel"); panel.AddClass("LCTBridgePanelActive"); } catch (e) {}
       log("diag-activate: panel made visible/active before nav");
-      // EXP-6726d/e 一次性探针已定论并下线(2026-10-20 腾行数给"网页设置即时同步"):
-      //   面板可用方法只有 SetURL/SetImage;引擎**没有**异步 HTTP API
-      //   ($.AsyncWebRequest 已被移除,全局 $ 里也无替代品);面板 ready 事件不改变导航。
-      //   → 通道只能是"隐藏 HTML 面板 + document.title 回程"。证据留在 docs/btipc-https-v1.md。
-      // EXP-6726f:Image 面板远程加载探针(保留作通道存活的旁证:桥日志出现 IMG-HIT 即通道活)
+      // EXP-6726d/e/f:引擎无异步 HTTP API(AsyncWebRequest 已移除),通道只能是"隐藏面板+title 回程";
+      //   Image 面板探针保留作通道旁证(桥日志 IMG-HIT = 通道活)。证据:docs/btipc-https-v1.md
       try {
         const imgUrl = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/test.png?id=f" + (State.imgProbeCount = (State.imgProbeCount || 0) + 1);
         let imgPanel = null;
@@ -2849,10 +2837,7 @@ function injectTranslation(row, sig, text, fragment) {
       log("outgoing dropped: queued too long, sending original");
       return;
     }
-    // ---- https 面板通道优先(2026-10-15)----
-    // 一个 RTT 拿整条结果(下行不再是位泵的 FIRST_SHOT + 帧数×tClose)。
-    // 通道级失败由 demoteToBtipc 原样交回下面的 BTIPC —— 证书没信任/Steam 没重启的
-    // 用户体感与今天完全一致(开机探针已判死时连一次都不会试)。
+    // ---- https 面板通道优先(2026-10-15):一个 RTT 拿整条结果;失败由 demoteToBtipc 原样交回 BTIPC ----
     if (httpsPanelTakes(job)) {
       dispatchViaPanel(job, {
         httpsChannel: true, // 绕开 http 面板通道的判死冷却(见 navSuppressedFor 注释)
@@ -3234,10 +3219,10 @@ function injectTranslation(row, sig, text, fragment) {
     return null;
   }
 
-  // 偶发"引擎压根没加载页面"(src="")时原地重试一次:重试成本 ≈1.5s,而直接降级
-  // BTIPC 的代价是出站翻译 6.6s / 读配置 24s。返回 true = 已重试、继续等这一轮。
+  // 偶发"引擎压根没加载页面"(src="")时原地重试一次(成本≈1 窗口,直降 BTIPC 更贵)。true=已重试、继续等。
   function retryNavOnce(pending) {
     if (pending.navRetried || !pending.navUrl) return false;
+    if (State.probePending && pending !== State.probePending) return false; // 探针在途:不重试,防踩掉 probe 的 nav
     pending.navRetried = true;
     pending.startedAt = nowMs();
     try {
@@ -3255,37 +3240,54 @@ function injectTranslation(row, sig, text, fragment) {
   function pollTitle() {
     State.polling = false;
     const pending = State.pending;
-    if (!pending) return;
+    const probe = State.probePending; // 与 pending 互斥:探针只在 pending 空时发起,期间新 job 被 httpsPanelTakes 挡到 BTIPC
+    if (!pending && !probe) return;
     diagTitlePoll();
     const title = readBridgeTitle();
     if (title === TITLE_ALIVE) {
       markBridgeUp();
-      pending.sawAlive = true;
+      if (pending) pending.sawAlive = true;
+      if (probe) probe.sawAlive = true;
       // 导航真的成功过 => 面板通道可用,清掉判死计数与冷却
       State.navDeadStreak = 0;
       State.navDeadUntil = 0;
-    } else if (title && title.indexOf(TITLE_PREFIX + pending.id) === 0) {
-      // 轮询通道命中:标题 = 前缀 + id + JSON
+    } else if (title && title.indexOf(TITLE_PREFIX) === 0) {
+      // 按 id 路由:探针 id 固定 "probe",翻译 job 的 id 动态(rXX)
       let payload = null;
-      try {
-        payload = JSON.parse(title.slice((TITLE_PREFIX + pending.id).length));
-      } catch (e) {}
-      State.pending = null;
-      pending.onResult(payload || { ok: false, error: "bad_bridge_payload" });
+      if (probe && title.indexOf(TITLE_PREFIX + "probe") === 0) {
+        try { payload = JSON.parse(title.slice((TITLE_PREFIX + "probe").length)); } catch (e) {}
+        settleProbe(!!(payload && payload.ok), String((payload && payload.error) || "no_reply"));
+        return;
+      }
+      if (pending && title.indexOf(TITLE_PREFIX + pending.id) === 0) {
+        try { payload = JSON.parse(title.slice((TITLE_PREFIX + pending.id).length)); } catch (e) {}
+        State.pending = null;
+        pending.onResult(payload || { ok: false, error: "bad_bridge_payload" });
+        return;
+      }
+    }
+    if (probe) {
+      // 探针 nav 失败(3s 无 alive)原地重试一次;仍败则判本会话暂不可用(等下轮自动重探,不再一次性锁死)
+      if (!probe.sawAlive && nowMs() - probe.startedAt > BRIDGE_ALIVE_SECONDS * 1000) {
+        if (retryNavOnce(probe)) return;
+        State.panelDead = true;
+        settleProbe(false, "bridge_nav_failed");
+        return;
+      }
+      if (nowMs() - probe.startedAt > HTTPS_PANEL_PROBE_SECONDS * 1000) {
+        settleProbe(false, probe.sawAlive ? "no_reply" : "probe_timeout");
+        return;
+      }
+      $.Schedule(TITLE_POLL_SECONDS, pollTitle);
       return;
     }
-    // 导航失败快速判定:BUGFIX 0.1.3
-    // 页面 JS 加载后立即置 document.title='lct-alive',正常 <2s 内必到。
-    // 若 BRIDGE_ALIVE_SECONDS 内连 alive 都没出现 => 面板导航失败(被游戏回收/UI 重建),
-    // 立即失败并标记面板死亡,下次 ensurePanel 重新查找,而不是傻等 15s 超时。
+    // 导航失败快速判定(BUGFIX 0.1.3):3s 内连 alive 都没出现 => 导航失败,立即结算而非傻等 15s 超时。
     if (!pending.sawAlive && nowMs() - pending.startedAt > BRIDGE_ALIVE_SECONDS * 1000) {
       if (retryNavOnce(pending)) return; // 偶发导航失败:原地重试一次再判死(见 retryNavOnce)
       State.pending = null;
       State.panelDead = true;
       const snap = navDiagSnapshot();
-      // 硬死签名:src 为空 = 引擎压根没开始加载页面(6726 起 SetURL 导航整条失效)。
-      // 只有这种才累计判死;页面已加载但没来得及置 alive(有 src)只重置计数,
-      // 免得把偶发抖动误判成通道死而长期禁用。
+      // 硬死签名:src 为空 = 引擎压根没开始加载页面;只有这种才累计判死(有 src 只重置,防偶发抖动误杀)。
       if (snap.indexOf('src=""') !== -1) State.navDeadStreak += 1;
       else State.navDeadStreak = 0;
       if (State.navDeadStreak >= PANEL_NAV_DEAD_STREAK) {
@@ -4137,6 +4139,7 @@ function injectTranslation(row, sig, text, fragment) {
     const touchedLobby = scanLobbyOnce();
     const touchedFill = processPendingFill();
     const touched = touchedChat || touchedHud || touchedLobby || touchedFill;
+    maybeProbeHttpsPanel(); // https 探针:开机首探 + 判死后节流重探(独立槽,与本循环的翻译调度并行)
     const hasWork = touched || State.queue.length > 0 || State.pending;
     $.Schedule(hasWork ? FAST_POLL_SECONDS : SLOW_POLL_SECONDS, scanChatMessages);
   }
@@ -5464,9 +5467,7 @@ function injectTranslation(row, sig, text, fragment) {
   // ================= 启动 =================
 
   // ================= 2026-10-16:配置同步启动门 + 用户脏标记 =================
-  // 启动门:boot() 与 onBridgeAlive() 共用 once。boot 不再 t=0 直接同步 ——
-  // 那时 https 探针没定论只能走 BTIPC 位泵(25s+);等探针定论(通常 2-4s)后经
-  // https 1 个来回。探针 8s 无定论(槽忙)则走老路,不无限等(自动降级不断)。
+  // 启动门:boot 等探针定论(通常 2-4s)再同步,避免 t=0 直发必走 BTIPC 位泵(25s+);8s 无定论走老路。
   function startCfgSync() {
     if (State.cfgSyncStarted) return;
     State.cfgSyncStarted = true;
@@ -5868,10 +5869,9 @@ function injectTranslation(row, sig, text, fragment) {
     // 2026-10-16:启动同步等探针定论后再发(见 startCfgSync/waitProbeForSync),t=0 直发必走慢通道。
     applyUILang(); // 初始化界面语言(配置同步后应用)
     updateBridgeDot(); // 初始状态:桥未上线前显示红点
-    // https 面板通道开机探针(2026-10-15):一次性决定本会话走 https 面板还是 BTIPC。
-    // 排在 2s 的 healthCheck 之前 —— 那次也要占同一个单槽,先到先得;探针若被在途翻译
-    // 挡住会自己 1s 后重试(最多 3 次,见 probeHttpsPanel)。
-    try { $.Schedule(1.2, probeHttpsPanel); } catch (eP) {}
+    // https 面板通道探针(2026-10-15 立项,2026-10-28 改独立槽):与翻译单槽并行,不再让路重试;
+    // 判死后由主循环按 HTTPS_PANEL_REPROBE_MS 自动重探(见 maybeProbeHttpsPanel)。
+    try { $.Schedule(1.2, maybeProbeHttpsPanel); } catch (eP) {}
     try { $.Schedule(2.0, waitProbeForSync); } catch (eW) { startCfgSync(); }
     // EXP6734-B/C/D/E: 手动触发(进对局后聊天输入 /bt6734b | /bt6734c | /bt6734d | /bt6734e);6734-A 已采完不自动跑
     // DMM 用户引导:启动后 12s 桥仍未在线 => 面板显示未运行 + 安装指引

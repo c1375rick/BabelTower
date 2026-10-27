@@ -60,9 +60,11 @@ check("只接管 outgoing/chat 两条翻译路径(不抢 config/test/log 的既�
   /job\.kind === "outgoing" \|\| job\.kind === "chat"/.test(takesSrc));
 check("总开关为 false 时直接不取(现场排障的旁路开关真实有效)",
   /if \(!HTTPS_PANEL_ENABLED\) return false/.test(takesSrc));
-check("boot 里排了开机探针", /\$\.Schedule\(1\.2, probeHttpsPanel\)/.test(SRC));
-check("探针只跑一次(判出结论即置位,随后早退)",
-  /function probeHttpsPanel\(\) \{\s*\n\s*if \(State\.httpsPanelOk !== null\) return;/.test(SRC));
+check("boot 里排了开机探针", /\$\.Schedule\(1\.2, maybeProbeHttpsPanel\)/.test(SRC));
+check("探针门控三纪律:通道健康早退 / 硬判死(连击到线)不自动重探 / 偶发判死按 REPROBE_MS 节流重探",
+  /function maybeProbeHttpsPanel\(\) \{[\s\S]*?State\.httpsPanelOk === true\) return;[\s\S]*?State\.httpsPanelHardDead\) return;[\s\S]*?HTTPS_PANEL_REPROBE_MS\) return;/.test(SRC));
+check("判死后自动重探的节流常量存在(2026-10-28:一次偶发 nav 失败不再锁死整场)",
+  /const HTTPS_PANEL_REPROBE_MS = \d+/.test(SRC));
 
 // ---------- 3. 失败分类(护栏第 2 条)----------
 check("硬失败表存在", /const PANEL_HARD_FAIL = \{[\s\S]*?\};/.test(SRC));
