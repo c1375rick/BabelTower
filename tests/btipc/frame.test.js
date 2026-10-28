@@ -143,11 +143,12 @@ console.log("--- buildFrame 校验 ---");
   ok(threw === 5, `seq/id/len 越界全部 throw(${threw}/5)`);
 }
 
-// ---------- 游戏侧内联副本对账(源: mod/panorama/scripts/lingua_chat.js §BTIPC)----------
+// ---------- 游戏侧内联副本对账(源: mod/panorama/scripts/lingua_chat_btipc.js §BTIPC)----------
+// 2026-10-28:BTIPC 传输层从 lingua_chat.js 拆出,函数本体随迁 —— 对账改读新文件(语义不变)
 // §12.1 铁律:两侧 crc16/decode/编码器必须逐字节一致;曾抓出代理对漏加 0x10000 的 emoji bug。
 console.log("--- 游戏侧内联副本对账 ---");
 {
-  const linguaPath = path.join(__dirname, "..", "..", "mod", "panorama", "scripts", "lingua_chat.js");
+  const linguaPath = path.join(__dirname, "..", "..", "mod", "panorama", "scripts", "lingua_chat_btipc.js");
   const src = fs.readFileSync(linguaPath, "utf8");
   const extract = (name) => {
     const start = src.indexOf("function " + name + "(");

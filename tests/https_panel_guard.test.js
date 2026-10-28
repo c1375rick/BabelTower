@@ -20,7 +20,9 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
-const SRC = fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat.js"), "utf8");
+// 2026-10-28:BTIPC 传输层拆至 lingua_chat_btipc.js —— 读拼接源,断言语义不变
+const SRC = fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat.js"), "utf8") +
+  "\n" + fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_btipc.js"), "utf8");
 const HTTPS_SRV = path.join(ROOT, "core", "bridge_https.js");
 
 let pass = 0, fail = 0;

@@ -17,14 +17,17 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
-const SRC = fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat.js"), "utf8") +
+  // 2026-10-28:STORM 状态机与豁免窗常量随 BTIPC 传输层拆出 —— 读拼接源,断言语义不变
+  "\n" + fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_btipc.js"), "utf8");
 
 test("T1-① 状态钉:btipcLastStormAt 声明 + STORM enter 盖时间戳", () => {
   assert.ok(/btipcLastStormAt:\s*0/.test(SRC), "State 缺 btipcLastStormAt 字段声明");
   const iEnter = SRC.indexOf("if (st.consecutiveFails >= BTIPC_STORM_TRIGGER");
   assert.ok(iEnter !== -1, "缺 STORM enter 判定块");
   const block = SRC.slice(iEnter, iEnter + 400);
-  assert.ok(/State\.btipcLastStormAt = nowMs\(\)/.test(block),
+  // 2026-10-28 拆分后 STORM enter 块在 lingua_chat_btipc.js,宿主依赖带 D. 前缀(注入的 State/nowMs)
+  assert.ok(/(?:D\.)?State\.btipcLastStormAt = (?:D\.)?nowMs\(\)/.test(block),
     "STORM enter 块未盖拥塞时间戳(回声豁免将永远不生效)");
 });
 

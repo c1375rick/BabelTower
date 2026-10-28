@@ -159,10 +159,7 @@
     "inferno", "paradox", "pocket", "shiv", "viscous", "warden",
     "wraith", "yamato", "seven", "ricochet",
   ];
-  let PROTECT_RE = new RegExp(
-    "\\b(?:" + PROTECT_NAMES.map(n => n.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')).join("|") + ")\\b",
-    "gi"
-  );  let PROTECT_TO_ZH = {
+  let PROTECT_TO_ZH = {
     "abrams": "亚伯兰", "bebop": "比波普", "calico": "卡厉可",
     "dynamo": "奇能", "geist": "盖斯特夫人", "haze": "岚梦",
     "inferno": "炽焱", "lady geist": "盖斯特夫人", "mo krill": "莫克双雄",
@@ -201,52 +198,80 @@
   const PROTECT_TO_ZH_FALLBACK = PROTECT_TO_ZH;
   const PROTECT_NAMES_FALLBACK = PROTECT_NAMES;
   
-  // ---- 中文游戏名保护(双向翻译:中文名→英文占位→翻译→还原) ----
+  // ---- 游戏名占位保护(EN/ZH 两通道共用同一套参数化实现) ----
+  // 占位符 LCTPH<i> / LCTZHPH<i> 与桥侧 core/name_protect.js、游戏内 vpk fallback 同一约定,不可改
   // 从 PROTECT_TO_ZH 反转构建 { 中文译名 -> 英文原名 }
   let ZH_TO_EN = {};
-  let ZH_PROTECT_RE = null;
-  
-  function buildZhProtectRe(zhNames) {
-    if (!zhNames || zhNames.length === 0) return null;
-    // 按长度降序,避免短名误匹配长名子串
-    const sorted = zhNames.slice().sort((a, b) => b.length - a.length);
-    const escaped = sorted.map(n => n.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
-    return new RegExp("(?:" + escaped.join("|") + ")", "g");
-  }
-  
-  /** 占位替换中文游戏名:lookup = {中文名 -> 英文原名};返回 { text, zhNameMap } */
-  function replaceChineseGameNames(text, lookup) {
-    if (!text || typeof text !== "string" || !ZH_PROTECT_RE) return { text: text, zhNameMap: null };
-    try {
-      const zhNameMap = [];
-      const replaced = text.replace(ZH_PROTECT_RE, function (match) {
-        const idx = zhNameMap.length;
-        zhNameMap.push(lookup ? (lookup[match] || match) : match);
-        return "LCTZHPH" + idx;
-      });
-      return zhNameMap.length > 0 ? { text: replaced, zhNameMap: zhNameMap } : { text: text, zhNameMap: null };
-    } catch (e) {
-      log("replaceChineseGameNames error: " + (e && e.message ? e.message : String(e)));
-      return { text: text, zhNameMap: null };
-    }
-  }
-  
-  /** 还原中文名占位符 */
-  function restoreChineseGameNames(text, zhNameMap) {
-    if (!text || !zhNameMap) return text;
-    for (let i = 0; i < zhNameMap.length; i++) {
-      text = text.split("LCTZHPH" + i).join(zhNameMap[i]);
-    }
-    return text;
+
+  // 名单 → 正则体:按长度降序(避免短名误匹配长名子串),再逐项转义
+  function protectAlt(names, escapeRe) {
+    return names.slice().sort((a, b) => b.length - a.length)
+      .map(n => String(n).replace(escapeRe, '\\$&')).join("|");
   }
 
-  // 由英文名数组(原始大小写)重建占位正则:按长度降序,避免子串误匹配
-  function buildProtectRe(names) {
-    const sorted = names.slice().sort((a, b) => b.length - a.length);
-    const escaped = sorted.map(n => String(n).replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'));
-    return new RegExp("\\b(?:" + escaped.join("|") + ")\\b", "gi");
+  const NAME_SCHEMES = {
+    // EN:词边界 + 大小写不敏感。还原走单趟带编号捕获组,容忍空格/大小写变化:
+    // 不按 i 升序 replace,故 "LCTPH1" 不会吃掉 "LCTPH10" 的首两位;未知编号原样保留。
+    en: {
+      prefix: "LCTPH", label: "replaceGameNames", re: null,
+      build: names => new RegExp("\\b(?:" + protectAlt(names, /[.*+?^${}()|[\\]\\]/g) + ")\\b", "gi"),
+      lookupKey: m => m.toLowerCase(),
+      restore: (text, mapArr) => String(text).replace(/LCTPH\s*(\d{1,3})/gi, (m, num) => {
+        const idx = parseInt(num, 10);
+        return (idx >= 0 && idx < mapArr.length) ? (mapArr[idx] || m) : m;
+      }),
+    },
+    // ZH:中文名无词边界,长度降序纯子串匹配;还原沿用历史 split/join 语义
+    zh: {
+      prefix: "LCTZHPH", label: "replaceChineseGameNames", re: null,
+      build: names => (names && names.length ? new RegExp("(?:" + protectAlt(names, /[-\/\\^$*+?.()|[\]{}]/g) + ")", "g") : null),
+      lookupKey: m => m,
+      restore: (text, mapArr) => {
+        for (let i = 0; i < mapArr.length; i++) text = text.split("LCTZHPH" + i).join(mapArr[i]);
+        return text;
+      },
+    },
+  };
+
+  /** 按方案占位替换:lookup = {匹配文本 -> 目标译名};返回 { text, mapArr } */
+  function replaceNamesByScheme(text, scheme, lookup) {
+    if (!text || typeof text !== "string" || !scheme.re) return { text: text, mapArr: null };
+    try {
+      const mapArr = [];
+      const replaced = text.replace(scheme.re, function (match) {
+        const idx = mapArr.length;
+        mapArr.push(lookup ? (lookup[scheme.lookupKey(match)] || match) : match);
+        return scheme.prefix + idx;
+      });
+      return mapArr.length > 0 ? { text: replaced, mapArr: mapArr } : { text: text, mapArr: null };
+    } catch (e) {
+      log(scheme.label + " error: " + (e && e.message ? e.message : String(e)));
+      return { text: text, mapArr: null };
+    }
   }
-  PROTECT_RE = buildProtectRe(PROTECT_NAMES);
+
+  /** 按方案还原占位符 */
+  function restoreNamesByScheme(text, scheme, mapArr) {
+    if (!text || !mapArr) return text;
+    return scheme.restore(text, mapArr);
+  }
+
+  /** 英文名占位:lookup = {小写英文名 -> 中文译名};返回 { text, nameMap, originalText } */
+  function replaceGameNames(text, lookup) {
+    const r = replaceNamesByScheme(text, NAME_SCHEMES.en, lookup);
+    return { text: r.text, nameMap: r.mapArr, originalText: text };
+  }
+  function restoreGameNames(text, nameMap) {
+    return restoreNamesByScheme(text, NAME_SCHEMES.en, nameMap);
+  }
+  /** 中文名占位:lookup = {中文名 -> 英文原名};返回 { text, zhNameMap } */
+  function replaceChineseGameNames(text, lookup) {
+    const r = replaceNamesByScheme(text, NAME_SCHEMES.zh, lookup);
+    return { text: r.text, zhNameMap: r.mapArr };
+  }
+  function restoreChineseGameNames(text, zhNameMap) {
+    return restoreNamesByScheme(text, NAME_SCHEMES.zh, zhNameMap);
+  }
 
   /** 用桥侧 gamenames.json({ 英文原名->中文译名 })重建保护名单与映射;
    *  case-insensitive 匹配(桥 key 原始大小写,兜底名单全小写)。*/
@@ -264,50 +289,18 @@
     if (names.length === 0) return false;
     PROTECT_NAMES = names;
     PROTECT_TO_ZH = toZh;
-    PROTECT_RE = buildProtectRe(PROTECT_NAMES);
+    NAME_SCHEMES.en.re = NAME_SCHEMES.en.build(PROTECT_NAMES);
     // 重建中文名反向表
     ZH_TO_EN = {};
     for (const en of Object.keys(toZh)) {
       const zh = toZh[en];
       if (zh) ZH_TO_EN[zh] = en;
     }
-    ZH_PROTECT_RE = buildZhProtectRe(Object.keys(ZH_TO_EN));
+    NAME_SCHEMES.zh.re = NAME_SCHEMES.zh.build(Object.keys(ZH_TO_EN));
     log("game names synced from bridge: " + names.length + " entries");
     return true;
   }
-
-  /** 占位替换:lookup = {匹配文本 -> 目标译名};返回 { text, nameMap, originalText } */
-  function replaceGameNames(text, lookup) {
-    if (!text || typeof text !== "string") return { text: text, nameMap: null, originalText: text };
-    const originalText = text;
-    try {
-      const nameMap = [];
-      const replaced = text.replace(PROTECT_RE, function (match) {
-        const idx = nameMap.length;
-        nameMap.push(lookup ? (lookup[match.toLowerCase()] || match) : match);
-        return "LCTPH" + idx;
-      });
-      return nameMap.length > 0 ? { text: replaced, nameMap: nameMap, originalText: originalText } : { text: text, nameMap: null, originalText: originalText };
-    } catch (e) {
-      log("replaceGameNames error: " + (e && e.message ? e.message : String(e)));
-      return { text: text, nameMap: null, originalText: originalText };
-    }
-  }
-  /** 还原占位符(LCTPHi 格式;与桥侧 name_protect.restore 同一套规则)
-   *  2026-09-17 重写,修复两个历史 bug:
-   *  ① 前缀碰撞:旧实现按 i 升序 replace("LCTPH"+i),LCTPH1 是 LCTPH10 的前缀,
-   *     ≥10 个受保护名时两位编号被个位编号吃掉一位("LCTPH10"→"乙0");
-   *  ② 死兜底:旧 fallback 匹配 [[G_i]] 格式,与实际产出的 LCTPHi 从未对齐(死代码),
-   *     API 啃坏 token 时占位原文直接泄漏到玩家屏幕。
-   *  改为带编号捕获组的单趟全局替换,容忍空格/大小写变化。 */
-  function restoreGameNames(text, nameMap) {
-    if (!text || !nameMap) return text;
-    return String(text).replace(/LCTPH\s*(\d{1,3})/gi, function (m, num) {
-      const idx = parseInt(num, 10);
-      if (!(idx >= 0 && idx < nameMap.length)) return m; // 未知编号:原样保留
-      return nameMap[idx] || m;
-    });
-  }
+  NAME_SCHEMES.en.re = NAME_SCHEMES.en.build(PROTECT_NAMES);
 
   // ---- 语言启发式 ----
   const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff]/;
@@ -1318,13 +1311,6 @@
   }
 
   // ================= 消息读取与过滤 =================
-
-  // ===== 诊断探针(2026-09-17 快捷消息不显示排查,临时;确认根因后移除) =====
-  // 背景:用户报告部分快捷消息语音正常但聊天栏+HUD都不渲染,且当局 mod 零记录。
-  // 假设:消息行根本没被创建进 DOM(语音走游戏音频层,不经过 Panorama 渲染)。
-  // 探针1:quick 行被读到时打一行日志(去重);探针2:boot 后每 15s 打容器行数(变化时)。
-  // 判读:日志有 quick row 且当局有 chatlog → 渲染在,问题在显示;无 quick row + rows=0 → 行未创建(布局层断)
-  const diagSet = new Set();
 
   function readMessageRow(row) {
     // 注:曾有"面板缓存"(__lctCached/__lctCachedSig 守卫)在此跳过 DOM 读取。
@@ -3864,15 +3850,6 @@ function injectTranslation(row, sig, text, fragment) {
       row.__lctWatched = false;
       try { State.pendingFill.delete(row); } catch (e) {}
     }
-    // 诊断探针1:读到的 quick 行(去重防刷屏,上限 200 条重置)
-    if (record.quick) {
-      const dkey = (record.hud ? "H\x00" : "C\x00") + (record.text || "");
-      if (!diagSet.has(dkey)) {
-        if (diagSet.size > 200) diagSet.clear();
-        diagSet.add(dkey);
-        log("diag: quick row hud=" + (record.hud ? 1 : 0) + " text=" + String(record.text || "").slice(0, 60));
-      }
-    }
     const skipTranslation = shouldSkip(record);
     // 混合消息(中文+少量英文,典型:英文英雄名设置下的快捷语音渲染如 "我看到 McGinnis"):
     // 只把非中文片段送去翻译,中文部分原样保留。record.text 保持完整原文(签名稳定)。
@@ -4059,12 +4036,6 @@ function injectTranslation(row, sig, text, fragment) {
         const messages = State.hudMessages[i];
         if (!isValid(messages)) continue;
         const count = childCount(messages);
-        // 诊断探针3:HUD 容器行数心跳(变化时才打;count=0 持续 → HUD 行未创建)
-        if (!State._diagHudRows) State._diagHudRows = [];
-        if (count !== State._diagHudRows[i]) {
-          State._diagHudRows[i] = count;
-          log("diag: HUD[" + i + "] rows=" + count);
-        }
         if (count < State.hudScanned[i]) State.hudScanned[i] = 0;
         const start = State.hudScanned[i];
         touched = processRange(messages, start, count) || touched;
@@ -4218,459 +4189,21 @@ function injectTranslation(row, sig, text, fragment) {
     } catch (e) {}
   }
 
+  // ---- BTIPC 传输层(2026-10-28 拆至 lingua_chat_btipc.js,此处别名解构保持调用点不变) ----
+  // 依赖经 LCTBTIPC.init({...}) 在 boot() 首行注入;此处只做引用绑定,不含实现。
+  const afterRealMs = LCTBTIPC.afterRealMs;
+  const btipcFinish = LCTBTIPC.btipcFinish;
+  const btipcUtf8Bytes = LCTBTIPC.btipcUtf8Bytes;
+  const BTIPC = LCTBTIPC.BTIPC;
+  const runBtipcEcho = LCTBTIPC.runBtipcEcho;
+  const runBtipcTranslate = LCTBTIPC.runBtipcTranslate;
+  // 传输层的节拍常量:主文件的写死线/行预算/回声拥塞豁免窗引用同一定义
+  const BTIPC_T_CLOSE_MS = LCTBTIPC.BTIPC_T_CLOSE_MS;
+  const BTIPC_FIRST_SHOT_DELAY_MS = LCTBTIPC.BTIPC_FIRST_SHOT_DELAY_MS;
+  const BTIPC_REQ_MAX_PAYLOAD = LCTBTIPC.BTIPC_REQ_MAX_PAYLOAD;
+  const BTIPC_ECHO_STORM_WINDOW_MS = LCTBTIPC.BTIPC_ECHO_STORM_WINDOW_MS;
+
   // 统一提交处理;带防重(函数调用 + 事件监听双通道可能同时触发)
-  // ============ BTIPC v1 客户端(规格 docs/btipc-v1.md;实现顺序④)=============
-  // 固定窗口收包:128 个隐藏 Image 面板轮询 /btipc/dl,位=1→200(火焰)/位=0→404;
-  // 每轮 16 字节帧 → 内联 CRC16 校验 → 按 seq 拼装。无 ACK:r 前进即确认,同 r 重投即重传(§4.0)。
-  // API(§7 冻结 Promise 形):BTIPC.request({windowId, text, timeoutMs}) → Promise<文本>。
-  // 当前回声模式(桥端③已就);⑥接翻译链后调用方不变。Panorama 无模块系统,crc16/decode 内联(§3.2 逐字节一致)。
-  const BTIPC_PANEL_PREFIX = "BTIPCD"; // 0..127;与 BTBIT*/BTD*/BTE* 探针严格隔离
-  const BTIPC_PANELS = 128;
-  const BTIPC_FRAME_BYTES = 16;
-  const BTIPC_PAYLOAD_MAX = 10;
-  const BTIPC_T_CLOSE_MS = 600; // §9 常态收口(新 build bit dt P99.9 ≈ 522ms)
-  const BTIPC_STORM_TCLOSE_MS = 2500; // §9 风暴收口
-  const BTIPC_STORM_TRIGGER = 2; // 连续 CRC fail 轮数 → 风暴(§4.1)
-  const BTIPC_STORM_ROUNDS = 4; // 风暴持续轮数
-  const BTIPC_BUSY_BACKOFF_MS = 500; // BUSY 退避
-  const BTIPC_T_HARD_MS = 12000; // 轮级强制闭合兜底(§4)
-  const BTIPC_REQ_TIMEOUT_MS = 30000; // 消息级死线(§9)
-  const BTIPC_CRC_DEAD = 8; // 同帧累计 fail 上限(§7)
-  const BTIPC_ECHO_STORM_WINDOW_MS = 15000; // 回声拥塞豁免窗:失败前此窗内进过风暴 -> 判拥塞不判掉线(2026-10-12)
-  const BTIPC_REQ_MAX_PAYLOAD = 680; // §9:整行(引擎前缀+[LCT]+行头+b64 908)≤1000(J1);68 帧 ≤ seq7 上限
-  const BTIPC_FIRST_SHOT_DELAY_MS = 1200; // 首拍延迟:桥 tail 轮询 1000ms,防首批全 404 误触风暴
-  // 死线轮询步长。死线改由 Date.now() 锚定(见 BTIPC.request 内 pollDeadline):
-  // $.Schedule(N) 的 N 秒在加载窗口内会早于 Date.now() 的 N 秒触发,拿它当死线不可信。
-  // 0.25s → 到点最多晚 0.25s 结算;单会话同时只有 1 个在途请求,4 次/秒空转可忽略。
-  const BTIPC_DEADLINE_POLL_SEC = 0.25;
-
-  // Date.now() 锚定的延迟结算 —— 所有「到点必须结算」的定时器走这里,不要直接
-  // $.Schedule(大 N)。实测(2026-10-04 07:23):config 首读 msg=REQ_TIMEOUT 50000ms
-  // 却 dt=20278ms,即 50s 的死线 21 秒就触发;窗口正好是加载进对局(Spawn Server /
-  // ss_loading -> ss_active、53.5% 帧 >17.5ms),加载结束后的第二次 25.6s 走满才成功
-  // —— 不是固定上限,是长延时的 $.Schedule 早于 Date.now()(同窗口 1.2s/2s/8s 的
-  // 短调度都准)。Date.now() 与 console 时间戳互相印证(21s ≈ 20.278s),错的是
-  // $.Schedule。早醒只重排、到点才调 fn;alive 返回假即停轮询(等价旧守卫,但不再
-  // 空转)。轮询用 0.25s:到点最多晚 0.25s,单会话同时只有 1 个在途请求,开销可忽略。
-  function afterRealMs(delayMs, fn, alive) {
-    const at = nowMs() + delayMs;
-    const tick = function () {
-      if (alive && !alive()) return;
-      if (nowMs() >= at) { fn(); return; }
-      $.Schedule(BTIPC_DEADLINE_POLL_SEC, tick);
-    };
-    $.Schedule(BTIPC_DEADLINE_POLL_SEC, tick);
-  }
-
-  // ---- 内联 CRC-16/CCITT-FALSE(与 core/btipc/crc16.js 逐字节一致) ----
-  function btipcCrc16(bytes) {
-    let crc = 0xffff;
-    for (let i = 0; i < bytes.length; i += 1) {
-      crc ^= (bytes[i] & 0xff) << 8;
-      for (let b = 0; b < 8; b += 1) {
-        crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) : crc << 1;
-        crc &= 0xffff;
-      }
-    }
-    return crc;
-  }
-
-  // ---- 16 字节帧解码(§3.2):CRC 不过直接拒,绝不返回半可信数据 ----
-  function btipcDecodeFrame(b) {
-    if (!b || b.length !== BTIPC_FRAME_BYTES) return { ok: false, reason: "size" };
-    const input = [];
-    for (let i = 0; i < 4; i += 1) input.push(b[i]);
-    for (let i = 6; i < 16; i += 1) input.push(b[i]); // CRC 覆盖 B0..B3 + B6..B15(固定 14B,含填充)
-    const calc = btipcCrc16(input);
-    const got = ((b[4] & 0xff) << 8) | (b[5] & 0xff);
-    if (calc !== got) return { ok: false, reason: "crc" };
-    const valid = (b[3] & 0x80) !== 0;
-    const len = b[3] & 0x7f;
-    if (len > BTIPC_PAYLOAD_MAX) return { ok: false, reason: "format" };
-    if (!valid && (b[0] !== 0 || b[3] !== 0)) return { ok: false, reason: "format" }; // BUSY 固定帧
-    const payload = [];
-    for (let i = 0; i < len; i += 1) payload.push(b[6 + i]);
-    return {
-      ok: true, valid: valid, seq: b[0] & 0x7f, end: (b[0] & 0x80) !== 0,
-      id: ((b[1] & 0xff) << 8) | (b[2] & 0xff), len: len, payload: payload,
-    };
-  }
-
-  // ---- UTF-8 字节 → 字符串(引擎无 TextDecoder) ----
-  function btipcUtf8Decode(bytes) {
-    let out = "";
-    let i = 0;
-    while (i < bytes.length) {
-      const c = bytes[i];
-      let cp = 0, extra = 0;
-      if (c < 0x80) { cp = c; extra = 0; }
-      else if ((c & 0xe0) === 0xc0) { cp = c & 0x1f; extra = 1; }
-      else if ((c & 0xf0) === 0xe0) { cp = c & 0x0f; extra = 2; }
-      else if ((c & 0xf8) === 0xf0) { cp = c & 0x07; extra = 3; }
-      else { out += "\ufffd"; i += 1; continue; }
-      let cont = true;
-      for (let k = 1; k <= extra; k += 1) {
-        const cc = bytes[i + k];
-        if (cc === undefined || (cc & 0xc0) !== 0x80) { cont = false; break; }
-        cp = (cp << 6) | (cc & 0x3f);
-      }
-      if (!cont) { out += "\ufffd"; i += 1; continue; }
-      i += extra + 1;
-      if (cp > 0x10ffff) { out += "\ufffd"; continue; }
-      if (cp < 0x10000) out += String.fromCharCode(cp);
-      else {
-        const v = cp - 0x10000;
-        out += String.fromCharCode(0xd800 + (v >> 10), 0xdc00 + (v & 0x3ff));
-      }
-    }
-    return out;
-  }
-
-  // ---- UTF-8 字符串 → 字节(REQ payload;代理对按码点展开) ----
-  function btipcUtf8Bytes(str) {
-    const out = [];
-    for (let i = 0; i < str.length; i += 1) {
-      let cp = str.charCodeAt(i);
-      if (cp >= 0xd800 && cp <= 0xdbff && i + 1 < str.length) {
-        const lo = str.charCodeAt(i + 1);
-        if (lo >= 0xdc00 && lo <= 0xdfff) { cp = 0x10000 + (((cp - 0xd800) << 10) | (lo - 0xdc00)); i += 1; }
-      }
-      if (cp < 0x80) out.push(cp);
-      else if (cp < 0x800) out.push(0xc0 | (cp >> 6), 0x80 | (cp & 63));
-      else if (cp < 0x10000) out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
-      else out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
-    }
-    return out;
-  }
-
-  // ---- 字节 → base64(引擎无 btoa;REQ 行用) ----
-  function btipcBase64(bytes) {
-    const tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let out = "";
-    for (let i = 0; i < bytes.length; i += 3) {
-      const b0 = bytes[i];
-      const b1 = bytes[i + 1];
-      const b2 = bytes[i + 2];
-      out += tbl[b0 >> 2];
-      out += tbl[((b0 & 3) << 4) | ((b1 === undefined ? 0 : b1) >> 4)];
-      out += b1 === undefined ? "=" : tbl[((b1 & 15) << 2) | ((b2 === undefined ? 0 : b2) >> 6)];
-      out += b2 === undefined ? "=" : tbl[b2 & 63];
-    }
-    return out;
-  }
-
-  // ---- 面板池(128 个隐藏 2×2,复用;创建不全时下次调用重建) ----
-  function btipcPanels() {
-    if (State.btipcPanels && State.btipcPanels.length === BTIPC_PANELS) return State.btipcPanels;
-    const arr = [];
-    for (let i = 0; i < BTIPC_PANELS; i += 1) {
-      const pid = BTIPC_PANEL_PREFIX + i;
-      let p = null;
-      try { p = findChild(getRoot(), pid); } catch (e) {}
-      if (!isValid(p)) {
-        try { p = $.CreatePanel("Image", getRoot(), pid); } catch (e) {}
-        if (isValid(p)) {
-          try { p.visible = false; p.style.width = "2px"; p.style.height = "2px"; } catch (e) {}
-        }
-      }
-      if (isValid(p)) arr.push(p);
-    }
-    State.btipcPanels = arr;
-    return arr;
-  }
-
-  // ---- ImageLoaded 每会话注册一次;只认 BTIPCD* 前缀(探针 BTD*/BTBIT*/BTE* 互不干扰) ----
-  function btipcEnsureHandler() {
-    if (State.btipcHandlerOn) return;
-    State.btipcHandlerOn = true;
-    try {
-      $.RegisterForUnhandledEvent("ImageLoaded", function (panel) {
-        const st = State.btipcActive;
-        if (!st || !st.roundOpen) return;
-        let pid = "";
-        try { pid = panel ? String(panel.id) : ""; } catch (e) {}
-        if (pid.slice(0, 6) !== BTIPC_PANEL_PREFIX) return;
-        const p = parseInt(pid.slice(6), 10);
-        if (isNaN(p) || p < 0 || p >= BTIPC_PANELS) return;
-        st.fire[p] = 1; // 同轮同面板重复 fire 幂等;上一轮迟到的 straggler 只能撞 CRC 重试(§1)
-      });
-    } catch (e) { log("btipc: ImageLoaded handler THREW " + expErr(e)); }
-  }
-
-  // ---- SHOT:一轮 128 发(§4);URL 对 (w,r,p) 唯一,t = 窗口号-请求号兼缓存击穿 ----
-  function btipcShot(st) {
-    if (State.btipcActive !== st) return;
-    const panels = btipcPanels();
-    if (panels.length < BTIPC_PANELS) {
-      btipcFinish(st, false, { kind: "bridge_down", message: "panels " + panels.length + "/" + BTIPC_PANELS });
-      return;
-    }
-    st.fire = {};
-    st.roundOpen = true;
-    st.roundNo += 1;
-    st.shotAt = nowMs();
-    const urlBase = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/btipc/dl?w=" + st.win + "&r=" + st.r;
-    // t = 窗口号-请求号-轮次。必须含 roundNo:否则同 r 重投的 128 个 URL 逐字节相同,
-    // SetImage 撞同一 URL 可能不再触发 ImageLoaded → fire 永远为空 → 重试复现同一次失败(§4 要求 URL 唯一)。
-    const tTag = "&t=" + st.win + "-" + st.idHex + "-" + st.roundNo;
-    for (let i = 0; i < BTIPC_PANELS; i += 1) {
-      try { panels[i].SetImage(urlBase + "&p=" + i + tTag); } catch (e) {}
-    }
-    const tClose = st.stormRounds > 0 ? BTIPC_STORM_TCLOSE_MS : BTIPC_T_CLOSE_MS;
-    const myR = st.r;
-    const myNo = st.roundNo;
-    try {
-      $.Schedule(tClose / 1000, function () { btipcClose(st, myR, myNo); });
-      $.Schedule(BTIPC_T_HARD_MS / 1000, function () { btipcClose(st, myR, myNo); }); // T_HARD 兜底(守卫保证只生效一次)
-    } catch (e) {
-      btipcFinish(st, false, { kind: "bridge_down", message: "schedule THREW " + expErr(e) });
-    }
-  }
-
-  // ---- 闭合判定(§4.0 判定表写死) ----
-  function btipcClose(st, myR, myNo) {
-    if (State.btipcActive !== st) return;
-    if (!st.roundOpen || st.r !== myR || st.roundNo !== myNo) return; // 已被更早的闭合推进
-    st.roundOpen = false;
-
-    // 128 bit → 16 字节(§3.1 LSB first)
-    const bytes = [];
-    for (let i = 0; i < BTIPC_FRAME_BYTES; i += 1) bytes.push(0);
-    for (let p = 0; p < BTIPC_PANELS; p += 1) {
-      if (st.fire[p]) bytes[p >> 3] |= 1 << (p & 7);
-    }
-    const dt = nowMs() - st.shotAt;
-    let d = btipcDecodeFrame(bytes);
-    if (d.ok && d.id !== st.id) d = { ok: false, reason: "id_mismatch got=" + d.id }; // 防缓存串窗
-
-    if (!d.ok) {
-      st.frameFails += 1;
-      st.consecutiveFails += 1;
-      log("BTIPC: r=" + st.r + " seq=-1 len=-1 dt=" + dt + " RETRY crc=" + d.reason +
-          " frameFails=" + st.frameFails + " consec=" + st.consecutiveFails);
-      if (st.frameFails > BTIPC_CRC_DEAD) {
-        btipcFinish(st, false, { kind: "crc_dead", message: "CRC fail " + st.frameFails + "x > " + BTIPC_CRC_DEAD });
-        return;
-      }
-      let entered = false;
-      if (st.consecutiveFails >= BTIPC_STORM_TRIGGER && st.stormRounds <= 0) {
-        st.stormRounds = BTIPC_STORM_ROUNDS;
-        entered = true;
-        State.btipcLastStormAt = nowMs(); // 拥塞时间戳:回声超时的豁免判据
-        log("BTIPC: STORM enter consec=" + st.consecutiveFails + " tClose=" + BTIPC_STORM_TCLOSE_MS + " rounds=" + BTIPC_STORM_ROUNDS);
-      }
-      const stormNow = st.stormRounds > 0;
-      if (stormNow && !entered) st.stormRounds -= 1; // 进入当轮不减,保证宽收口正好 4 轮
-      // 同 r 重投(§4.0);风暴期轮间 1s 冷却
-      try {
-        $.Schedule(stormNow ? 1.0 : 0.1, function () { btipcShot(st); });
-      } catch (e) { btipcFinish(st, false, { kind: "bridge_down", message: "schedule THREW " + expErr(e) }); }
-      return;
-    }
-
-    // ---- CRC ok ----
-    st.frameFails = 0;
-    st.consecutiveFails = 0;
-    if (st.stormRounds > 0) { st.stormRounds = 0; log("BTIPC: STORM exit"); }
-
-    if (!d.valid) {
-      // BUSY 固定帧(§3.2):退避后**同 r 重poll**,不 r++。
-      // BUSY = “本 window 的 DATA 尚未就绪”,不是新 frame;翻译等待期靠这个反复轮询。
-      // 此时桥端尚未 setFrames,不会锚定 frameStartRound,待首个 DATA poll 才锚定。
-      log("BTIPC: r=" + st.r + " seq=-1 len=-1 dt=" + dt + " BUSY");
-      try {
-        $.Schedule(BTIPC_BUSY_BACKOFF_MS / 1000, function () {
-          if (State.btipcActive !== st) return;
-          btipcShot(st);
-        });
-      } catch (e) { btipcFinish(st, false, { kind: "bridge_down", message: "schedule THREW " + expErr(e) }); }
-      return;
-    }
-
-    // 数据帧:按 seq 入账(重复幂等),END 验收 0..max 连续
-    if (!st.parts[d.seq]) st.parts[d.seq] = d.payload;
-    log("BTIPC: r=" + st.r + " seq=" + d.seq + " len=" + d.len + " dt=" + dt + (d.end ? " END" : " OK"));
-    if (!d.end) { st.r += 1; btipcShot(st); return; }
-
-    let maxSeq = -1;
-    for (const k in st.parts) { const n = parseInt(k, 10); if (!isNaN(n) && n > maxSeq) maxSeq = n; }
-    const concat = [];
-    let gap = -1;
-    for (let i = 0; i <= maxSeq; i += 1) {
-      const pl = st.parts[i];
-      if (!pl) { gap = i; break; }
-      for (let j = 0; j < pl.length; j += 1) concat.push(pl[j]);
-    }
-    if (gap >= 0) {
-      // 正常流不可能(帧序到达、CRC fail 不推进);真到 = 状态被打破,诚实拒绝
-      log("BTIPC: r=" + st.r + " GAP missing=" + gap + " → crc_dead");
-      btipcFinish(st, false, { kind: "crc_dead", message: "gap at seq " + gap });
-      return;
-    }
-    const got = btipcUtf8Decode(concat);
-    log("BTIPC: DONE win=" + st.win + " id=" + st.idHex + " frames=" + (maxSeq + 1) +
-        " bytes=" + concat.length + " total=" + (nowMs() - st.tReq) + "ms");
-    // 翻译模式下空串 = 桥端翻译失败(协议零改动:失败编为空 END 帧)。
-    // 回声模式不做此判定 —— "" 是合法回声。传输层已 DONE,这里只把语义错误上报给上层。
-    if (st.translate && got === "") {
-      btipcFinish(st, false, { kind: "translate_error", message: "bridge returned empty translation" });
-      return;
-    }
-    btipcFinish(st, true, got);
-  }
-
-  function btipcFinish(st, ok, value) {
-    if (State.btipcActive !== st) return;
-    State.btipcActive = null;
-    st.roundOpen = false;
-    if (ok) {
-      // btipc04:任何 BTIPC 成功(翻译/健应回声)= 桥在线实证 → 状态栏置绿
-      // (6726 后 nav health 永远失败,老逻辑只会显示未连通)。
-      State.btipcLastOk = nowMs();
-      State.bridgeOfflineSince = 0;
-      if (!State.bridgeUp) {
-        markBridgeUp();
-        try { setBridgeStatus(t("bridgeOnline") + " \u00b7 " + (State.cfg.provider || "bing")); } catch (e) {}
-      }
-      try { st.resolve(value); } catch (e) { log("btipc: resolve THREW " + expErr(e)); }
-    }
-    else { try { st.reject(value); } catch (e) { log("btipc: reject THREW " + expErr(e)); } }
-  }
-
-  // ---- API(§7 冻结 Promise 形)----
-  const BTIPC = {
-    busy: function () { return !!State.btipcActive; },
-    newWindowId: function () { return ("000000" + (nowMs() & 0xffffff).toString(16)).slice(-6); },
-    cancel: function () {
-      const st = State.btipcActive;
-      if (!st) return;
-      try { log("BTIPC CAN w=" + st.win); } catch (e) {}
-      btipcFinish(st, false, { kind: "cancelled", message: "cancel() called" });
-    },
-    request: function (opts) {
-      opts = opts || {};
-      return new Promise(function (resolve, reject) {
-        try {
-          const text = String(opts.text == null ? "" : opts.text);
-          const bytes = btipcUtf8Bytes(text);
-          const win = String(opts.windowId == null ? "" : opts.windowId);
-          if (!/^[0-9a-f]{6}$/.test(win)) {
-            reject({ kind: "bad_args", message: "windowId 需 6 位小写 hex(BTIPC.newWindowId())" });
-            return;
-          }
-          if (bytes.length > BTIPC_REQ_MAX_PAYLOAD) {
-            reject({ kind: "too_long", message: "payload " + bytes.length + "B > " + BTIPC_REQ_MAX_PAYLOAD + "B" });
-            return;
-          }
-          if (State.btipcActive) {
-            reject({ kind: "busy", message: "已有在途传输 win=" + State.btipcActive.win });
-            return;
-          }
-          const timeoutMs = typeof opts.timeoutMs === "number" && opts.timeoutMs > 0 ? opts.timeoutMs : BTIPC_REQ_TIMEOUT_MS;
-          // translate=false → REQ(回声 conformance);true → TRQ(⑥ 翻译,空 END 帧 = 失败)
-          const translate = opts.translate === true;
-          const id = Math.floor(Math.random() * 65536);
-          const idHex = ("0000" + id.toString(16)).slice(-4);
-          const crcHex = ("0000" + btipcCrc16(bytes).toString(16)).slice(-4);
-          const b64 = btipcBase64(bytes);
-          const st = {
-            win: win, id: id, idHex: idHex, text: text, timeoutMs: timeoutMs, translate: translate,
-            r: 1, roundNo: 0, fire: {}, roundOpen: false, shotAt: 0,
-            frameFails: 0, consecutiveFails: 0, stormRounds: 0,
-            parts: {}, tReq: nowMs(), resolve: resolve, reject: reject,
-          };
-          State.btipcActive = st;
-          // REQ/TRQ 行(§5):桥端 tail 自 [LCT] 起解析,行头 54 + b64 后 ≤1000(J1)
-          // REQ 与 TRQ 命令词等长,故 translate 不额外占用行预算。
-          log("BTIPC " + (translate ? "TRQ" : "REQ") + " w=" + win + " id=" + idHex +
-              " len=" + bytes.length + " crc=" + crcHex + " b64=" + b64);
-          btipcEnsureHandler();
-          try {
-            // 缺陷 A 修:死线走 Date.now() 锚定的 afterRealMs。单发 $.Schedule(timeoutMs/1000)
-            // 在长延时上会早触发(实测 50s 死线 21s 就到),把本该成功的 config 读打死 ——
-            // 详见 afterRealMs 的注释。alive 覆盖旧的 State.btipcActive !== st 守卫。
-            afterRealMs(timeoutMs, function () {
-              log("BTIPC: REQ_TIMEOUT win=" + st.win + " after " + timeoutMs + "ms");
-              btipcFinish(st, false, { kind: "timeout", message: "REQ_TIMEOUT " + timeoutMs + "ms" });
-            }, function () { return State.btipcActive === st; });
-            $.Schedule(BTIPC_FIRST_SHOT_DELAY_MS / 1000, function () {
-              if (State.btipcActive !== st) return;
-              btipcShot(st);
-            });
-          } catch (e) {
-            btipcFinish(st, false, { kind: "bridge_down", message: "schedule THREW " + expErr(e) });
-          }
-        } catch (e) {
-          reject({ kind: "bad_args", message: expErr(e) });
-        }
-      });
-    },
-  };
-
-  // /bt6736 [n] [text]: BTIPC 回声 conformance(§12.4)—— 桥回声模式,回显必须与发送逐字节一致
-  function runBtipcEcho(arg) {
-    if (State.bitRunning || State.dRunning || State.eRunning || State.c5) {
-      log("btipc6736: 探针在途,refuse(防两套 ImageLoaded 互相污染)");
-      return;
-    }
-    if (BTIPC.busy()) { log("btipc6736: BTIPC busy,先等当前传输结束"); return; }
-    let count = 1;
-    let text = "Hello BTIPC";
-    const m = /^(\d+)(?:\s+([\s\S]+))?$/.exec(String(arg || "").trim());
-    if (m) {
-      count = Math.max(1, Math.min(100, parseInt(m[1], 10)));
-      if (m[2]) text = m[2];
-    } else if (String(arg || "").trim()) {
-      text = String(arg).trim();
-    }
-    log("btipc6736: START n=" + count + " text=" + JSON.stringify(text));
-    let done = 0;
-    let failed = 0;
-    const runOne = function () {
-      if (done >= count) {
-        log("btipc6736: ALL DONE n=" + count + " ok=" + (count - failed) + " fail=" + failed);
-        return;
-      }
-      done += 1;
-      const win = BTIPC.newWindowId();
-      const t0 = nowMs();
-      BTIPC.request({ windowId: win, text: text }).then(function (got) {
-        const match = got === text;
-        if (!match) failed += 1;
-        log("btipc6736: RUN " + done + "/" + count + " win=" + win +
-            (match ? " ECHO_OK" : " ECHO_MISMATCH") + " dt=" + (nowMs() - t0) +
-            " got=" + JSON.stringify(String(got).slice(0, 60)));
-        try { $.Schedule(0.3, runOne); } catch (e) { log("btipc6736: schedule THREW " + expErr(e)); }
-      }).catch(function (err) {
-        failed += 1;
-        log("btipc6736: RUN " + done + "/" + count + " win=" + win + " FAIL kind=" + (err && err.kind) +
-            " msg=" + (err && err.message) + " dt=" + (nowMs() - t0));
-        try { $.Schedule(1.0, runOne); } catch (e) { log("btipc6736: schedule THREW " + expErr(e)); }
-      });
-    };
-    runOne();
-  }
-
-  // /bt6737 [text]: BTIPC 翻译 smoke(⑥)—— 验证 TRQ→BUSY→译文全链。
-  // 翻译层只见 BTIPC.request() 的 Promise,不见 panel/CRC/round/frameFails。
-  function runBtipcTranslate(arg) {
-    if (State.bitRunning || State.dRunning || State.eRunning || State.c5) {
-      log("btipc6737: 探针在途,refuse(防两套 ImageLoaded 互相污染)");
-      return;
-    }
-    if (BTIPC.busy()) { log("btipc6737: BTIPC busy,先等当前传输结束"); return; }
-    const text = String(arg || "");
-    const win = BTIPC.newWindowId();
-    const t0 = nowMs();
-    log("btipc6737: START text=" + JSON.stringify(text.slice(0, 60)));
-    BTIPC.request({ windowId: win, text: text, translate: true }).then(function (got) {
-      log("btipc6737: OK win=" + win + " dt=" + (nowMs() - t0) + "ms got=" + JSON.stringify(String(got).slice(0, 80)));
-    }).catch(function (err) {
-      log("btipc6737: FAIL win=" + win + " kind=" + (err && err.kind) +
-          " msg=" + (err && err.message) + " dt=" + (nowMs() - t0) + "ms");
-    });
-  }
-
   function handleChatSubmit(input) {
     const now = nowMs();
     if (State.lastSubmitAt && now - State.lastSubmitAt < 150) return;
@@ -5560,50 +5093,31 @@ function injectTranslation(row, sig, text, fragment) {
       function (ok) { if (onDone) onDone(ok); });
   }
 
-  // ================= 运行时配置监听(2026-10-19, 2026-10-20 提速) =================
+  // ================= 运行时配置监听(2026-10-19, 2026-10-28 简化为慢兜底) =================
   // 网页保存只落 config.json,游戏侧只在开机读一次 → "网页改了游戏不认"。
-  // 做法:轮询 8 位指纹(revOnly,应答约 30B),指纹变了才拉一次全量(快通道 ~80ms)。
-  // 护栏:快通道 3s 一问;传输忙就跳过(最多连跳 2 次,免饿死);轮询失败不计入 https 判死;
-  // 失败即退避;整段 try/catch —— 任何异常都不许让监听链断掉。2026-10-20 实踩:压缩行数
-  // 时把 "const CFG_WATCH_FAST_S = 3;" 粘到注释行尾 → 常量没声明 → ReferenceError 被
+  // 主力是配置推送(startConfigPush:https 面板长轮询,网页保存后 ~0.3s 生效);
+  // 这里的轮询只是 https 面板判死/推送挂不上时的兜底:固定 60s 差分对账,
+  // 不做快慢切换、不做退避、不做传输忙跳过(60s 一次,不值得优化)。
+  // 轮询失败不计入 https 判死;整段 try/catch —— 任何异常都不许让监听链断掉。
+  // 2026-10-20 实踩:压缩行数时把常量声明粘到注释行尾 → 常量没声明 → ReferenceError 被
   // catch 吞掉 → 监听静默死掉、网页改配置游戏永不生效。故:常量独占一行 + 启动即打日志。
-  const CFG_WATCH_FAST_S = 3;
-  const CFG_WATCH_SLOW_S = 20;
-  const CFG_WATCH_BACKOFF_S = [3, 10, 30, 60];
+  const CFG_WATCH_FALLBACK_S = 60;
   function startCfgWatch() {
     if (State.cfgWatchStarted) return;
     State.cfgWatchStarted = true;
     const tick = function () {
-      let iv = (State.httpsPanelOk === true) ? CFG_WATCH_FAST_S : CFG_WATCH_SLOW_S;
       let done = false;
       const again = function () {
         if (done) return;
         done = true;
-        try { $.Schedule(iv, tick); } catch (e) { log("cfg watch: schedule THREW " + expErr(e)); }
+        try { $.Schedule(CFG_WATCH_FALLBACK_S, tick); } catch (eS) { log("cfg watch: schedule THREW " + expErr(eS)); }
       };
       try {
-        const bi = Math.min(State.cfgWatchBackoffIdx || 0, CFG_WATCH_BACKOFF_S.length - 1);
-        iv = (bi === 0) ? iv : Math.max(iv, CFG_WATCH_BACKOFF_S[bi]);
-        // 推送已挂上 → 轮询退成 15s 兜底(推送才是主力);推送没挂上(面板挂不上去)就保持 3s
-        if (State.watchArmed) iv = Math.max(iv, 15);
-        // 传输忙就跳过这一轮:别和翻译抢单槽(最多连跳 2 次,之后照问,免饿死)。
-        if ((State.queue && State.queue.length > 0) || State.activeRequests > 0) {
-          State.cfgWatchSkip = (State.cfgWatchSkip || 0) + 1;
-          if (State.cfgWatchSkip <= 2) log("cfg watch: transport busy, skip " + State.cfgWatchSkip);
-          if (State.cfgWatchSkip < 3) { again(); return; }
-        }
-        State.cfgWatchSkip = 0;
-        State.cfgPollNext = true;
-        // btipc11:轮询本身走差分同步 —— 没变时握手 1 帧就回,变了才取差分片(旧路:revOnly 指纹读
-        // → 变了再拉全量;慢通道 = 20s 轮询 + 26s 全量 ≈46s)。
+        State.cfgPollNext = true; // 兜底轮询失败不计入 https 判死(见 demoteToBtipc)
+        // btipc11:轮询走差分同步 —— 没变时握手 1 帧就回,变了才取差分片。
         try {
           syncConfigDelta(function (ok) {
-            if (ok) {
-              State.cfgWatchBackoffIdx = 0;
-            } else {
-              log("cfg watch: poll failed");
-              State.cfgWatchBackoffIdx = Math.min((State.cfgWatchBackoffIdx || 0) + 1, CFG_WATCH_BACKOFF_S.length - 1);
-            }
+            if (!ok) log("cfg watch: poll failed (fallback, next in " + CFG_WATCH_FALLBACK_S + "s)");
             again();
           });
         } catch (eP) { log("cfg watch: poll THREW " + expErr(eP)); again(); }
@@ -5613,8 +5127,8 @@ function injectTranslation(row, sig, text, fragment) {
       }
     };
     try {
-      $.Schedule(CFG_WATCH_FAST_S, tick);
-      log("cfg watch: started (fast=" + CFG_WATCH_FAST_S + "s)");
+      $.Schedule(CFG_WATCH_FALLBACK_S, tick);
+      log("cfg watch: started (fallback=" + CFG_WATCH_FALLBACK_S + "s, push is primary)");
     } catch (e) { log("cfg watch: start THREW " + expErr(e)); }
     startConfigPush();
   }
@@ -5861,6 +5375,7 @@ function injectTranslation(row, sig, text, fragment) {
   }
 
   function boot() {
+    try { LCTBTIPC.init({ State: State, log: log, expErr: expErr, nowMs: nowMs, findChild: findChild, getRoot: getRoot, isValid: isValid, BRIDGE_HOST: BRIDGE_HOST, BRIDGE_PORT: BRIDGE_PORT, markBridgeUp: markBridgeUp, setBridgeStatus: setBridgeStatus, t: t }); } catch (eI) {}
     State.cfg = loadUiConfig();
     applyUILang(); // 初始化界面语言
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
@@ -5919,18 +5434,6 @@ function injectTranslation(row, sig, text, fragment) {
     $.Schedule(8.0, function logLoop() {
       flushChatLog();
       $.Schedule(8.0, logLoop);
-    });
-    // 诊断探针2:容器行数心跳(每 15s,变化时才打;rows=-1 = ChatMessages 容器不存在=布局断)
-    $.Schedule(15.0, function diagLoop() {
-      try {
-        const messages = resolveChatMessages();
-        const n = messages ? childCount(messages) : -1;
-        if (n !== State._diagRows) {
-          State._diagRows = n;
-          log("diag: ChatMessages rows=" + n);
-        }
-      } catch (e) {}
-      $.Schedule(15.0, diagLoop);
     });
   }
 

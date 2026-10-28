@@ -7,7 +7,10 @@ const fs = require("fs");
 const path = require("path");
 
 const SRC = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
-const src = fs.readFileSync(SRC, "utf8");
+// 2026-10-28:BTIPC 传输层拆至 lingua_chat_btipc.js —— 护栏改读「主文件 + 新文件」拼接源,
+// 断言语义不变(仍锁同一批常量与结构),只是不再要求它们都物理落在主文件里。
+const BTIPCS = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_btipc.js");
+const src = fs.readFileSync(SRC, "utf8") + "\n" + fs.readFileSync(BTIPCS, "utf8");
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) {

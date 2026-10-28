@@ -22,6 +22,8 @@ let imageLoadedHandler = null;
 const nativeSetTimeout = setTimeout;
 
 const SCRIPT = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
+// 2026-10-28:BTIPC 传输层拆到独立文件,装载顺序同 XML(先 btipc,后主脚本)
+const SCRIPT_BTIPCS = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_btipc.js");
 // P4a(2026-10-12):实验探针区独立文件 —— 与游戏 include 顺序对齐(主脚本先行)
 const SCRIPT_EXP = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_exp.js");
 
@@ -139,6 +141,7 @@ function freshEnv(cfg) {
   envTimers = [];
   panelSim = { navUrls: [], httpsBroken: false, aliveOnly: false };
   delete require.cache[require.resolve(SCRIPT)];
+  delete require.cache[require.resolve(SCRIPT_BTIPCS)];
   delete require.cache[require.resolve(SCRIPT_EXP)];
 
   const contextPanel = new MockPanel("ContextPanel");
@@ -249,6 +252,7 @@ function freshEnv(cfg) {
     // noop
   }
 
+  require(SCRIPT_BTIPCS); // 传输层:先装载,主脚本顶层 const 别名解构 LCTBTIPC
   require(SCRIPT);
   require(SCRIPT_EXP); // 探针文件:依赖核心先求值发布的 LCTNS,顺序不可倒
 

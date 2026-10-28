@@ -16,7 +16,10 @@ const ROOT = path.join(__dirname, "..", "..");
 function read(rel) { return fs.readFileSync(path.join(ROOT, rel), "utf8"); }
 
 const bridgeSrc = read("core/bridge_server.js");
-const lcSrc = read("mod/panorama/scripts/lingua_chat.js");
+// 2026-10-28:BTIPC 传输层拆至 lingua_chat_btipc.js —— 客户端断言读拼接源(语义不变,
+// 仅保证 BTIPC_REQ_MAX_PAYLOAD 这类行预算常量仍被找到)
+const lcSrc = read("mod/panorama/scripts/lingua_chat.js") +
+  "\n" + read("mod/panorama/scripts/lingua_chat_btipc.js");
 
 // ---------- 1) 冻结件不为 log 开口(行为钉) ----------
 test("冻结信封白名单仍只有 config|test:op=log 原样透传", () => {

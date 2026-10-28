@@ -80,6 +80,7 @@ const SYNTAX_TARGETS = [
   "core/providers/deepl.js",
   "core/providers/openai.js",
   "core/providers/registry.js",
+  "mod/panorama/scripts/lingua_chat_btipc.js",
   "mod/panorama/scripts/lingua_chat.js",
   "mod/panorama/scripts/lingua_chat_exp.js",
 ];

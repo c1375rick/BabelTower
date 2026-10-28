@@ -21,8 +21,11 @@
 		<include src="s2r://panorama/scripts/lingua_chat_gamenames_fallback.vjs_c" />
 		<!-- 名称保护配对名单(自动生成,勿手改):全量 EN->ZH + 指纹,btipc07 握手用 -->
 		<include src="s2r://panorama/scripts/lingua_chat_gamenames_pairs_fallback.vjs_c" />
+		<!-- BTIPC 传输层(2026-10-28 从 lingua_chat.js 拆出):先于主脚本挂 LCTBTIPC,主文件别名解构 -->
+		<include src="s2r://panorama/scripts/lingua_chat_btipc.vjs_c" />
 		<include src="s2r://panorama/scripts/lingua_chat.vjs_c" />
-		<!-- P4a 实验探针区(2026-10-12 分家):必须晚于 lingua_chat.vjs_c —— 核心先发布 LCTNS -->
+		<!-- P4a 实验探针区(2026-10-12 分家):必须晚于 lingua_chat.vjs_c —— 核心先发布 LCTNS
+		     装载顺序:fallback 三件 → lingua_chat_btipc → lingua_chat(核心)→ 探针 -->
 		<include src="s2r://panorama/scripts/lingua_chat_exp.vjs_c" />
 	</scripts>
 	<snippets>

@@ -19,6 +19,8 @@ function skip(label) { skipped++; console.log("  SKIP |", label); }
 
 const ROOT = path.join(__dirname, "..");
 const LC = path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat.js");
+// 2026-10-28:传输层已拆出 —— 读拼接源,assert 仍锁同一批接线点(语义不变)
+const BTIPCS = path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_btipc.js");
 const BRIDGE = path.join(ROOT, "core", "bridge_server.js");
 const PKG = path.join(ROOT, "scripts", "package_release.ps1");
 const TRANSPORT = path.join(ROOT, "core", "btipc", "transport.js");
@@ -28,7 +30,7 @@ if (!fs.existsSync(LC) || !fs.existsSync(BRIDGE)) {
   console.log("RESULT: PASS " + pass + " / FAIL " + fail + " / SKIP " + skipped);
   process.exit(0);
 }
-const lc = fs.readFileSync(LC, "utf8");
+const lc = fs.readFileSync(LC, "utf8") + "\n" + fs.readFileSync(BTIPCS, "utf8");
 const bridge = fs.readFileSync(BRIDGE, "utf8");
 
 // ---------- ① 信封折叠:三个 op 必须走 op=config 的 "get" 字段 ----------
@@ -229,7 +231,8 @@ ok(!/\$\.Schedule\(timeoutMs \/ 1000,/.test(lc), "请求死线不再单发 $.Sch
 ok(!/\$\.Schedule\(\(timeoutMs \+ 2000\) \/ 1000,/.test(lc), "deadman 不再单发(否则比死线长却更早触发,等于 A 换地方复发)");
 ok(/afterRealMs\(timeoutMs, function/.test(lc), "请求死线已接线到 afterRealMs");
 ok(/afterRealMs\(timeoutMs \+ 2000, function/.test(lc), "deadman 已接线到 afterRealMs");
-ok(/return State\.btipcActive === st/.test(lc), "死线 alive 守卫等价于旧的 btipcActive !== st");
+// 2026-10-28 拆分后 afterRealMs 在 lingua_chat_btipc.js,alive 回调里的宿主 State 带 D. 前缀
+ok(/(?:D\.)?State\.btipcActive === st/.test(lc), "死线 alive 守卫等价于旧的 btipcActive !== st");
 ok(/alive && !alive\(\)/.test(lc), "afterRealMs 支持 alive 提前停轮询");
 
 // ---------- ⑩ 缺陷 B(2026-10-04 11:26 实车):dispatchJob 抛异常绝不许泄漏单槽槽位 ----------
