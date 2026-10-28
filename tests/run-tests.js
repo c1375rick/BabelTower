@@ -82,7 +82,9 @@ const SYNTAX_TARGETS = [
   "core/providers/openai.js",
   "core/providers/registry.js",
   "mod/panorama/scripts/lingua_chat_btipc.js",
+  "mod/panorama/scripts/lingua_chat_i18n.js",
   "mod/panorama/scripts/lingua_chat.js",
+  "mod/panorama/scripts/lingua_chat_panel.js",
   "mod/panorama/scripts/lingua_chat_exp.js",
 ];
 let syntaxBad = 0;

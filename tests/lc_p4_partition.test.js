@@ -47,18 +47,37 @@ function parseExpImports() {
   assert.ok(m, "探针文件缺少别名导入行 const { ... } = L;");
   return m[1].split(",").map(s => s.trim()).filter(Boolean);
 }
+// 2026-10-28(任务②C-1 设置面板拆分):面板文件与探针同法 —— 头部 `const { ... } = L;` 导入宿主符号
+function parsePanelImports() {
+  const panel = fs.readFileSync(path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_panel.js"), "utf8");
+  const m = panel.match(/^  const \{ ([^}]+) \} = L;\r?$/m);
+  assert.ok(m, "面板文件缺少别名导入行 const { ... } = L;");
+  return m[1].split(",").map(s => s.trim()).filter(Boolean);
+}
 
-test("P4a-② 核心 LCTNS 发布 == 探针别名导入(双向对账,漂移即红)", () => {
+test("P4a-② 核心 LCTNS 发布 ⊇ 各消费方别名导入(子集语义,漂移即红)", () => {
   const pub = parseCorePub();
   const imp = parseExpImports();
+  const impPanel = parsePanelImports();
+  // 2026-10-28(任务②C-1):原断言是"核心发布名单 == 探针导入名单"(deepStrictEqual 双向对账)。
+  // 设置面板拆出 lingua_chat_panel.vjs_c 后,核心要向两份消费方发布(面板额外需要
+  // saveUiConfig/setStatus/bridgePost/SETTINGS_PANEL_ID/选项表 …),导出名单必然大于单侧导入,
+  // 故改为子集语义:① 发布 ⊇ 探针导入;② 发布 ⊇ 面板导入;两侧导入名单各自做顶层声明校验。
+  // 漂移(发布漏名字 / 导入写了没发布的名字)仍然当场红。
   assert.ok(pub.size >= 25, "核心发布数过少:" + pub.size);
-  assert.deepStrictEqual([...pub].sort(), imp.slice().sort(),
-    "核心发布名单与探针导入名单不一致(必须由同一份计算生成)");
-  for (const n of imp) {
-    const reFn = new RegExp("^  (?:async\\s+)?function\\s*\\*?\\s+" + n.replace(/\$/g, "\\$") + "\\b");
-    const reVar = new RegExp("^  (?:const|let|var)\\s+" + n.replace(/\$/g, "\\$") + "\\b");
-    const isDecl = coreLines.some(l => reFn.test(l) || reVar.test(l));
-    assert.ok(isDecl, "导入名 " + n + " 不是核心 indent-2 顶层声明(解构将得到 undefined)");
+  const consumers = [["探针", imp], ["面板", impPanel]];
+  for (const [who, list] of consumers) {
+    for (const n of list) {
+      assert.ok(pub.has(n), "核心 LCTNS 未发布 " + n + "(" + who + "文件有导入)");
+    }
+  }
+  for (const [who, list] of consumers) {
+    for (const n of list) {
+      const reFn = new RegExp("^  (?:async\\s+)?function\\s*\\*?\\s+" + n.replace(/\$/g, "\\$") + "\\b");
+      const reVar = new RegExp("^  (?:const|let|var)\\s+" + n.replace(/\$/g, "\\$") + "\\b");
+      const isDecl = coreLines.some(l => reFn.test(l) || reVar.test(l));
+      assert.ok(isDecl, "导入名 " + n + "(" + who + ")不是核心 indent-2 顶层声明(解构将得到 undefined)");
+    }
   }
 });
 

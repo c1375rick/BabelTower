@@ -25,9 +25,14 @@
 		<include src="s2r://panorama/scripts/lingua_chat_gamenames_pairs_fallback.vjs_c" />
 		<!-- BTIPC 传输层(2026-10-28 从 lingua_chat.js 拆出):先于主脚本挂 LCTBTIPC,主文件别名解构 -->
 		<include src="s2r://panorama/scripts/lingua_chat_btipc.vjs_c" />
+		<!-- UI 文案/选项表数据(2026-10-28 任务①E 外置):数据文件,必须先于 lingua_chat.vjs_c —— 主文件顶部读全局别名 -->
+		<include src="s2r://panorama/scripts/lingua_chat_i18n.vjs_c" />
 		<include src="s2r://panorama/scripts/lingua_chat.vjs_c" />
+		<!-- 设置面板 UI(2026-10-28 任务②C-1 拆分):必须晚于 lingua_chat.vjs_c —— 经 LCTNS 导入宿主符号,
+		     并且必须在 lingua_chat_exp 探针之前(boot 延迟 0.1s,面板全局挂载先就绪) -->
+		<include src="s2r://panorama/scripts/lingua_chat_panel.vjs_c" />
 		<!-- P4a 实验探针区(2026-10-12 分家):必须晚于 lingua_chat.vjs_c —— 核心先发布 LCTNS
-		     装载顺序:fallback 三件 → lingua_chat_btipc → lingua_chat(核心)→ 探针 -->
+		     装载顺序:fallback 三件 → lingua_chat_btipc → lingua_chat_i18n → lingua_chat(核心)→ panel → 探针 -->
 		<include src="s2r://panorama/scripts/lingua_chat_exp.vjs_c" />
 	</scripts>
 	<CitadelHudChat defaultfocus="ChatInput" hittest="false">

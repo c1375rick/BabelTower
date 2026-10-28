@@ -19,7 +19,11 @@ function ok(cond, label) {
 }
 
 const LC = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
-const lc = fs.readFileSync(LC, "utf8");
+// 2026-10-28(任务②C-1):设置面板 UI(pick/toggle/cycle/save …)已拆到 lingua_chat_panel.js。
+// 本测试的面板类断言按源码文本匹配,故与主文件拼接后统一读(与 lc_btipc_guard 的跨文件拼读同法);
+// 主文件在前,aliveBody 的 indexOf 切片仍只落在主文件段内。
+const PANEL = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_panel.js");
+const lc = fs.readFileSync(LC, "utf8") + "\n" + fs.readFileSync(PANEL, "utf8");
 const aliveBody = lc.slice(lc.indexOf("function onBridgeAlive(src)"), lc.indexOf("function onBridgeDown()"));
 
 console.log("--- 启动门(等探针定论,once) ---");

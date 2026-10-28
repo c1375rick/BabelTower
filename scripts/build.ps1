@@ -225,7 +225,7 @@ if (-not (Test-Path $vpkOut)) { Fail "打包未产出 $vpkOut" }
 # 4. 校验关键资产
 Write-Step "校验 VPK 内容..."
 $listing = & $vpkEdit $vpkOut --file-tree 2>&1 | Out-String
-$required = @("chat.vxml_c", "lingua_chat_btipc.vjs_c", "lingua_chat.vjs_c", "lingua_chat_exp.vjs_c", "lingua_chat.vcss_c")
+$required = @("chat.vxml_c", "lingua_chat_btipc.vjs_c", "lingua_chat_i18n.vjs_c", "lingua_chat.vjs_c", "lingua_chat_panel.vjs_c", "lingua_chat_exp.vjs_c", "lingua_chat.vcss_c")
 foreach ($r in $required) {
   if (-not ($listing -match [regex]::Escape($r))) {
     Fail "VPK 中缺少关键资产: $r"

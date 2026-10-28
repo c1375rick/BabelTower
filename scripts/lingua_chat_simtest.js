@@ -24,8 +24,12 @@ const nativeSetTimeout = setTimeout;
 const SCRIPT = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
 // 2026-10-28:BTIPC 传输层拆到独立文件,装载顺序同 XML(先 btipc,后主脚本)
 const SCRIPT_BTIPCS = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_btipc.js");
+// 2026-10-28(任务①E):UI 文案/选项表数据文件 —— 先于主脚本(与 XML include 顺序一致)
+const SCRIPT_I18N = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_i18n.js");
 // P4a(2026-10-12):实验探针区独立文件 —— 与游戏 include 顺序对齐(主脚本先行)
 const SCRIPT_EXP = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_exp.js");
+// 2026-10-28(任务②C-1):设置面板 UI —— 晚于主脚本(经 LCTNS 导入宿主符号),早于探针
+const SCRIPT_PANEL = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_panel.js");
 
 // ---------------- Mock 面板 ----------------
 // 环境隔离(2026-09-17):真实引擎里 UI 重载会销毁整个 JS 上下文,旧轮询链/挂起回调随之死亡;
@@ -142,7 +146,9 @@ function freshEnv(cfg) {
   panelSim = { navUrls: [], httpsBroken: false, aliveOnly: false };
   delete require.cache[require.resolve(SCRIPT)];
   delete require.cache[require.resolve(SCRIPT_BTIPCS)];
+  delete require.cache[require.resolve(SCRIPT_I18N)];
   delete require.cache[require.resolve(SCRIPT_EXP)];
+  delete require.cache[require.resolve(SCRIPT_PANEL)];
 
   const contextPanel = new MockPanel("ContextPanel");
   const chatPanel = contextPanel.addChild(new MockPanel("Chat"));
@@ -253,7 +259,9 @@ function freshEnv(cfg) {
   }
 
   require(SCRIPT_BTIPCS); // 传输层:先装载,主脚本顶层 const 别名解构 LCTBTIPC
+  require(SCRIPT_I18N); // UI 文案/选项表数据(任务①E):无声明赋值挂全局,主脚本读别名
   require(SCRIPT);
+  require(SCRIPT_PANEL); // 设置面板 UI(任务②C-1):晚于主脚本,经 globalThis.LCTNS 导入宿主符号
   require(SCRIPT_EXP); // 探针文件:依赖核心先求值发布的 LCTNS,顺序不可倒
 
   return {
