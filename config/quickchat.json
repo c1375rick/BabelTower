@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "fingerprint": "fnv1a-f9ec2bc3",
+  "fingerprint": "fnv1a-197a3523",
   "langs": [
     "schinese",
     "english"
@@ -672,13 +672,9 @@
       "一起行动",
       "Stay Together"
     ],
-    "citadel_chatwheel_label_Yes": [
+    "citadel_chatwheel_message_Yes": [
       "好的",
       "Yes"
-    ],
-    "citadel_chatwheel_message_Yes": [
-      "没问题",
-      "Affirmative"
     ],
     "citadel_chatwheel_label_HoldUp": [
       "等等/等一下",
@@ -809,8 +805,8 @@
       "Urn Here"
     ],
     "citadel_chatwheel_idol_here_message": [
-      "灵瓮在这里",
-      "Spirit Urn is here"
+      "灵瓮就在这里",
+      "Soul Urn is here"
     ],
     "citadel_chatwheel_help_with_idol_message": [
       "帮我护送灵瓮",
@@ -1429,8 +1425,8 @@
       "Stun please"
     ],
     "ping_jar_call": [
-      "灵瓮在此",
-      "Spirit Urn is here"
+      "灵瓮就在这里",
+      "Soul Urn is here"
     ],
     "ping_koth": [
       "不稳定裂隙在这里",
@@ -1474,6 +1470,9 @@
     ],
     "citadel_bot_objective_none": [
       "None"
+    ],
+    "citadel_chatwheel_label_Yes": [
+      "Yes"
     ],
     "citadel_chatwheel_label_No": [
       "No"

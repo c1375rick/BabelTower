@@ -1,7 +1,7 @@
 // 自动生成 by core/quickchat.js —— 请勿手改;游戏更新后重跑 node core/quickchat.js 并重编 VPK
 // 桥离线时的快捷语音模板兜底语料(双语,来自本地真实文件)。
 // 指纹以全局变量暴露,客户端 syncQuickChat 握手用;旧兑底文件无此变量 → 客户端按指纹缺失路径处理
-LCT_QUICKCHAT_FALLBACK_FINGERPRINT = "fnv1a-f9ec2bc3";
+LCT_QUICKCHAT_FALLBACK_FINGERPRINT = "fnv1a-197a3523";
 LCT_QUICKCHAT_FALLBACK_TEMPLATES = [
  "攻击分路",
  "Attacking Lane",
@@ -30,8 +30,8 @@ LCT_QUICKCHAT_FALLBACK_TEMPLATES = [
  "Help me deliver the urn",
  "灵瓮在这里",
  "Urn Here",
- "灵瓮在这里",
- "Spirit Urn is here",
+ "灵瓮就在这里",
+ "Soul Urn is here",
  "攻击{s:hero_name}",
  "Attack {s:hero_name}",
  "马上回来",
@@ -90,7 +90,6 @@ LCT_QUICKCHAT_FALLBACK_TEMPLATES = [
  "Stun {s:hero_name}",
  "打得很漂亮",
  "Well Played",
- "好的",
  "Yes",
  "准备好了吗",
  "Ready",
@@ -350,8 +349,8 @@ LCT_QUICKCHAT_FALLBACK_TEMPLATES = [
  "Stun",
  "打得很漂亮",
  "Well Played",
- "没问题",
- "Affirmative",
+ "好的",
+ "Yes",
  "准备好了吗",
  "Are you ready",
  "我们攻击这里",
@@ -665,8 +664,8 @@ LCT_QUICKCHAT_FALLBACK_TEMPLATES = [
  "Headed to York",
  "我回来了",
  "I'm Back",
- "灵瓮在此",
- "Spirit Urn is here",
+ "灵瓮就在这里",
+ "Soul Urn is here",
  "不稳定裂隙在这里",
  "Unstable Rift is here",
  "我们去百老汇",
