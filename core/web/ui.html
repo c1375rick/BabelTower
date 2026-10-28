@@ -95,6 +95,7 @@
       <div class="v" id="age-gameFetch">—</div>
     </div>
     <div class="note"><span id="healthNote"></span></div>
+    <div class="note" id="dupNote" style="display:none;color:#c0392b;font-weight:600"></div>
   </div>
 
   <div class="card">
@@ -1204,6 +1205,18 @@
       var j = r.body || {};
       if (!j.ok) return;
       $("ver").textContent = "v" + (j.version || "?");
+      // 排外告警(2026-10-28):桥侧 addons 扫描发现多份含 BabelTower 面板的 vpk 并存
+      var fp = j.foreignPaks;
+      var dupNote = $("dupNote");
+      if (dupNote) {
+        if (fp && fp.duplicates) {
+          var names = (fp.items || []).map(function (h) { return h.file + " (" + h.version + ")"; }).join("、");
+          dupNote.textContent = "⚠️ 检测到 " + fp.count + " 份 BabelTower 并存: " + names + " — 同 ID 面板混合加载会导致版本串错乱/行为不可预测,请只保留一份(其余改名加 .bak 或经 DMM 卸载)";
+          dupNote.style.display = "block";
+        } else {
+          dupNote.style.display = "none";
+        }
+      }
       var game = !!j.gameRunning;
       $("gameState").textContent = game ? t("health_game_on") : t("health_game_off");
       if (j.gameLang) {

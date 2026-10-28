@@ -79,6 +79,9 @@ const steamPaths = require("./steam_paths.js");
 // btipc07:health / gamenames / quickchat 的载荷编码(指纹协商 + gzip 分片 + delta)
 const syncData = require("./sync_data.js");
 const tlsGuard = require("./tls_guard.js");
+// 排外扫描(2026-10-28):检测 addons 里多份 BabelTower/同类翻译 mod 并存(§14"两份同装"教训),
+// 结果进 health 端点与启动日志,游戏内状态条/UI 同步显示。
+const pakScan = require("./pak_scan.js");
 // ---------- BTIPC v1(规格 docs/btipc-v1.md)----------
 // 窗口表(§6 状态机/§14.2 隔离)+ console.log tail 的 REQ/TRQ/CAN 解析(§14.1 校验,非法静默 drop 只记 WARN)。
 // 两条传输路径完全分离,共用同一套帧/窗口/重试核心:
@@ -187,11 +190,58 @@ function configHistoryNote() {
   } catch (e) {}
 }
 
+// 排外扫描(2026-10-28):addons 里多份 BabelTower/同类翻译 mod 并存检测。
+// 定位:与游戏日志同源(steamPaths.gameFileCandidates)。惰性执行 + 5 分钟 TTL。
+// 消费点:/api/v1/health(UI 页面)、runBtipcGet("health")(游戏内探针,duplicates 才带 dup 字段)。
+const PAK_SCAN_TTL_MS = 5 * 60 * 1000;
+let pakScanCache = { at: 0, summary: null };
+
+function locateAddonsDir() {
+  const cands = steamPaths.gameFileCandidates("Deadlock", "game/citadel/addons/.dmm.json", []).concat(
+    ["C:/SteamLibrary", "F:/SteamLibrary", "D:/SteamLibrary"].map(function (lib) {
+      return lib + "/steamapps/common/Deadlock/game/citadel/addons/.dmm.json";
+    })
+  );
+  for (const c of cands) {
+    if (c && fs.existsSync(c)) return path.dirname(c);
+  }
+  return null;
+}
+
+function foreignPakSummary(force) {
+  const now = Date.now();
+  if (!force && pakScanCache.summary && now - pakScanCache.at < PAK_SCAN_TTL_MS) return pakScanCache.summary;
+  const addonsDir = locateAddonsDir();
+  let summary;
+  if (!addonsDir) {
+    summary = { count: 0, duplicates: false, missing: false, items: [], error: "addons dir not found" };
+  } else {
+    summary = pakScan.summarize(pakScan.scanAddons(addonsDir));
+  }
+  pakScanCache = { at: now, summary: summary };
+  if (summary.duplicates) {
+    log("warn", "检测到 " + summary.count + " 份含 BabelTower 面板的 vpk 并存: " +
+      summary.items.map(function (h) { return h.file + "(" + h.version + ")"; }).join(", ") +
+      " — 同 ID 面板混合加载会导致版本串错乱/行为不可预测,请只保留一份(其余改名或经 DMM 卸载)");
+  } else if (summary.error) {
+    log("warn", "排外扫描失败: " + summary.error);
+  }
+  return summary;
+}
+
 function runBtipcGet(o) {
   const kind = String(o.get || "");
   if (kind === "health") {
     const cfgH = configStore.load();
     const r = { ok: true, provider: cfgH.provider, version: readLocalVersion() || "unknown" };
+    // 排外扫描(2026-10-28):仅重复安装时带 dup(正常时零增量,不占位泵预算);
+    // 游戏内 boot 探针/health 必经此处,读到即状态条告警。
+    try {
+      const pakS = foreignPakSummary(false);
+      if (pakS.duplicates) {
+        r.dup = pakS.items.map(function (h) { return h.file + "(" + h.version + ")"; });
+      }
+    } catch (eDup) {}
     if (cachedVersionInfo && cachedVersionInfo.ok && cachedVersionInfo.hasUpdate) {
       r.updateInfo = {
         hasUpdate: true,
@@ -1134,6 +1184,7 @@ async function handleApi(req, res, url, bodyObj) {
 
   if (p === "/api/v1/health") {
     const cfgH = configStore.load();
+    const pakS = foreignPakSummary(false);
     const healthResp = {
       ok: true,
       name: "Babel Tower Bridge",
@@ -1141,6 +1192,9 @@ async function handleApi(req, res, url, bodyObj) {
       provider: cfgH.provider,
       providers: providerRegistry.listProviders(),
       fallbackProviders: Array.isArray(cfgH.fallbackProviders) ? cfgH.fallbackProviders : [],
+      // 排外扫描结果(2026-10-28):游戏内状态条与 /ui 据此显示"重复安装"告警
+      foreignPaks: { count: pakS.count, duplicates: pakS.duplicates, missing: pakS.missing,
+        items: pakS.items.map(function (h) { return { file: h.file, version: h.version }; }) },
       chatLog: Object.assign({ enabled: true, dir: "logs/chat" }, cfgH.chatLog || {}),
       // 游戏↔桥连通性(2026-10-19):/ui 健康卡据此判断"通道断了没有"。
       // byChannel 里 0 表示本次桥启动后从未观测到该方向有流量。

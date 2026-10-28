@@ -355,6 +355,7 @@
     httpsPanelStreak: 0, // 通道级失败连击(够 HTTPS_PANEL_DEAD_STREAK 次就永久退 BTIPC)
     httpsPanelDemotedLogged: false, // 本次会话是否已打过"退 BTIPC"那条日志(避免每请求刷屏)
     httpsPanelHardDead: false, // true=运行时连击硬判死(疑似证书级故障):不自动重探;探测偶发失败不受此限
+    dupWarned: false, // 排外告警只打一次(桥侧 addons 扫描发现多份含本面板的 vpk 时)
     probePending: null, // 探针独立槽(不占 State.pending 单槽):探针与翻译/BTIPC 位泵并行等引擎 I/O
     probeLastAt: 0, // 上次探测发起时间(nowMs()),判死后按 HTTPS_PANEL_REPROBE_MS 节流重探
     eventsRegistered: false,
@@ -3250,6 +3251,15 @@ function injectTranslation(row, sig, text, fragment) {
       let payload = null;
       if (probe && title.indexOf(TITLE_PREFIX + "probe") === 0) {
         try { payload = JSON.parse(title.slice((TITLE_PREFIX + "probe").length)); } catch (e) {}
+        // 排外告警(2026-10-28):探针响应携带 foreignPaks(桥侧 addons 扫描)——
+        // 多份含本面板的 vpk 并存 = 同 ID 混合加载,版本串错乱/行为不可预测(§14"两份同装"翻版)。
+        if (payload && payload.foreignPaks && payload.foreignPaks.duplicates && !State.dupWarned) {
+          State.dupWarned = true;
+          const dupList = (payload.foreignPaks.items || []).map(function (h) { return h.file + "(" + h.version + ")"; }).join(", ");
+          log("⚠️ 排外检测: 检测到 " + payload.foreignPaks.count + " 份含本面板的 vpk 并存: " + dupList +
+            " — 请只保留一份(其余改名或经 DMM 卸载),否则行为不可预测");
+          setStatus("⚠️ 检测到重复安装(" + payload.foreignPaks.count + " 份),请查看桥日志");
+        }
         settleProbe(!!(payload && payload.ok), String((payload && payload.error) || "no_reply"));
         return;
       }

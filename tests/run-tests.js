@@ -20,7 +20,8 @@ const files = [
   "tests/config_atomic_write.test.js",
   // 2026-10-15:https 面板通道的降级纪律 + 发行包自足(新增文件必须显式登记,
   // 这个清单是显式的而非 glob —— 漏登记 = 护栏永远不跑,而"全链 30/30"照样绿)。
-  "tests/https_panel_guard.test.js",
+  "tests/pak_scan.test.js",
+"tests/https_panel_guard.test.js",
   "tests/launcher_condebug_guard.test.js",
   "tests/launcher_entry_guard.test.js",
   "tests/lc_btipc07_guard.test.js",
