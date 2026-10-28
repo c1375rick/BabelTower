@@ -26,6 +26,10 @@ function bufferContains(buf, needle) {
   return buf.indexOf(needle) !== -1;
 }
 
+// DMM 禁用命名约定(§14):`<modid>_pakNN_dir.vpk` = 该 mod 处于禁用态,游戏不加载。
+// 这类文件是 DMM 的记录,不是活跃副本——排外告警只按"活跃份数"(无 modid 前缀)计算。
+const DMM_DISABLED_RE = /^\d+_pak\d/i;
+
 function extractVersion(buf) {
   const m = VERSION_RE.exec(buf.toString("latin1"));
   return m ? m[1] : "unknown";
@@ -65,11 +69,13 @@ function scanAddons(addonsDir) {
     }
     result.scanned += 1;
     if (!bufferContains(buf, needle)) continue;
+    const disabled = DMM_DISABLED_RE.test(f);
     result.hits.push({
       file: f,
       version: extractVersion(buf),
       size: st.size,
       mtimeMs: st.mtimeMs,
+      disabled: disabled, // true=DMM 禁用件(游戏不加载),不计入 duplicates
     });
   }
   // 命中按文件名排序,输出稳定(测试与日志都好对)
@@ -77,14 +83,16 @@ function scanAddons(addonsDir) {
   return result;
 }
 
-// 语义化:单份=正常;多份=排外告警;0 份=mod 可能没装对槽(桥只读不改)。
+// 语义化:活跃(active)份数才是排外告警的依据;禁用件单独列出(信息性)。
 function summarize(scan) {
-  const n = (scan && scan.hits ? scan.hits.length : 0);
+  const items = (scan && scan.hits) || [];
+  const active = items.filter(function (h) { return !h.disabled; });
   return {
-    count: n,
-    duplicates: n > 1,
-    missing: n === 0,
-    items: (scan && scan.hits) || [],
+    count: active.length,
+    duplicates: active.length > 1,
+    missing: active.length === 0,
+    items: items,
+    disabledCount: items.length - active.length,
     error: (scan && scan.error) || null,
   };
 }

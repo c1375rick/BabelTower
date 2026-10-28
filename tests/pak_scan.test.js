@@ -47,6 +47,19 @@ test("PakScan-② 双份并存:duplicates=true 且清单稳定排序", () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("PakScan-②b DMM 禁用件(<modid>_pakNN)不计入 duplicates(§14 约定)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pakscan-"));
+  try {
+    makeFakeVpk(dir, "pak15_dir.vpk", { version: "1.2.2-6726-btipc12" });
+    makeFakeVpk(dir, "700107_pak08_dir.vpk", { version: "1.2.1-6726-btipc10" }); // 禁用命名
+    const s = pakScan.summarize(pakScan.scanAddons(dir));
+    assert.strictEqual(s.count, 1, "活跃份数=1(禁用件不算)");
+    assert.strictEqual(s.duplicates, false, "不应误报重复安装");
+    assert.strictEqual(s.disabledCount, 1, "禁用件单独计数");
+    assert.strictEqual(s.items.find((h) => h.file === "700107_pak08_dir.vpk").disabled, true);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("PakScan-③ 大包跳过(游戏本体 pak ≥23MB,不扫 800MB 级)", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pakscan-"));
   try {
