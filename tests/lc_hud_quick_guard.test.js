@@ -60,10 +60,11 @@ ok(skip({ text: "防守分路", quick: true, hud: true }) === true, "HUD 轮盘 
 ok(skip({ text: "撤退", quick: true, hud: true }) === true, "HUD 轮盘 撤退 -> 模板命中跳过");
 ok(skip({ text: "去商店", quick: true, hud: true }) === true, "HUD 非语料中文 去商店 -> 目标语言跳过");
 
-console.log("--- ③ 回归护栏:聊天/大厅行的 quick 标记行为原样不动 ---");
-ok(skip({ text: "前去带线！", quick: true, hud: false }) === true, "聊天行 quick + 轮盘 -> 跳过");
-ok(skip({ text: "hi", quick: true, hud: false }) === true, "聊天行 quick 标记仍直接跳过(旧行为)");
-ok(skip({ text: "哨兵文本X", quick: true }) === true, "无 hud 字段(大厅行) -> 跳过");
+console.log("--- ③ 回归护栏:2026-10-28 起 DOM 标记一律经文本硬校验(当日游戏更新后全部行误命中 Ping 标记) ---");
+ok(skip({ text: "前去带线！", quick: true, hud: false }) === true, "聊天行 quick + 轮盘模板命中 -> 跳过");
+ok(skip({ text: "hi", quick: true, hud: false }) === false, "聊天行 quick + 非语料 -> 送翻译(旧直接跳过已废)");
+ok(skip({ text: "哨兵文本", quick: true }) === true, "无 hud 字段(大厅行) + 纯中文 -> 目标语言跳过");
+ok(skip({ text: "sentinel text X", quick: true }) === false, "无 hud 字段(大厅行) + 非语料英文 -> 送翻译");
 
 console.log("--- ④ 无标记行的既有判定不受影响 ---");
 ok(skip({ text: "hi", quick: false, hud: true }) === false, "HUD 无标记 + hi -> 送翻译");

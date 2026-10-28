@@ -1,4 +1,4 @@
-﻿// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
+// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
 // Babel Tower - Deadlock 聊天翻译 Panorama 脚本
 // ------------------------------------------------------------------
 // 独立实现(不复制任何现有 mod 代码),技术路线与 DLCT 一致:
@@ -15,7 +15,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "1.2.2-6726-btipc11"; // 1.2.2 (2026-10-21) 内容:① 配置同步走**差分**(只传增删改,不传全量):复用
+  const VERSION = "1.2.2-6726-btipc12"; // btipc12 (2026-10-28):https 探针独立槽+判死后自动重探;quick 判定收紧(文本硬校验);outgoing 队列饿死兜底;BTIPC 传输层拆出独立文件 // 1.2.2 (2026-10-21) 内容:① 配置同步走**差分**(只传增删改,不传全量):复用
   //   gamenames/quickchat 的两段式(握手报本地指纹 → same 或只传变更字段);桥侧保留最近 16 版配置历史当差分
   //   基线(按客户端指纹查)。慢通道实测:没变 = 1 帧 ≈0.65s、改一个字段 = 120B ≈12 帧 ≈7.8s(旧路是全量
   //   392B = 40 帧 ≈26s,再加 20s 轮询)。→ 构建标 btipc11(BTIPС 请求语义变了,与 1.2.1 的 btipc10 线区分)
@@ -1687,17 +1687,13 @@
     // 语义对不上,用户以为没生效)。只认显式 false(缺省按开)。
     if (State.cfg.enabled === false) return true;
     if (record.quick) {
-      // 游戏原生快捷短语/Ping 已由游戏本地化,不调用翻译接口。但 DOM 标记的可信度分容器:
-      //   · 聊天/大厅行 → PingLabel 是专用标记,直接可信(16/26 红 fixture 基线原样不动);
-      //   · HUD 顶栏行 → 统一模板:10-02 exp6738 dump 实锤 PingStyleIcon(+SubjectIcon/
-      //     CooldownTimer/ResponseHeroes)是常驻槽位,打字消息同样命中 → 标记不可信,必须由文本侧
-      //     再确认"已本地化"才跳过。否则 HUD 气泡 100% 拿不到译文(不止直接 return,连缓存恢复
-      //     也被 !skipTranslation 拦住)。10-03 实车:hi/gg/防守分路/FOR THE KING RAAAAH 全部
-      //     `diag: quick row hud=1` 后无下文,当天 `translated [hud]` = 0;而无 ping 标记的构造行
-      //     全链路走通 → 管线没问题,是判定过宽。
+      // 游戏原生快捷短语/Ping 已由游戏本地化,不调用翻译接口。
+      // 2026-10-28 起收紧:DOM 标记(Ping/PingLabel/PingStyleIcon)不再单独定生死——当日游戏更新后
+      // 实测聊天框行与 HUD 行全部误命中 Ping 标记(手打英文长句 "u have 7k on me…" 也标 quick),
+      // 全场零翻译。改为:仅当文本命中轮盘模板库(参数填空已支持)或已为目标语言才跳过。
       const textLocalized = isQuickChatTemplate(text) || (!State.cfg.force && isTargetLanguageText(text));
-      if (!record.hud || textLocalized) return true;
-      // HUD 行 + 标记存疑(既非已知轮盘语料、也不是目标语言)→ 落到下面的正常判定
+      if (textLocalized) return true;
+      // 标记存疑(既非已知轮盘语料、也不是目标语言)→ 落到下面的正常判定,照常翻译
     }
     if (isQuickChatTemplate(text)) return true; // 本地化模板白名单:快捷语音渲染结果(含参数填空),精确命中即跳过
     if (text.charAt(0) === "/") return true; // 指令消息
@@ -1982,6 +1978,18 @@ function injectTranslation(row, sig, text, fragment) {
       if (_zg.zhNameMap) { sendText = _zg.text; outgoingZhNameMap = _zg.zhNameMap; }
     }
     State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: sendText }, attempts: 0, done: once, enqueuedAt: nowMs(), nameMap: _ng.nameMap || null, zhNameMap: outgoingZhNameMap, originalText: text });
+    // 队列等待死线(2026-10-28):排队超 15s 仍未派发(如单槽被长占用)直接按原文发送。
+    // 旧检查点在 dispatchJob 开头——排着队永远轮不到 dispatch,检查形同虚设(10-28 上午 gg 全灭的成因之一)。
+    const queuedJob = State.queue[State.queue.length - 1];
+    const queueDeadline = nowMs() + 15000;
+    const queueWatch = function () {
+      const idx = State.queue.indexOf(queuedJob);
+      if (idx === -1) return; // 已被派发或移除,dispatchJob 的超时接手
+      if (nowMs() < queueDeadline) { try { $.Schedule(1.0, queueWatch); } catch (eQ) {} return; }
+      const i2 = State.queue.indexOf(queuedJob);
+      if (i2 !== -1) { State.queue.splice(i2, 1); log("outgoing: queued >15s (slot starved), sending original"); once(null, null); }
+    };
+    try { $.Schedule(1.0, queueWatch); } catch (eQ) {}
     pumpQueue();
   }
 
