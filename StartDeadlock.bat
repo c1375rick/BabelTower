@@ -27,8 +27,8 @@ if defined MISSING (
 )
 
 set "NODE_EXE="
-if exist "portable-node\r\node.exe" (
-    set "NODE_EXE=portable-node\r\node.exe"
+if exist "portable-node\node.exe" (
+    set "NODE_EXE=portable-node\node.exe"
 ) else (
     where node >nul 2>nul && set "NODE_EXE=node"
 )
@@ -39,16 +39,32 @@ if not defined NODE_EXE (
     exit /b 1
 )
 
+set "FIND_EXE=%SystemRoot%\System32\find.exe"
+set "BRIDGE_OK="
+
+rem 2026-10-28: reuse an already-running bridge instead of blind-starting a
+rem second instance (port 8791 conflict kills the new one and dirties logs).
+rem Also start core\bridge_https.js here - booting only bridge_server leaves
+rem 8792 with no listener, the https probe fails and the whole day falls
+rem back to the slow BTIPC channel (seen live 2026-10-16 08:47; the autostart
+rem vbs already did this, the launcher path did not).
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bridge_health.ps1" -WaitSeconds 1 | "%FIND_EXE%" "BRIDGE_UP" >nul 2>nul
+if not errorlevel 1 (
+    echo [LCT] Bridge already running. Reusing it.
+    goto bridge_ready
+)
+
 echo [LCT] Starting local translation bridge...
 start "LinguaChatBridge" /min "%NODE_EXE%" "core\bridge_server.js"
+if exist "core\bridge_https.js" (
+    start "LinguaChatBridge-HTTPS" /min "%NODE_EXE%" "core\bridge_https.js"
+)
 
 rem Liveness check: poll the health endpoint (reads the port from
 rem config). Do NOT use "tasklist node.exe" here - other apps also
 rem run on node and would make a dead bridge look alive.
 rem Absolute path for find: under Git Bash environments a bare "find"
 rem resolves to the UNIX find and eats the pipe silently.
-set "FIND_EXE=%SystemRoot%\System32\find.exe"
-set "BRIDGE_OK="
 for /l %%i in (1,1,15) do (
     if not defined BRIDGE_OK (
         powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bridge_health.ps1" -WaitSeconds 1 | "%FIND_EXE%" "BRIDGE_UP" >nul 2>nul
@@ -64,6 +80,7 @@ if not defined BRIDGE_OK (
     exit /b 1
 )
 
+:bridge_ready
 echo [LCT] Bridge is up. Launching Deadlock...
 rem -condebug is MANDATORY: without it the game never writes
 rem game\citadel\console.log and the bridge cannot read a single [LCT]/BTIPC
