@@ -17,6 +17,8 @@ const files = [
   "tests/cfg_delta_sync.test.js",
   "tests/cfg_sync_guard.test.js",
   "tests/client_copy_sync.test.js",
+  // 拼接器/跨文件契约检查器(工具,不在构建流程里;真机四文件零重名的现状钉在这里)
+  "tests/concat_panorama.test.js",
   "tests/config_atomic_write.test.js",
   // 2026-10-15:https 面板通道的降级纪律 + 发行包自足(新增文件必须显式登记,
   // 这个清单是显式的而非 glob —— 漏登记 = 护栏永远不跑,而"全链 30/30"照样绿)。
@@ -86,6 +88,7 @@ const SYNTAX_TARGETS = [
   "mod/panorama/scripts/lingua_chat.js",
   "mod/panorama/scripts/lingua_chat_panel.js",
   "mod/panorama/scripts/lingua_chat_exp.js",
+  "scripts/concat_panorama.js",
 ];
 let syntaxBad = 0;
 for (const rel of SYNTAX_TARGETS) {
