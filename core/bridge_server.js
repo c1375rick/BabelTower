@@ -624,20 +624,41 @@ function noteGameLang(raw) {
 // override 时),作为"游戏语言"的离线估计比陈旧脉冲准得多。
 let steamLangStatic = null;
 let steamLangAt = 0;
-const STEAMLANG_TTL_MS = 60 * 1000; // 60s 缓存:用户切 Steam 语言后 1 分钟内网页跟随,无需重启游戏/桥
-function steamLanguage() {
-  if (steamLangStatic !== null && Date.now() - steamLangAt <= STEAMLANG_TTL_MS) return steamLangStatic;
-  let v = null;
+const STEAMLANG_TTL_MS = 60 * 1000; // 60s 缓存:用户切语言后 1 分钟内网页跟随,无需重启游戏/桥
+
+// "游戏界面语言"的权威真源:
+// ① per-game:Deadlock 所在库 appmanifest_1422450.acf 的 UserConfig.language
+//   (Steam → Deadlock → 属性 → 语言;用户实测:全局 schinese 而 Deadlock 是 english,
+//    读全局会把英文游戏报成中文——2026-10-29 用户复测的最终根因)
+// ② 无 per-game 覆盖时回落:注册表全局 Steam 语言
+function readSteamLanguageRaw() {
+  try {
+    const libs = steamPaths.steamLibraries ? steamPaths.steamLibraries() : [];
+    for (const lib of libs) {
+      const amf = path.join(lib, "steamapps", "appmanifest_1422450.acf");
+      if (!fs.existsSync(amf)) continue;
+      const t = fs.readFileSync(amf, "utf8");
+      const uc = /"UserConfig"\s*\{([^}]*)\}/.exec(t);
+      const scope = uc ? uc[1] : t;
+      const m = /"language"\s*"([^"]*)"/i.exec(scope) || /"Language"\s*"([^"]*)"/.exec(t);
+      if (m && m[1]) return m[1];
+    }
+  } catch (e) {}
   try {
     const out = require("child_process").execSync(
       'reg query "HKCU\\Software\\Valve\\Steam" /v Language',
       { encoding: "utf8", timeout: 5000 });
     const m = /Language\s+REG_SZ\s+(\S+)/.exec(out);
-    v = m ? normalizeGameLang(m[1]) : null;
+    return m ? m[1] : null;
   } catch (e) {
-    v = null;
+    return null;
   }
-  // 读取失败时保留旧值(短 TTL 内重试),成功才刷新
+}
+
+function steamLanguage() {
+  if (steamLangStatic !== null && Date.now() - steamLangAt <= STEAMLANG_TTL_MS) return steamLangStatic;
+  let v = normalizeGameLang(readSteamLanguageRaw());
+  // 读取失败(库未找到/注册表不可读)时保留旧值,TTL 内重试;成功才刷新
   if (v) { steamLangStatic = v; steamLangAt = Date.now(); }
   return steamLangStatic;
 }
