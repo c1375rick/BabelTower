@@ -2413,7 +2413,7 @@ function injectTranslation(row, sig, text, fragment) {
       log("diag-activate: panel made visible/active before probe");
     }
     const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
-      "/bridge?op=health&id=probe&lang=" + gameUiLang();
+      "/bridge?op=health&id=probe&boot=1&lang=" + gameUiLang();
     // 对照探针(2026-10-29):http 的 Image 加载与 https 页面加载走不同判定路径——
     // IMG-HIT 到桥 = CEF 网络活(问题在 https/证书/title);不来 = CEF 对外加载全死(引擎级)。
     // 桥日志 IMG-HIT id=p<seq> 即为证据。
@@ -3257,6 +3257,12 @@ function injectTranslation(row, sig, text, fragment) {
     if (title === TITLE_ALIVE) {
       markBridgeUp();
       if (pending) pending.sawAlive = true;
+      // 探针(统一槽):见到 lct-alive 即握手成功(boot=1 页面不发 health 单发),立即结算
+      if (pending && pending.id === "probe") {
+        State.pending = null;
+        settleProbe(true, "ok");
+        return;
+      }
       // 导航真的成功过 => 面板通道可用,清掉判死计数与冷却
       State.navDeadStreak = 0;
       State.navDeadUntil = 0;
