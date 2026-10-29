@@ -2534,20 +2534,25 @@ function injectTranslation(row, sig, text, fragment) {
              timeoutMs: job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000) },
       };
       setPending(job.id, function (payload2) {
+        // hash 超时连击(2026-10-30):页面常驻无新 lct-alive,3s nav 失败判定已跳过
+        // (sawAlive 预置);连续 2 次超时 → hashReady=false 回 nav 模式(引擎降级保险)。
+        if (payload2 && !payload2.ok && (payload2.error === "timeout" || payload2.error === "bridge_timeout")) {
+          State.hashFailStreak = (State.hashFailStreak || 0) + 1;
+          if (State.hashFailStreak >= 2) {
+            State.hashReady = false;
+            State.hashFailStreak = 0;
+            log("hash channel: consecutive timeouts, falling back to nav mode");
+          }
+        } else {
+          State.hashFailStreak = 0;
+        }
         if (isPanelHardFail(payload2) && handOff(hooks, payload2)) return;
         handleBridgePayload(job, payload2);
       }, job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000));
-      try {
-        panel.SetURL(State.hashBase + "#LCTQ:" + encodeURIComponent(JSON.stringify(payload)));
-      } catch (eH) {
-        State.pending = null;
-        State.hashReady = false; // hash 通道异常 → 回退 nav 模式(下一请求起生效)
-        log("hash channel SetURL THREW, fallback to nav: " + expErr(eH));
-      }
-      if (State.hashReady) {
-        try { if (State.pending) State.pending.navUrl = null; } catch (eNU) {}
-        return; // 响应经 pollTitle 现有解析(LCT+id+JSON 格式不变)
-      }
+      // 页面常驻:hash 请求后无新 lct-alive,必须跳过 3s nav 失败判定(响应由 deadline/到达结算)
+      try { if (State.pending) State.pending.sawAlive = true; } catch (eSA) {}
+      try { if (State.pending) State.pending.navUrl = null; } catch (eNU) {}
+      return; // 响应经 pollTitle 现有解析(LCT+id+JSON 格式不变)
     }
     const url = buildBridgeUrl(job, forceHttp);
     setPending(job.id, function (payload) {
