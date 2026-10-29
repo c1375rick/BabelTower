@@ -2523,7 +2523,10 @@ function injectTranslation(row, sig, text, fragment) {
     // hash 命令通道(2026-10-29,QOL 4.0.5 实证架构):页面常驻,SetURL 只变 fragment
     // (同 base#frag = 同文档导航,hashchange 不重载)——nav 偶发失败/watch 顶掉/
     // 页面重载族问题从架构上消失。异常自动回退下方 nav 模式(现有代码全保留)。
-    if (hooks && hooks.httpsChannel && State.hashReady && !forceHttp) {
+    // 2026-10-30 修:条件去掉 hooks.httpsChannel 要求——enqueueBridge 路径的 job
+    // (config/gamenames/quickchat)不带该标记,漏掉会导致它们走 nav 重载页面、
+    // 破坏页面常驻(01:54 实车:hash 模式建立后被 gamenames sync 的 nav 打断)。
+    if (State.hashReady && !forceHttp) {
       const payload = {
         q: "h" + (++State.hashSeq) + "_" + nowMs(),
         id: job.id,
