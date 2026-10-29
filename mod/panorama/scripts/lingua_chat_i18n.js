@@ -57,6 +57,7 @@ LCT_I18N_STRINGS = {
   optOutBilingual: { zh: "双语(原文 | 译文)", en: "Bilingual (original | translation)" },
   optUILangZh: { zh: "中文", en: "中文 (Chinese)" },
   optUILangEn: { zh: "English(英语)", en: "English" },
+  optUILangAuto: { zh: "自动(跟随游戏)", en: "Auto (follow game)" },
   btnSave: { zh: "保存", en: "Save" },
   btnTest: { zh: "测试", en: "Test" },
   btnHint: { zh: "选项点击选择 · 改完点保存 · 设置推荐用桌面网页(/tr 打开)· 点右下角 X 关闭", en: "Click to select \u00b7 Save when done \u00b7 Desktop page recommended (type /tr) \u00b7 Click X to close" },
@@ -120,6 +121,7 @@ LCT_FIELD_OPTIONS = {
     { value: "bilingual", key: "optOutBilingual" },
   ],
   UI_LANG_OPTIONS: [
+    { value: "auto", key: "optUILangAuto" },
     { value: "zh", key: "optUILangZh" },
     { value: "en", key: "optUILangEn" },
   ],

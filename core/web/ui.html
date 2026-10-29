@@ -1105,8 +1105,11 @@
 
   function resolveLang() {
     if (storeMode !== "auto") return storeMode;
+    // 2026-10-29:gameLang 现为完整 code 集(zh-Hans/zh-Hant/ja/ko/fr/de/es/ru/pt-BR/en),
+    // 旧值 zh 兼容;未识别回落浏览器语言检测。
     if (gameLang === "zh") return "zh-Hans";
-    if (gameLang === "en") return "en";
+    if (gameLang === "zh-Hans" || gameLang === "zh-Hant") return gameLang;
+    for (var i = 0; i < LANGS.length; i += 1) if (LANGS[i].code === gameLang) return gameLang;
     return detectFromNavigator();
   }
 

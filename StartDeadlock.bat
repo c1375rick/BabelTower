@@ -15,6 +15,7 @@ rem with a raw red error right before the window disappears, which reads
 rem like "the button does nothing". Fail early with a readable reason.
 set "MISSING="
 if not exist "%~dp0core\bridge_server.js" set "MISSING=core\bridge_server.js"
+if not exist "%~dp0core\bridge_https.js" if not defined MISSING set "MISSING=core\bridge_https.js"
 if not exist "%~dp0scripts\bridge_health.ps1" if not defined MISSING set "MISSING=scripts\bridge_health.ps1"
 if not exist "%~dp0run-bridge.bat" if not defined MISSING set "MISSING=run-bridge.bat"
 if defined MISSING (

@@ -253,6 +253,7 @@
 						<Label id="LCTUILangSelectLabel" text="中文" />
 					</Button>
 					<Panel id="LCTUILangMenu" class="LCTSelectMenu">
+						<Button class="LCTMenuOption" onactivate="LCTPickUILang('auto');"><Label id="LCTMenuUILangAuto" text="自动(跟随游戏)" /></Button>
 						<Button class="LCTMenuOption" onactivate="LCTPickUILang('zh');"><Label id="LCTMenuUILangZh" text="中文" /></Button>
 						<Button class="LCTMenuOption" onactivate="LCTPickUILang('en');"><Label id="LCTMenuUILangEn" text="English(英语)" /></Button>
 					</Panel>

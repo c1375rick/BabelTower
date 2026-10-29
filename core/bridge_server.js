@@ -598,8 +598,18 @@ function noteGameLang(raw) {
   const s = String(raw || "").toLowerCase();
   if (!s) return;
   let v = null;
-  if (s.indexOf("zh") === 0 || s.indexOf("chinese") !== -1) v = "zh";
-  else if (s.indexOf("en") === 0 || s.indexOf("english") !== -1) v = "en";
+  // 2026-10-29 扩展:游戏侧 gameUiLang() 现上报完整 code 集(zh-Hans/zh-Hant/ja/ko/...),
+  // 旧值 zh/en 仍兼容。注意 zh-hant 判定必须在 zh 之前("zh-hant" 也以 zh 开头)。
+  if (s.indexOf("zh-hant") !== -1 || s.indexOf("tchinese") !== -1) v = "zh-Hant";
+  else if (s.indexOf("zh") === 0 || s.indexOf("chinese") !== -1 || s.indexOf("zh-hans") !== -1) v = "zh-Hans";
+  else if (s.indexOf("english") !== -1 || s.indexOf("en") === 0) v = "en";
+  else if (s.indexOf("japanese") !== -1 || s === "ja") v = "ja";
+  else if (s.indexOf("korean") !== -1 || s === "ko") v = "ko";
+  else if (s.indexOf("french") !== -1 || s === "fr") v = "fr";
+  else if (s.indexOf("german") !== -1 || s === "de") v = "de";
+  else if (s.indexOf("spanish") !== -1 || s === "es") v = "es";
+  else if (s.indexOf("russian") !== -1 || s === "ru") v = "ru";
+  else if (s.indexOf("brazillian") !== -1 || s.indexOf("portuguese") !== -1 || s === "pt-br") v = "pt-BR";
   if (v) gameLangPulse = { value: v, at: Date.now() };
 }
 
