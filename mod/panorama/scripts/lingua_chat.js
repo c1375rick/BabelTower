@@ -2403,7 +2403,18 @@ function injectTranslation(row, sig, text, fragment) {
     // 顺序要紧:probePending 先落再启动轮询,否则 pollTitle 撞空槽提前停摆。
     State.probePending = { sawAlive: false, navRetried: false, startedAt: nowMs(), navUrl: null };
     startTitlePolling();
+    // 面板激活(2026-10-29 补):与 dispatchViaPanel 同款——EXP-6726b 实证"新引擎不为
+    // 不可见/非激活面板加载网页";10-29 更新后更严格,探针缺 Activate 会导致
+    // SetURL 静默空打(src=""、页面从未开始加载),探针恒 bridge_nav_failed。
     try { panel.visible = true; } catch (e) {}
+    try { panel.style.opacity = "1"; } catch (e) {}
+    if (!State.panelActivated) {
+      State.panelActivated = true;
+      try { if (typeof panel.Activate === "function") panel.Activate(); } catch (e) {}
+      try { if (typeof panel.SetFocus === "function") panel.SetFocus(); } catch (e) {}
+      try { panel.RemoveClass("LCTBridgePanel"); panel.AddClass("LCTBridgePanelActive"); } catch (e) {}
+      log("diag-activate: panel made visible/active before probe");
+    }
     const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
       "/bridge?op=health&id=probe&lang=" + gameUiLang();
     State.probePending.navUrl = probeUrl;
