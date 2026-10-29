@@ -86,7 +86,7 @@ foreach ($f in $requiredCore) {
 # 这两个文件与打进 VPK 的完全同源,包里没有 mod/ 目录,单独补一份到 mod\panorama\scripts\。
 Write-Host "==> 复制 btipc07 同步基线..."
 New-Item -ItemType Directory -Path (Join-Path $Stage "mod\panorama\scripts") -Force | Out-Null
-$syncBaselines = @("lingua_chat_gamenames_pairs_fallback.js","lingua_chat_quickchat_fallback.js")
+$syncBaselines = @("lingua_chat_gamenames_pairs_fallback.js","lingua_chat_quickchat_fallback.js","lingua_chat_btipc.js","lingua_chat_panel.js","lingua_chat_i18n.js")
 foreach ($f in $syncBaselines) {
   $src = Join-Path $Root "mod\panorama\scripts\$f"
   if (-not (Test-Path $src)) { Fail "mod\panorama\scripts\$f 缺失(btipc07 同步基线)" }
