@@ -2417,6 +2417,19 @@ function injectTranslation(row, sig, text, fragment) {
     }
     const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
       "/bridge?op=health&id=probe&lang=" + gameUiLang();
+    // 对照探针(2026-10-29):http 的 Image 加载与 https 页面加载走不同判定路径——
+    // IMG-HIT 到桥 = CEF 网络活(问题在 https/证书/title);不来 = CEF 对外加载全死(引擎级)。
+    // 桥日志 IMG-HIT id=p<seq> 即为证据。
+    try {
+      const imgProbe = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/test.png?id=p" +
+        (State.imgProbeCount = (State.imgProbeCount || 0) + 1);
+      let imgPanel = null;
+      try { imgPanel = findChild(getRoot(), "LCTImgProbe"); } catch (eI0) {}
+      if (!isValid(imgPanel)) { try { imgPanel = $.CreatePanel("Image", getRoot(), "LCTImgProbe"); } catch (eI1) {} }
+      if (isValid(imgPanel) && typeof imgPanel.SetImage === "function") {
+        try { imgPanel.SetImage(imgProbe); } catch (eI3) {}
+      }
+    } catch (eI) {}
     State.probePending.navUrl = probeUrl;
     try {
       panel.SetURL(probeUrl);
