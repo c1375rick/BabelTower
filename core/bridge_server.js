@@ -594,6 +594,22 @@ function touchChannel(name) {
 // 游戏每次导航 /bridge 都会带 &lang=<zh|en>(取 mod 的界面语言设置),桥记下最后一次值。
 // 桌面设置页据此决定默认显示中文还是英文;用户可在页面右上角覆盖。
 let gameLangPulse = { value: null, at: 0 };
+// 系统 UI 语言(Windows Get-Culture,如 en-US → en;启动读一次,系统语言不常变)。
+// 2026-10-29:游戏侧 mod 界面语言 auto 模式的兜底真源——修复英文系统用户被默认
+// 中文 UI 坑(GB 用户反馈:面板/UMM 选项全是中文看不懂,弃坑)。
+let sysLangPulse = { value: null, at: 0 };
+function readSystemLang() {
+  if (sysLangPulse.value) return sysLangPulse.value;
+  try {
+    const out = require("child_process").execSync(
+      "powershell -NoProfile -Command (Get-Culture).Name",
+      { encoding: "utf8", timeout: 8000 });
+    const m = /([a-z]{2})-[A-Za-z]+/.exec(String(out || ""));
+    if (m) sysLangPulse = { value: m[1], at: Date.now() };
+  } catch (e) {}
+  return sysLangPulse.value;
+}
+readSystemLang();
 function normalizeGameLang(raw) {
   const s = String(raw || "").toLowerCase();
   if (!s) return null;
@@ -1263,6 +1279,9 @@ async function handleApi(req, res, url, bodyObj) {
       // 排外扫描结果(2026-10-28):游戏内状态条与 /ui 据此显示"重复安装"告警
       foreignPaks: { count: pakS.count, duplicates: pakS.duplicates, missing: pakS.missing,
         items: pakS.items.map(function (h) { return { file: h.file, version: h.version }; }) },
+      // 系统 UI 语言(2026-10-29):游戏侧 mod 界面语言 auto 模式的兜底真源——
+      // 修复英文系统用户被默认中文 UI 坑(GB 用户反馈)。启动读一次缓存(系统语言不常变)
+      sysLang: sysLangPulse.value,
       chatLog: Object.assign({ enabled: true, dir: "logs/chat" }, cfgH.chatLog || {}),
       // 游戏↔桥连通性(2026-10-19):/ui 健康卡据此判断"通道断了没有"。
       // byChannel 里 0 表示本次桥启动后从未观测到该方向有流量。

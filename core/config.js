@@ -56,6 +56,10 @@ const DEFAULTS = {
     targetLanguage: "zh-Hans",
     force: false,
     timeoutMs: 15000,
+    // 界面语言(2026-10-29):""=自动(跟随系统/游戏语言)。经桥持久化——
+    // 修复 GB 用户实测"游戏内面板选语言,重启即重置"(LCTPickUILang 原来只写
+    // 会话 convar,从不推桥)。值域:auto/""(自动) | zh | en
+    uiLang: "",
   },
   // 进程监视:检测 deadlock.exe 的启动/退出。2026-08-12 起桥常驻 —— 游戏退出后
   // 桥保持运行等待下次启动(见 bridge_server.js checkGameProcess)。
@@ -338,6 +342,8 @@ function applyMaskedUpdate(current, incoming) {
     if (typeof u.targetLanguage === "string" && u.targetLanguage) cfg.ui.targetLanguage = u.targetLanguage;
     if (typeof u.force === "boolean") cfg.ui.force = u.force;
     if (Number.isFinite(Number(u.timeoutMs))) cfg.ui.timeoutMs = Number(u.timeoutMs);
+    // 界面语言(2026-10-29):允许空串(=自动)。持久化修复见 DEFAULTS.ui.uiLang 注释
+    if (typeof u.uiLang === "string") cfg.ui.uiLang = u.uiLang;
   }
   // 兼容面板旧扁平形态(直接顶层字段)
   if (typeof incoming.displayMode === "string" && incoming.displayMode) cfg.ui.displayMode = incoming.displayMode;

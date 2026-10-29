@@ -83,6 +83,10 @@ if not defined BRIDGE_OK (
 
 :bridge_ready
 echo [LCT] Bridge is up. Launching Deadlock...
+rem 2026-10-29: open the settings page too - English users could not find
+rem where to configure translation at all (GameBanana feedback). The page
+rem is bilingual and auto-follows the Windows UI language.
+start "" "http://127.0.0.1:8791/ui"
 rem -condebug is MANDATORY: without it the game never writes
 rem game\citadel\console.log and the bridge cannot read a single [LCT]/BTIPC
 rem line back => BTIPC uplink dead => the mod silently does nothing.

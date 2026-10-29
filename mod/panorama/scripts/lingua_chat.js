@@ -357,6 +357,7 @@
     httpsPanelDemotedLogged: false, // 本次会话是否已打过"退 BTIPC"那条日志(避免每请求刷屏)
     httpsPanelHardDead: false, // true=运行时连击硬判死(疑似证书级故障):不自动重探;探测偶发失败不受此限
     dupWarned: false, // 排外告警只打一次(桥侧 addons 扫描发现多份含本面板的 vpk 时)
+    sysLang: null, // Windows 系统 UI 语言(桥 health 下发,如 "en"/"zh"):界面语言 auto 模式的兜底
     probePending: null, // 探针独立槽(不占 State.pending 单槽):探针与翻译/BTIPC 位泵并行等引擎 I/O
     probeLastAt: 0, // 上次探测发起时间(nowMs()),判死后按 HTTPS_PANEL_REPROBE_MS 节流重探
     eventsRegistered: false,
@@ -882,11 +883,20 @@
 
   // 游戏内 UI 文案语言(STRINGS 只有 zh/en 两语):配置固定值优先;auto/空 →
   // 跟随探测,探测不到(桥会用 Steam 语言兜底,游戏内拿不到)时按用户主群默认中文。
+  // 界面语言偏好(2026-10-29 统一读取):cfg.ui.uiLang(经桥持久化,面板选的)>
+  // 旧顶层 cfg.uiLang(兼容)> State.sysLang(桥下发的 Windows 系统语言)> ""(自动)。
+  // 英文系统/游戏用户此前被默认 zh 坑(GB 用户反馈:UMM 选项/面板全是中文看不懂)。
+  function uiLangPref() {
+    const c = State.cfg || {};
+    const v = (c.ui && typeof c.ui.uiLang === "string" && c.ui.uiLang) || (typeof c.uiLang === "string" ? c.uiLang : "") || State.sysLang || "";
+    return String(v);
+  }
+
   function resolveUiLang() {
-    const l = (State.cfg && State.cfg.uiLang) || "";
-    if (l === "zh" || l === "en") return l;
+    const pref = uiLangPref();
+    if (pref === "zh" || pref === "en") return pref;
     const g = detectGameLang();
-    if (!g) return "zh";
+    if (!g) return (pref === "en" || State.sysLang === "en") ? "en" : "zh";
     return (g === "zh-Hans" || g === "zh") ? "zh" : "en";
   }
 
@@ -1141,7 +1151,7 @@
     try {
       // 标签随界面语言: 中文界面下 UMM 设置窗口显示中文(core/umm_bridge.js localizeUmmManifest 同规则,
       // 测试对账 tests/umm_integration.test.js);存储按 id 不按 label,切语言不丢设置。
-      const lang = (State.cfg && State.cfg.uiLang) || "zh";
+      const lang = (uiLangPref() === "en") ? "en" : "zh";
       const manifest = localizeUmmManifest(UMM_SETTINGS, lang);
       // announce 后 UMM 会把它存档值逐键 set 回来(协议既定行为,每次 announce 都重放)。
       // 吸收窗: 这批 set 整体忽略 —— 桥配置(/tr 保存)是唯一持久真值;
@@ -3192,6 +3202,10 @@ function injectTranslation(row, sig, text, fragment) {
         try { payload = JSON.parse(title.slice((TITLE_PREFIX + "probe").length)); } catch (e) {}
         // 排外告警(2026-10-28):探针响应携带 foreignPaks(桥侧 addons 扫描)——
         // 多份含本面板的 vpk 并存 = 同 ID 混合加载,版本串错乱/行为不可预测(§14"两份同装"翻版)。
+        if (payload && payload.sysLang && !State.sysLang) {
+          State.sysLang = String(payload.sysLang);
+          log("sysLang: " + State.sysLang + " (from bridge; UI lang auto fallback source)");
+        }
         if (payload && payload.foreignPaks && payload.foreignPaks.duplicates && !State.dupWarned) {
           State.dupWarned = true;
           const dupList = (payload.foreignPaks.items || []).map(function (h) { return h.file + "(" + h.version + ")"; }).join(", ");
@@ -4437,7 +4451,7 @@ function injectTranslation(row, sig, text, fragment) {
     setSelectText("LCTDisplayModeSelect", labelFor(DISPLAY_MODES, State.cfg.displayMode || "bilingual"));
     setSelectText("LCTOutgoingSelect", labelFor(OUTGOING_MODES, State.cfg.outgoing || "off"));
     setSelectText("LCTOutgoingTargetSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.outgoingTarget || "en"));
-    setSelectText("LCTUILangSelect", labelFor(UI_LANG_OPTIONS, State.cfg.uiLang || "auto"));
+    setSelectText("LCTUILangSelect", labelFor(UI_LANG_OPTIONS, uiLangPref() || "auto"));
     // 同步开关文本
     setToggleText("LCTEnabled", !!State.cfg.enabled);
     setToggleText("LCTForce", !!State.cfg.force);
@@ -4448,10 +4462,19 @@ function injectTranslation(row, sig, text, fragment) {
   }
 
   function LCTPickUILang(value) {
-    State.cfg.uiLang = value;
+    // 2026-10-29 持久化修复(GB 用户实测"面板选语言,重启即重置"):原实现只写
+    // State.cfg.uiLang + saveUiConfig(会话 convar),从不推桥 → 重启被桥配置覆盖。
+    // 现写入 cfg.ui.uiLang(DEFAULTS.ui 块,经桥持久化)并同步推桥。
+    if (!State.cfg.ui) State.cfg.ui = {};
+    State.cfg.ui.uiLang = value;
     saveUiConfig();
     applyUILang();
     closeSelectMenus();
+    try {
+      bridgePost("config", { config: { ui: { uiLang: value } } }, function (res) {
+        log("pickUILang persist: " + (res && res.ok ? "ok" : (res && res.error) || "failed"));
+      });
+    } catch (eP) { log("pickUILang persist THREW " + expErr(eP)); }
     log("pickUILang: " + value);
   }
 
