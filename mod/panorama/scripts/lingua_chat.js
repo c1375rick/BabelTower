@@ -846,21 +846,23 @@
 
   // 游戏侧界面语言:/ui 设置页据此决定默认显示语言(优先 mod 设置,退引擎语言)。
   function gameUiLang() {
-    // 上报给桥(&lang=)的"游戏 UI 语言",网页 auto 模式据此跟随。
-    // 优先级:配置固定值(zh/en,游戏内面板可选) > auto/空 → $.Language() 探测。
-    // 2026-10-29 修:旧版只认 chinese→zh、其余一律 en——非中英游戏语言全部误报 en,
-    // 网页"自动(跟随游戏)"名不副实;且 cfg.uiLang 一旦被面板选过就永久短路探测。
-    const l = (State.cfg && State.cfg.uiLang) || "";
-    if (l === "zh" || l === "en") return l;
+    // 上报给桥(&lang=)的"游戏语言",网页 auto 模式据此跟随。
+    // 2026-10-29 修:不再读 cfg.uiLang(那是 mod 界面语言,用户在游戏内面板选过就
+    // 会永久污染上报,"跟随游戏"失效)——恒为引擎探测;探测不到时上报空串,
+    // 桥忽略空值并回落 Steam 语言(注册表),后者才是"游戏语言"的权威源。
     return detectGameLang();
   }
+
+  // $.Language() 在 Deadlock 的 Panorama 里实测不存在(2026-10-29:typeof 检查失败,
+  // 旧代码一直走 catch 兜底 zh——"跟随游戏"从未真正工作过)。探测不到时返回空串,
+  // 由桥侧 Steam 语言兜底。
 
   // $.Language() 返回 Steam 语言名(english/schinese/tchinese/japanese/...)。
   // 映射到网页 LANGS 支持的 code;未识别一律 en(与旧行为一致)。只读不改配置。
   function detectGameLang() {
     try {
       const s = String(typeof $.Language === "function" ? $.Language() : "").toLowerCase();
-      if (!s) return "zh";
+      if (!s) return ""; // 探测不到:上报空串,桥忽略并回落 Steam 语言(注册表)
       if (s.indexOf("schinese") !== -1 || s.indexOf("zh-hans") !== -1) return "zh-Hans";
       if (s.indexOf("tchinese") !== -1 || s.indexOf("zh-hant") !== -1) return "zh-Hant";
       if (s.indexOf("chinese") !== -1) return "zh-Hans";
@@ -872,18 +874,19 @@
       if (s.indexOf("spanish") !== -1) return "es";
       if (s.indexOf("russian") !== -1) return "ru";
       if (s.indexOf("brazillian") !== -1 || s.indexOf("portuguese") !== -1) return "pt-BR";
-      return "en";
+      return "";
     } catch (e) {
-      return "zh";
+      return "";
     }
   }
 
   // 游戏内 UI 文案语言(STRINGS 只有 zh/en 两语):配置固定值优先;auto/空 →
-  // 跟随探测到的游戏语言(zh-Hans → zh,其余文案回落 en)。
+  // 跟随探测,探测不到(桥会用 Steam 语言兜底,游戏内拿不到)时按用户主群默认中文。
   function resolveUiLang() {
     const l = (State.cfg && State.cfg.uiLang) || "";
     if (l === "zh" || l === "en") return l;
     const g = detectGameLang();
+    if (!g) return "zh";
     return (g === "zh-Hans" || g === "zh") ? "zh" : "en";
   }
 

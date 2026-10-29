@@ -1226,7 +1226,7 @@
         gameLang = j.gameLang;
         var badge = $("gameLangBadge");
         badge.className = "badge";
-        badge.textContent = t("health_game_lang", { lang: langLabel(gameLang === "zh" ? "zh-Hans" : "en") });
+        badge.textContent = t("health_game_lang", { lang: langLabel(gameLang === "zh" ? "zh-Hans" : (function () { for (var i = 0; i < LANGS.length; i += 1) if (LANGS[i].code === gameLang) return gameLang; return "en"; })()) });
         if (storeMode === "auto") {
           var want = resolveLang();
           if (want !== LANG) { LANG = want; applyI18n(); }

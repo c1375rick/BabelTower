@@ -1,4 +1,4 @@
-﻿// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
+// Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0
 // Babel Tower - 本地翻译桥服务器
 //
 // 职责(只做翻译相关的事,不做通用代理):
@@ -594,23 +594,60 @@ function touchChannel(name) {
 // 游戏每次导航 /bridge 都会带 &lang=<zh|en>(取 mod 的界面语言设置),桥记下最后一次值。
 // 桌面设置页据此决定默认显示中文还是英文;用户可在页面右上角覆盖。
 let gameLangPulse = { value: null, at: 0 };
-function noteGameLang(raw) {
+function normalizeGameLang(raw) {
   const s = String(raw || "").toLowerCase();
-  if (!s) return;
-  let v = null;
-  // 2026-10-29 扩展:游戏侧 gameUiLang() 现上报完整 code 集(zh-Hans/zh-Hant/ja/ko/...),
-  // 旧值 zh/en 仍兼容。注意 zh-hant 判定必须在 zh 之前("zh-hant" 也以 zh 开头)。
-  if (s.indexOf("zh-hant") !== -1 || s.indexOf("tchinese") !== -1) v = "zh-Hant";
-  else if (s.indexOf("zh") === 0 || s.indexOf("chinese") !== -1 || s.indexOf("zh-hans") !== -1) v = "zh-Hans";
-  else if (s.indexOf("english") !== -1 || s.indexOf("en") === 0) v = "en";
-  else if (s.indexOf("japanese") !== -1 || s === "ja") v = "ja";
-  else if (s.indexOf("korean") !== -1 || s === "ko") v = "ko";
-  else if (s.indexOf("french") !== -1 || s === "fr") v = "fr";
-  else if (s.indexOf("german") !== -1 || s === "de") v = "de";
-  else if (s.indexOf("spanish") !== -1 || s === "es") v = "es";
-  else if (s.indexOf("russian") !== -1 || s === "ru") v = "ru";
-  else if (s.indexOf("brazillian") !== -1 || s.indexOf("portuguese") !== -1 || s === "pt-br") v = "pt-BR";
+  if (!s) return null;
+  // 2026-10-29 扩展:游戏侧 gameUiLang() 上报完整 code 集(zh-Hans/zh-Hant/ja/ko/...),
+  // 旧值 zh/en 兼容。注意 zh-hant 判定必须在 zh 之前("zh-hant" 也以 zh 开头)。
+  if (s.indexOf("zh-hant") !== -1 || s.indexOf("tchinese") !== -1) return "zh-Hant";
+  if (s.indexOf("zh") === 0 || s.indexOf("chinese") !== -1 || s.indexOf("zh-hans") !== -1) return "zh-Hans";
+  if (s.indexOf("english") !== -1 || s.indexOf("en") === 0) return "en";
+  if (s.indexOf("japanese") !== -1 || s === "ja") return "ja";
+  if (s.indexOf("korean") !== -1 || s === "ko") return "ko";
+  if (s.indexOf("french") !== -1 || s === "fr") return "fr";
+  if (s.indexOf("german") !== -1 || s === "de") return "de";
+  if (s.indexOf("spanish") !== -1 || s === "es") return "es";
+  if (s.indexOf("russian") !== -1 || s === "ru") return "ru";
+  if (s.indexOf("brazillian") !== -1 || s.indexOf("portuguese") !== -1 || s === "pt-br") return "pt-BR";
+  return null;
+}
+
+function noteGameLang(raw) {
+  const v = normalizeGameLang(raw);
   if (v) gameLangPulse = { value: v, at: Date.now() };
+}
+
+// Steam 语言静态真源(注册表 HKCU\Software\Valve\Steam\Language,如 schinese)。
+// 游戏 mod 离线后 gameLangPulse 是陈旧值(2026-10-28 晚实测:验证时模拟的 english
+// 脉冲停到第二天,用户 auto 模式看到英文而游戏是中文)。gameLangPulse 超 TTL 未
+// 更新 → health 回落到这里;Steam 界面语言默认即各游戏的语言(per-game 无
+// override 时),作为"游戏语言"的离线估计比陈旧脉冲准得多。
+let steamLangStatic = null;
+let steamLangAt = 0;
+const STEAMLANG_TTL_MS = 60 * 1000; // 60s 缓存:用户切 Steam 语言后 1 分钟内网页跟随,无需重启游戏/桥
+function steamLanguage() {
+  if (steamLangStatic !== null && Date.now() - steamLangAt <= STEAMLANG_TTL_MS) return steamLangStatic;
+  let v = null;
+  try {
+    const out = require("child_process").execSync(
+      'reg query "HKCU\\Software\\Valve\\Steam" /v Language',
+      { encoding: "utf8", timeout: 5000 });
+    const m = /Language\s+REG_SZ\s+(\S+)/.exec(out);
+    v = m ? normalizeGameLang(m[1]) : null;
+  } catch (e) {
+    v = null;
+  }
+  // 读取失败时保留旧值(短 TTL 内重试),成功才刷新
+  if (v) { steamLangStatic = v; steamLangAt = Date.now(); }
+  return steamLangStatic;
+}
+
+// 游戏每 ~2s 上报一次 &lang=;超过 GAMELANG_TTL_MS 未更新 = 游戏已离线,
+// 脉冲是陈旧值 → 回落 Steam 语言静态估计(可能为 null,网页再回落浏览器语言)。
+const GAMELANG_TTL_MS = 10 * 60 * 1000;
+function effectiveGameLang() {
+  if (gameLangPulse.value && Date.now() - gameLangPulse.at <= GAMELANG_TTL_MS) return gameLangPulse.value;
+  return steamLanguage();
 }
 
 // ---------- /tr → 打开桌面设置页(2026-10-19) ----------
@@ -1211,7 +1248,7 @@ async function handleApi(req, res, url, bodyObj) {
       gameRunning: !!gameProcessSeen,
       // 游戏侧界面语言(zh/en),来自 mod 每次 /bridge 导航带的 &lang=;
       // /ui 页面据此决定默认语言,null 表示还没收到过。2026-10-19
-      gameLang: gameLangPulse.value,
+      gameLang: effectiveGameLang(),
       gameLangAt: gameLangPulse.at,
       channels: {
         now: Date.now(),
