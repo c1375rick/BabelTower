@@ -1217,7 +1217,7 @@ function bridgePage(query) {
     "setTimeout(function(){if(!done){done=true;out({ok:false,error:'bridge_timeout'});}},t);",
     "var req={operation:op,text:q.get('text')||'',sourceLanguage:q.get('source')||'auto',targetLanguage:q.get('target')||'zh-Hans',timeoutMs:Number(q.get('timeoutMs'))||undefined};",
     "var d=q.get('d');if(d){try{req=JSON.parse(d);}catch(e){}}",
-    "var path='/api/v1/'+(op==='translate'?'translate':op);",
+    "var path='/api/v1/'+(op==='translate'?'translate':op)+(q.toString()?'?'+q.toString():'');",
     "var fetchOpts={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req)};",
     "if(op==='health'){fetchOpts={method:'GET'};}",
     "fetch(path,fetchOpts)",
