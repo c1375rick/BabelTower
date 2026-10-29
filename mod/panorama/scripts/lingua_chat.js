@@ -3257,15 +3257,15 @@ function injectTranslation(row, sig, text, fragment) {
     if (title === TITLE_ALIVE) {
       markBridgeUp();
       if (pending) pending.sawAlive = true;
+      // 导航真的成功过 => 面板通道可用,清掉判死计数与冷却
+      State.navDeadStreak = 0;
+      State.navDeadUntil = 0;
       // 探针(统一槽):见到 lct-alive 即握手成功(boot=1 页面不发 health 单发),立即结算
       if (pending && pending.id === "probe") {
         State.pending = null;
         settleProbe(true, "ok");
         return;
       }
-      // 导航真的成功过 => 面板通道可用,清掉判死计数与冷却
-      State.navDeadStreak = 0;
-      State.navDeadUntil = 0;
     } else if (title && title.indexOf(TITLE_PREFIX) === 0) {
       // 按 id 路由:翻译 job 的 id 动态(rXX);探针回归统一槽后 id="probe" 也走此路径
       let payload = null;
