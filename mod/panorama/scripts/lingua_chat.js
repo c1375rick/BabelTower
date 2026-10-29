@@ -360,6 +360,9 @@
     sysLang: null, // Windows 系统 UI 语言(桥 health 下发,如 "en"/"zh"):界面语言 auto 模式的兜底
     probePending: null, // 探针独立槽(不占 State.pending 单槽):探针与翻译/BTIPC 位泵并行等引擎 I/O
     probeLastAt: 0, // 上次探测发起时间(nowMs()),判死后按 HTTPS_PANEL_REPROBE_MS 节流重探
+    hashReady: false, // hash 命令通道已握手(探针 ALIVE 后置位):SetURL 只变 fragment,页面常驻零导航
+    hashSeq: 0, // hash 请求计数
+    hashBase: "", // hash 通道 base(init 页面 URL 含 query;hash 请求必须与它前缀完全一致才不触发整页导航)
     eventsRegistered: false,
     pending: null, // 统一在途桥请求 { id, onResult, deadline, sawAlive }
     bridgeUp: false,
@@ -2376,6 +2379,8 @@ function injectTranslation(row, sig, text, fragment) {
     State.httpsPanelOk = ok;
     if (ok) {
       State.httpsPanelHardDead = false;
+      State.hashReady = true;
+      State.hashBase = (State.probePending && State.probePending.navUrl) || State.hashBase;
       log("https panel: ALIVE (https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
         ") — translations now take one RTT instead of the BTIPC bit pump");
     } else {
@@ -2488,6 +2493,35 @@ function injectTranslation(row, sig, text, fragment) {
         job.done(null, null);
         finishJob();
       });
+    }
+    // hash 命令通道(2026-10-29,QOL 4.0.5 实证架构):页面常驻,SetURL 只变 fragment
+    // (同 base#frag = 同文档导航,hashchange 不重载)——nav 偶发失败/watch 顶掉/
+    // 页面重载族问题从架构上消失。异常自动回退下方 nav 模式(现有代码全保留)。
+    if (hooks && hooks.httpsChannel && State.hashReady && !forceHttp) {
+      const payload = {
+        q: "h" + (++State.hashSeq) + "_" + nowMs(),
+        id: job.id,
+        op: job.kind === "bridge" ? job.op : "translate",
+        d: job.kind === "bridge" ? (function () { try { return JSON.parse(job.data || "{}"); } catch (eD) { return {}; } })() :
+           { text: (job.record && job.record.text) || "", source: "auto",
+             target: job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage(),
+             timeoutMs: job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000) },
+      };
+      setPending(job.id, function (payload2) {
+        if (isPanelHardFail(payload2) && handOff(hooks, payload2)) return;
+        handleBridgePayload(job, payload2);
+      }, job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000));
+      try {
+        panel.SetURL(State.hashBase + "#LCTQ:" + encodeURIComponent(JSON.stringify(payload)));
+      } catch (eH) {
+        State.pending = null;
+        State.hashReady = false; // hash 通道异常 → 回退 nav 模式(下一请求起生效)
+        log("hash channel SetURL THREW, fallback to nav: " + expErr(eH));
+      }
+      if (State.hashReady) {
+        try { if (State.pending) State.pending.navUrl = null; } catch (eNU) {}
+        return; // 响应经 pollTitle 现有解析(LCT+id+JSON 格式不变)
+      }
     }
     const url = buildBridgeUrl(job, forceHttp);
     setPending(job.id, function (payload) {
@@ -3253,6 +3287,7 @@ function injectTranslation(row, sig, text, fragment) {
       }
       State.pending = null;
       State.panelDead = true;
+      State.hashReady = false; // 面板死 → hash 通道随面板失效,nav 模式接管
       const snap = navDiagSnapshot();
       // 硬死签名:src 为空 = 引擎压根没开始加载页面;只有这种才累计判死(有 src 只重置,防偶发抖动误杀)。
       if (snap.indexOf('src=""') !== -1) State.navDeadStreak += 1;
