@@ -1,0 +1,50 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/citadel_hero_stats_tech_panel.vcss_c");
+#ModifiedAbilitiesPanel,CitadelModifiedAbilities
+{
+	width: 100%;
+}
+
+.gShopOpen #SpiritValueContainer
+{
+	flow-children: right;
+	padding: 0px;
+	height: 25px;
+}
+
+.gScoreboardOpen CitadelModifiedAbilities
+{
+	visibility: collapse;
+}
+
+.gShopOpen #StatContainer_TechPower
+{
+	width: 54%;
+	height: 30px;
+}
+
+.SpiritPower
+{
+	flow-children: down;
+}
+
+.SpiritPowerImpactLabel
+{
+	visibility: collapse;
+}
+
+.SpiritPowerDesc
+{
+	visibility: collapse;
+}
+
+.simplify_shop_stats_active #SpiritImpactContainer,.simplify_shop_stats_active #ModifiedAbilitiesPanel,.simplify_shop_stats_active CitadelModifiedAbilities,CitadelHudHeroShop.simplify_shop_stats_active #SpiritImpactContainer,CitadelHudHeroShop.simplify_shop_stats_active #ModifiedAbilitiesPanel,CitadelHudHeroShop.simplify_shop_stats_active CitadelModifiedAbilities
+{
+	visibility: collapse !important;
+	height: 0px;
+	width: 0px;
+	margin: 0px;
+	padding: 0px;
+}
+

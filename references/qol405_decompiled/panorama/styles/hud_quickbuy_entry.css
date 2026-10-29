@@ -1,0 +1,144 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/hud_quickbuy_entry.vcss_c");
+.QuickbuyItem .CostPanel .QueueRemainingSoulsDivider
+{
+	visibility: collapse;
+	color: #d8d0c088;
+	wash-color: #d8d0c088;
+	font-weight: bold;
+	font-size: 16px;
+	margin-left: 2px;
+	vertical-align: center;
+}
+
+.QuickbuyItem .CostPanel #QueueRemainingSoulsLabel
+{
+	visibility: collapse;
+	color: #66ffd9;
+	wash-color: #66ffd9;
+	font-weight: bold;
+	font-size: 16px;
+	margin-left: 1px;
+	vertical-align: center;
+}
+
+#QuickbuyPreview2Entry,#QuickbuyPreview3Entry,#QuickbuyPreview4Entry,#QuickbuyPreview5Entry
+{
+	width: 100%;
+	height: 100%;
+	background-color: offWhite&10;
+}
+
+#QuickbuyPreview2Entry #ItemContentPanel,#QuickbuyPreview3Entry #ItemContentPanel,#QuickbuyPreview4Entry #ItemContentPanel,#QuickbuyPreview5Entry #ItemContentPanel
+{
+	flow-children: none;
+	horizontal-align: center;
+	vertical-align: center;
+}
+
+#QuickbuyPreview2Entry .QuickbuyItem,#QuickbuyPreview3Entry .QuickbuyItem,#QuickbuyPreview4Entry .QuickbuyItem,#QuickbuyPreview5Entry .QuickbuyItem
+{
+	height: 100%;
+	width: 100%;
+	padding: 0px;
+	horizontal-align: center;
+	opacity: 1;
+}
+
+#QuickbuyPreview2Entry .NamePanel,#QuickbuyPreview2Entry #ControlIcons,#QuickbuyPreview3Entry .NamePanel,#QuickbuyPreview3Entry #ControlIcons,#QuickbuyPreview4Entry .NamePanel,#QuickbuyPreview4Entry #ControlIcons,#QuickbuyPreview5Entry .NamePanel,#QuickbuyPreview5Entry #ControlIcons
+{
+	visibility: collapse;
+}
+
+#QuickbuyPreview2Entry #ModIcon,#QuickbuyPreview3Entry #ModIcon,#QuickbuyPreview4Entry #ModIcon,#QuickbuyPreview5Entry #ModIcon
+{
+	ui-scale: 120%;
+	horizontal-align: center;
+	vertical-align: middle;
+	tooltip-position: top;
+	margin-top: 0px;
+}
+
+#QuickbuyPreview2Entry CitadelModIcon,#QuickbuyPreview3Entry CitadelModIcon,#QuickbuyPreview4Entry CitadelModIcon,#QuickbuyPreview5Entry CitadelModIcon
+{
+	tooltip-position: left;
+}
+
+#NotifyButton
+{
+	margin-left: 0px;
+	width: 30px;
+	height: 30px;
+	vertical-align: center;
+	horizontal-align: right;
+	visibility: collapse;
+	background-size: auto 52%;
+	background-position: center;
+	background-repeat: no-repeat;
+	background-image: url("s2r://panorama/images/icons/icon_send.vsvg");
+	wash-color: #101515;
+	opacity: 0.55;
+}
+
+.ToastPanel #NotifyButton,.IsBeingDragged #NotifyButton
+{
+	visibility: collapse;
+}
+
+#NotifyButton:hover
+{
+	brightness: 1.15;
+	wash-color: #66ffd9;
+	opacity: 0.75;
+	pre-transform-scale2d: 1.1;
+	transition-property: brightness,pre-transform-scale2d,opacity,wash-color;
+	transition-duration: 0.1s;
+}
+
+.shop_click_to_notify_active .HasRemainingSoulsNeeded #NotifyButton.CanClickToNotify,#CitadelHudQuickbuy.shop_click_to_notify_active .HasRemainingSoulsNeeded #NotifyButton.CanClickToNotify
+{
+	visibility: visible;
+}
+
+.shop_click_to_notify_active #ControlIcons,#CitadelHudQuickbuy.shop_click_to_notify_active #ControlIcons
+{
+	width: 90px;
+}
+
+.HasRemainingSoulsNeeded .CostPanel .QueueRemainingSoulsDivider,.HasRemainingSoulsNeeded .CostPanel #QueueRemainingSoulsLabel
+{
+	visibility: visible;
+}
+
+.shop_click_to_notify_active .HasRemainingSoulsNeeded .CostPanel #QueueRemainingSoulsLabel,#CitadelHudQuickbuy.shop_click_to_notify_active .HasRemainingSoulsNeeded .CostPanel #QueueRemainingSoulsLabel
+{
+	brightness: 1.15;
+	color: #d64259;
+	wash-color: #d64259;
+	font-size: 16px;
+	font-weight: bold;
+}
+
+.shop_click_to_notify_active .HasRemainingSoulsNeeded .CostPanel #QueueRemainingSoulsLabel:hover,#CitadelHudQuickbuy.shop_click_to_notify_active .HasRemainingSoulsNeeded .CostPanel #QueueRemainingSoulsLabel:hover
+{
+	brightness: 1.8;
+}
+
+.shop_click_to_notify_active .HasRemainingSoulsNeeded .CostPanel .QueueRemainingSoulsDivider,#CitadelHudQuickbuy.shop_click_to_notify_active .HasRemainingSoulsNeeded .CostPanel .QueueRemainingSoulsDivider
+{
+	color: #d8d0c088;
+	wash-color: #d8d0c088;
+	font-size: 16px;
+	font-weight: bold;
+	vertical-align: center;
+}
+
+.support_4_3_active #QuickbuyQueue .QuickbuyItem,.support_4_3_active #QuickbuySellQueue .QuickbuyItem
+{
+	width: 100%;
+	horizontal-align: left;
+	brightness: 0.8;
+	background-color: offWhite&50;
+}
+

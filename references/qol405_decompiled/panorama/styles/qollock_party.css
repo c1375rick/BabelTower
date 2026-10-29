@@ -1,0 +1,15 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+.FriendsCountContainer
+{
+	ignore-parent-flow: true;
+	width: 36px;
+	height: 36px;
+	margin-top: 30px;
+	margin-right: 2px;
+	x: -2px;
+	y: -2px;
+	horizontal-align: left;
+	vertical-align: top;
+}
+

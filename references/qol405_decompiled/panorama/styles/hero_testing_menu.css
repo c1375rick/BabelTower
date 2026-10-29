@@ -1,0 +1,13 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/hero_testing_menu.vcss_c");
+.hud_hero_testing_root
+{
+	y: 75px;
+}
+
+.connectedToHeroTesting.connectedToHideout:not(.InHideout) .hud_hero_testing_root
+{
+	visibility: visible;
+}
+

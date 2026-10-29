@@ -3226,7 +3226,12 @@ function injectTranslation(row, sig, text, fragment) {
     if (probe) {
       // 探针 nav 失败(3s 无 alive)原地重试一次;仍败则判本会话暂不可用(等下轮自动重探,不再一次性锁死)
       if (!probe.sawAlive && nowMs() - probe.startedAt > BRIDGE_ALIVE_SECONDS * 1000) {
-        if (retryNavOnce(probe)) return;
+        if (retryNavOnce(probe)) {
+          // 2026-10-29 致命修复:重试后必须续轮询——原代码 return 断循环 → 探针槽挂死、
+          // settleProbe 永不执行、sysLang/结算日志全消失、https 通道全天静默降级 BTIPC(16:05 实车)
+          $.Schedule(TITLE_POLL_SECONDS, pollTitle);
+          return;
+        }
         State.panelDead = true;
         settleProbe(false, "bridge_nav_failed");
         return;
@@ -3240,7 +3245,12 @@ function injectTranslation(row, sig, text, fragment) {
     }
     // 导航失败快速判定(BUGFIX 0.1.3):3s 内连 alive 都没出现 => 导航失败,立即结算而非傻等 15s 超时。
     if (!pending.sawAlive && nowMs() - pending.startedAt > BRIDGE_ALIVE_SECONDS * 1000) {
-      if (retryNavOnce(pending)) return; // 偶发导航失败:原地重试一次再判死(见 retryNavOnce)
+      if (retryNavOnce(pending)) {
+        // 2026-10-29 补:重试后同样要续轮询(与 probe 分支同款修复;存量靠下一个 job 入队
+        // 重启循环自愈,但探针槽挂起期间不 restart 的场景下会静默断链)
+        $.Schedule(TITLE_POLL_SECONDS, pollTitle);
+        return;
+      }
       State.pending = null;
       State.panelDead = true;
       const snap = navDiagSnapshot();

@@ -1,0 +1,850 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+CitadelModifiedAttributeLabel
+{
+	width: fit-children;
+	flow-children: right;
+}
+
+.AttributeContents
+{
+	width: fit-children;
+	flow-children: right;
+	vertical-align: center;
+}
+
+.ShowBonusDiff .AttributeContents,#TierBonusValue .AttributeContents
+{
+	width: 100%;
+}
+
+.heroStatsDisplay .AttributeContents
+{
+	height: 100%;
+}
+
+#AbilityType_Innate .isNegative.Corrupted .AttributeContents
+{
+	max-width: 80%;
+}
+
+CitadelHeroStatsDisplay CitadelModifiedAttributeLabel
+{
+	horizontal-align: center;
+}
+
+CitadelHeroStatsDisplay #StatContainer_TechPower CitadelModifiedAttributeLabel
+{
+	horizontal-align: left;
+}
+
+.isPostGame CitadelModifiedAttributeLabel
+{
+	width: 100%;
+}
+
+#HeroStats CitadelModifiedAttributeLabel.StatDesc_MaxHealth,#HeroStats CitadelModifiedAttributeLabel.StatDesc_DPS,#HeroStats CitadelModifiedAttributeLabel.StatDesc_TechPower,#HeroStats CitadelModifiedAttributeLabel.StatDesc_BaseHealthRegen,#HeroStats CitadelModifiedAttributeLabel.StatDesc_BulletDamage,#HeroStats CitadelModifiedAttributeLabel.StatDesc_TechDamageScale
+{
+	flow-children: down;
+	margin-top: 5px;
+}
+
+#HeroStats .StatDesc_MaxHealth .AttributeContents,#HeroStats .StatDesc_DPS .AttributeContents,#HeroStats .StatDesc_TechPower .AttributeContents,#HeroStats .StatDesc_BaseHealthRegen .AttributeContents,#HeroStats .StatDesc_BulletDamage .AttributeContents,#HeroStats .StatDesc_TechDamageScale .AttributeContents
+{
+	flow-children: down;
+}
+
+CitadelModifiedAttributeLabel.Elevated
+{
+	font-weight: bold;
+}
+
+CitadelModifiedAttributeLabel#TierBonusValue,CitadelModifiedAttributeLabel#ImportantStatValue,#TierBonusValue .AttributeContents,#ImportantStatValue .AttributeContents
+{
+	flow-children: none;
+}
+
+CitadelModifiedAttributeLabel#TierBonusValue
+{
+	width: 85px;
+}
+
+CitadelModifiedAttributeLabel.ShowBonusDiff
+{
+	width: 100%;
+	margin: 2px;
+}
+
+CitadelModifiedAttributeLabel.Elevated
+{
+	color: courageBrightColor;
+	ui-scale: 105%;
+	margin-bottom: 15px;
+	margin-bottom: 2px;
+}
+
+#StatsAppliedContainer .Enhanced #AdditionalText
+{
+	ui-scale: 105%;
+	margin-bottom: 15px;
+	margin-bottom: 2px;
+}
+
+CitadelModifiedAttributeLabel.Enhanced
+{
+	opacity-brush: gradient( linear, 0% 0%, 100% 0%, from( enhancedColorBright&ee ), to( offWhite ) );
+	ui-scale: 105%;
+}
+
+#StatsAppliedContainer .Corrupted #AdditionalText
+{
+	ui-scale: 105%;
+	margin-bottom: 2px;
+}
+
+CitadelModifiedAttributeLabel.Corrupted
+{
+	opacity-brush: gradient( linear, 0% 0%, 100% 0%, from( corruptedColorBright&ee ), to( corruptedColorBright ) );
+	background-color: corruptedColorBright&20;
+	ui-scale: 100%;
+	padding: 0px 5px;
+}
+
+CitadelModifiedAttributeLabel.Corrupted.isNegative
+{
+	opacity-brush: gradient( linear, 0% 0%, 100% 0%, from( #ff8888ee ), to( #ff8888 ) );
+	background-color: gradient( linear, 0% 0%, 100% 0%, from( colorEnemy&30 ), to( colorEnemy&00 ) );
+	padding: 0px 5px;
+}
+
+#AbilityType_Innate CitadelModifiedAttributeLabel.Corrupted.isNegative
+{
+	width: 100%;
+}
+
+CitadelModifiedAttributeLabel#ImportantStatValue.Corrupted
+{
+	background-color: none;
+}
+
+CitadelModifiedAttributeLabel.PropertySearchMatch
+{
+	animation-name: SearchHighlight;
+	animation-duration: 3s;
+	animation-iteration-count: infinite;
+	background-color: #ffffff00;
+	animation-delay: 1s;
+	background-color: rgba(255, 255, 151, 0.05);
+}
+
+@keyframes 'SearchHighlight'
+{
+	0%
+	{
+		pre-transform-scale2d: 1;
+		brightness: 1;
+	}
+	
+	50%
+	{
+		pre-transform-scale2d: 1;
+		brightness: 2;
+	}
+	
+	100%
+	{
+		pre-transform-scale2d: 1;
+		brightness: 1;
+	}
+	
+}
+
+#StatsAppliedContainer #PassiveLineItem Label
+{
+	font-size: 18px;
+	font-weight: medium;
+}
+
+#AdditionalText
+{
+	font-size: 17px;
+	vertical-align: middle;
+	font-weight: semi-bold;
+	opacity: 0.6;
+	horizontal-align: center;
+	max-height: 28px;
+	text-overflow: shrink;
+}
+
+#StatContainer_WeaponRangeFalloffMin .StatImageArea,#StatContainer_WeaponRangeFalloffMax .StatImageArea
+{
+	visibility: collapse;
+}
+
+.ShowBonusDiff.ShowBonusDiffEnd #AdditionalText
+{
+	width: 290px;
+}
+
+.ShowBonusDiff #AdditionalText
+{
+	width: 260px;
+}
+
+#HeroStatsDisplay #AdditionalText
+{
+	font-size: 16px;
+	font-weight: semi-bold;
+	color: #ffffff60;
+}
+
+.heroStatsDisplay #AdditionalText
+{
+	height: 100%;
+	text-overflow: shrink;
+}
+
+#StatsAppliedContainer #AdditionalText
+{
+	opacity: 0.5;
+	font-size: 17px;
+	text-overflow: shrink;
+	height: 23px;
+	text-shadow: 1px 1px 0px offBlack&90;
+	font-size: 18px;
+	font-weight: medium;
+	color: #ffffff;
+}
+
+#TierBonusValue #BaseLabel,#TierBonusValue #ModifiedLabel,#PropertyStatValue #BaseLabel,#PropertyStatValue #ModifiedLabel
+{
+	text-align: center;
+	horizontal-align: center;
+	font-family: sansMono;
+}
+
+#StatsAppliedContainer .Elevated #AdditionalText
+{
+	font-weight: bold;
+	opacity: 1;
+}
+
+#StatsAppliedContainer .Elevated .PostfixValue,#StatsAppliedContainer .Elevated .PrefixValue
+{
+	font-weight: bold;
+}
+
+AbilityDetailsPanel #ImportantStatContainer #PropertyStatValue #BaseLabel,AbilityDetailsPanel #ImportantStatContainer #PropertyStatValue #ModifiedLabel,AbilityDetailsPanel #ImportantStatContainer #PropertyStatValue #StatScalingLabel,AbilityDetailsPanel #CooldownLabel #BaseLabel,AbilityDetailsPanel #CooldownLabel #ModifiedLabel,AbilityDetailsPanel #ChargesLabel #BaseLabel,AbilityDetailsPanel #ChargesLabel #ModifiedLabel
+{
+	font-size: 20px;
+}
+
+.LabelsContainer
+{
+	flow-children: right;
+	horizontal-align: center;
+	width: fit-children;
+	font-weight: bold;
+	margin-right: 5px;
+	vertical-align: center;
+}
+
+#HeroStatsDisplay .LabelsContainer
+{
+	margin-right: 4px;
+	horizontal-align: left;
+}
+
+#StatsAppliedBackground .LabelsContainer
+{
+	margin-left: 7px;
+	margin-right: 0px;
+}
+
+.StatusEffectBox .LabelsContainer
+{
+	margin-right: 5px;
+}
+
+CitadelTooltipModDetails #ImportantAttributeContainer .LabelsText
+{
+	max-width: 90px;
+	flow-children: right;
+}
+
+CitadelTooltipModDetails #ImportantAttributeContainer .HasModifiedValue .LabelsText
+{
+	max-width: 120px;
+}
+
+.LabelsText
+{
+	flow-children: right;
+	width: fit-children;
+}
+
+.LabelsText Label
+{
+	text-overflow: shrink;
+}
+
+#ModifiedLabel
+{
+	font-family: oracle;
+	text-overflow: shrink;
+	max-height: 35px;
+	font-size: 18px;
+}
+
+.Enhanced #ModifiedLabel
+{
+	text-shadow: 0px 0px 3.0 enhancedColorDarker;
+	color: enhancedColorBright;
+}
+
+.Corrupted #ModifiedLabel
+{
+	text-shadow: 0px 0px 3.0 corruptedColorDarker;
+	color: offWhite;
+	padding: 1px;
+}
+
+.Corrupted.isNegative #ModifiedLabel
+{
+	text-shadow: 0px 0px 3.0 #3a0d0d;
+	color: corruptedPenaltyColor;
+}
+
+.brawl_modifier
+{
+	width: 10px;
+	height: 10px;
+	vertical-align: middle;
+	background-image: url("s2r://panorama/images/hud/brawl/icon_brawl.vsvg");
+	background-size: cover;
+	wash-color: #ecc64c;
+	margin-right: 0px;
+	margin-left: 2px;
+	opacity: 0.6;
+	visibility: collapse;
+}
+
+.ValueModifiedWorseByMode .brawl_modifier,.ValueModifiedBetterByMode .brawl_modifier
+{
+	visibility: visible;
+}
+
+.hero_stats #ModifiedLabel,.hero_stats #BaseLabel
+{
+	font-size: 20px;
+}
+
+.hero_stats #GunDamage #ModifiedLabel,.hero_stats #GunDamage #BaseLabel
+{
+	font-size: 22px;
+}
+
+#HeroStatsDisplay #ModifiedLabel,#HeroStatsDisplay #BaseLabel
+{
+	font-size: 17px;
+}
+
+#HeroStatsDisplay #StatContainer_MaxHealth #ModifiedLabel,#HeroStatsDisplay #StatContainer_MaxHealth #BaseLabel,#HeroStatsDisplay #StatContainer_DPS #ModifiedLabel,#HeroStatsDisplay #StatContainer_DPS #BaseLabel,#HeroStatsDisplay #StatContainer_TechPower #ModifiedLabel,#HeroStatsDisplay #StatContainer_TechPower #BaseLabel
+{
+	font-size: 20px;
+}
+
+#HeroStats #CourageStats .HasModifiedValue #ModifiedLabel
+{
+	color: courageBrightColor;
+}
+
+#HeroStats #FortitudeStats .HasModifiedValue #ModifiedLabel
+{
+	color: fortitudeBrightColor;
+}
+
+#HeroStats #SpiritStats .HasModifiedValue #ModifiedLabel
+{
+	color: spiritBrightColor;
+}
+
+#ImportantStatsContainer #ModifiedLabel,#ImportantStatsContainer #BaseLabel,#ImportantStatsContainer #StatScalingLabel,#ImportantStatContainer #ValueFromModsLabel,#ImportantAttributeContainer #ModifiedLabel,#ImportantAttributeContainer #BaseLabel,#ImportantAttributeContainer #StatScalingLabel,#ImportantAttributeContainer #ValueFromModsLabel
+{
+	font-size: 22px;
+}
+
+.gDetailView #ImportantStatsContainer .HasScalingStat #ModifiedLabel,.gDetailView #ImportantStatsContainer .HasScalingStat #BaseLabel,.gDetailView #ImportantStatsContainer .HasScalingStat #StatScalingLabel,.gDetailView #ImportantStatsContainer .HasScalingStat #ValueFromModsLabel,.gDetailView #ImportantAttributeContainer .HasScalingStat #ModifiedLabel,.gDetailView #ImportantAttributeContainer .HasScalingStat #BaseLabel,.gDetailView #ImportantAttributeContainer .HasScalingStat #StatScalingLabel,.gDetailView #ImportantAttributeContainer .HasScalingStat #ValueFromModsLabel
+{
+	font-size: 18px;
+}
+
+#ImportantAttributeContainer .ScalingStat_EWeaponPower #StatScalingLabel
+{
+	color: courageBrightColor;
+}
+
+#ImportantAttributeContainer .ScalingStat_EArmorPower #StatScalingLabel
+{
+	color: fortitudeBrightColor;
+}
+
+#ImportantAttributeContainer .ScalingStat_ETechPower #StatScalingLabel
+{
+	color: spiritBrightColor;
+}
+
+#BaseLabel
+{
+	font-family: oracle;
+	text-overflow: shrink;
+	max-height: 35px;
+	text-shadow: 1px 1px 0px offBlack&90;
+}
+
+.hero_stats .HasModifiedValue #BaseLabel,.gDetailView .HasScalingStat .HasModifiedValue #BaseLabel
+{
+	text-decoration: none;
+	color: white;
+	margin-right: 0px;
+}
+
+.gDetailView .HasModifiedValue #BaseLabel,.gDetailView .HasModifiedValue.isAbilityUpgradPreview #BaseLabel,.HasScalingStat .gDetailView .HasModifiedValue #BaseLabel
+{
+	color: #999;
+	margin-right: 5px;
+	brightness: 0.7;
+}
+
+.Corrupted .gDetailView .HasModifiedValue #BaseLabel,.Corrupted .gDetailView .HasModifiedValue.isAbilityUpgradPreview #BaseLabel,.Corrupted .HasScalingStat .gDetailView .HasModifiedValue #BaseLabel
+{
+	opacity: 1;
+}
+
+#HeroStats .HasModifiedValue #BaseLabel
+{
+	visibility: visible;
+	text-decoration: line-through;
+	color: #ffffff40;
+	margin-right: 5px;
+}
+
+#TierBonusValue.HasModifiedValue #BaseLabel
+{
+	visibility: collapse;
+}
+
+.gDetailView .TechMod #ModifiedLabel
+{
+	color: spiritBrightColor;
+}
+
+.gDetailView .TechMod .prop_weapon_damage #ModifiedLabel
+{
+	color: spiritBrightColor;
+}
+
+.gDetailView .WeaponMod #ModifiedLabel
+{
+	color: courageBrightColor;
+}
+
+.gDetailView .WeaponMod .prop_tech_damage #ModifiedLabel
+{
+	color: spiritBrightColor;
+}
+
+.gDetailView .ArmorMod #ModifiedLabel
+{
+	color: fortitudeBrightColor;
+}
+
+.ShowBonusDiff .LabelsContainer
+{
+	horizontal-align: left;
+}
+
+.BonusDiff
+{
+	horizontal-align: right;
+	ignore-parent-flow: true;
+}
+
+.PreBonusValue
+{
+	opacity: 0.5;
+	font-family: sansMono;
+}
+
+.PostBonusValue
+{
+	font-weight: bold;
+	font-family: sansMono;
+}
+
+.TechMod .PostBonusValue
+{
+	color: spiritBrightColor;
+}
+
+.WeaponMod .PostBonusValue
+{
+	color: courageBrightColor;
+}
+
+.ArmorMod .PostBonusValue
+{
+	color: fortitudeBrightColor;
+}
+
+.isNegative .PostBonusValue,.isNegative #BaseLabel,.isNegative .PostfixValue
+{
+	color: #ff8888;
+}
+
+.GreenUpArrow
+{
+	visibility: collapse;
+	vertical-align: middle;
+	margin-top: 1px;
+	width: 10px;
+	height: 16px;
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-image: url("s2r://panorama/images/shop/tooltip_modified_arrow_1.vsvg");
+	vertical-align: center;
+	margin-left: 3px;
+	wash-color: #00FF99;
+	ui-scale: 80%;
+}
+
+.Show2Arrows .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/tooltip_modified_arrow_2.vsvg");
+}
+
+.Show3Arrows .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/tooltip_modified_arrow_3.vsvg");
+}
+
+.Enhanced .GreenUpArrow
+{
+	wash-color: none;
+	width: 15px;
+	height: 20px;
+	margin-left: -4px;
+	z-index: -1;
+	background-image: url("s2r://panorama/images/shop/enhanced_arrow_png.vtex");
+}
+
+.Corrupted .GreenUpArrow
+{
+	visibility: visible;
+	wash-color: #ffffff;
+	width: 30px;
+	height: 30px;
+	margin-left: -6px;
+	margin-top: -4px;
+	z-index: -1;
+	opacity: 1;
+	background-size: 100% 100%;
+	background-repeat: no-repeat;
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_positive_arrow1_png.vtex");
+	animation-name: CorruptedArrowPulseUp;
+	animation-duration: 1s;
+	animation-iteration-count: infinite;
+	animation-frame-time: 0.3s;
+}
+
+.Corrupted.isNegative .GreenUpArrow
+{
+	animation-name: CorruptedArrowPulseDown;
+	animation-duration: 1s;
+	animation-iteration-count: infinite;
+	animation-frame-time: 0.3s;
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_negative_arrow1_png.vtex");
+}
+
+.CorruptedUp2 .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_positive_arrow2_png.vtex");
+	margin-left: -6px;
+}
+
+.CorruptedUp3 .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_positive_arrow3_png.vtex");
+	margin-left: -4px;
+}
+
+.CorruptedDown1 .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_negative_arrow1_png.vtex");
+	margin-left: -6px;
+}
+
+.CorruptedDown2 .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_negative_arrow2_png.vtex");
+	margin-left: -6px;
+}
+
+.CorruptedDown3 .GreenUpArrow
+{
+	background-image: url("s2r://panorama/images/shop/corrupted_items/corrupted_negative_arrow3_png.vtex");
+	margin-left: -4px;
+}
+
+@keyframes 'ArrowPulse'
+{
+	0%
+	{
+		pre-transform-scale2d: 1;
+	}
+	
+	50%
+	{
+		pre-transform-scale2d: 1.1;
+	}
+	
+	100%
+	{
+		pre-transform-scale2d: 1;
+	}
+	
+}
+
+@keyframes 'CorruptedArrowPulseUp'
+{
+	0%
+	{
+		transform: translateY(0px);
+		brightness: 1;
+	}
+	
+	50%
+	{
+		transform: translateY(-1px);
+		brightness: 1.3;
+	}
+	
+	100%
+	{
+		transform: translateY(0px);
+		brightness: 1;
+	}
+	
+}
+
+@keyframes 'CorruptedArrowPulseDown'
+{
+	0%
+	{
+		transform: translateY(0px);
+		brightness: 1;
+	}
+	
+	50%
+	{
+		transform: translateY(1px);
+		brightness: 1.3;
+	}
+	
+	100%
+	{
+		transform: translateY(0px);
+		brightness: 1;
+	}
+	
+}
+
+#CooldownLabel .GreenUpArrow
+{
+	pre-transform-rotate2d: 180deg;
+}
+
+#TierBonusValue.HasModifiedValue .GreenUpArrow,.isAbilityUpgradPreview .GreenUpArrow,.gDetailView .GreenUpArrow,.gDetailView .HasModifiedValue .GreenUpArrow,.hero_stats .HasModifiedValue .GreenUpArrow,.gDetailView .HasScalingStat .GreenUpArrow,.upgradeBeingHovered .HasModifiedValue .GreenUpArrow
+{
+	visibility: collapse;
+}
+
+.HasModifiedValue .GreenUpArrow,AbilityDetailsPanel .HasScalingStat .GreenUpArrow
+{
+	visibility: visible;
+}
+
+#AdditionLabel,#ModifiedAdditionLabel
+{
+	opacity: 0.5;
+	vertical-align: center;
+	margin-right: 4px;
+	margin-left: 6px;
+	margin-top: 3px;
+}
+
+.BonusDiff,.HasNoPlayer .ShowBonusDiff .BonusDiff,.usedAsComponent .BonusDiff,.usedAsComponent .ShowBonusDiff .BonusDiff
+{
+	visibility: collapse;
+}
+
+.ShowBonusDiff .BonusDiff
+{
+	visibility: visible;
+}
+
+.gDetailView .hero_stats #AdditionLabel,.gDetailView .hero_stats #ModifiedAdditionLabel
+{
+	visibility: collapse;
+}
+
+.hero_stats .HasModifiedValue #ModifiedLabel,.gDetailView .HasScalingStat #ModifiedAdditionLabel,.gDetailView .HasScalingStat #AdditionLabel
+{
+	visibility: visible;
+}
+
+#ModifiedLabel,.gDetailView .HasScalingStat #BaseLabel,#StatScalingLabel,.HasModifiedValue #BaseLabel,.HasScalingStat #BaseLabel,.isAbilityUpgradPreview #ModifiedLabel,#ValueFromModsLabel,.gDetailView .HasScalingStat .HasModifiedValue #ModifiedLabel,.gDetailView .HasScalingStat #ModifiedLabel,.gDetailView .HasScalingStat .IsRoundingDown #ValueFromModsLabel,.gDetailView .HasScalingStat .IsRoundingDown #AdditionLabel,.HideModsValue #ValueFromModsLabel,.gDetailView .HasScalingStat.HideModsValue #ValueFromModsLabel,.gDetailView .HideModsValue #ValueFromModsLabel .HideModsValue #AdditionLabel,.gDetailView .HasScalingStat.HideModsValue #AdditionLabel,.gDetailView .HideModsValue #AdditionLabel
+{
+	visibility: collapse;
+}
+
+.HasModifiedValue #ModifiedLabel,.HasScalingStat #ModifiedLabel
+{
+	visibility: visible;
+}
+
+.gDetailView .HasModifiedValue #ModifiedLabel,.gDetailView .HasScalingStat #ModifiedLabel
+{
+	visibility: collapse;
+}
+
+.gDetailView #BaseLabel
+{
+	visibility: visible;
+}
+
+.ShowBonusDiffEnd .PreBonusValue,.ShowBonusDiffEnd .DiffArrow,#AdditionLabel,#ModifiedAdditionLabel
+{
+	visibility: collapse;
+}
+
+.StatImageArea
+{
+	visibility: visible;
+}
+
+.StatImage
+{
+	width: 18px;
+	height: 18px;
+	background-size: contain;
+	background-texture-size: 18px 18px;
+	margin-right: 4px;
+	vertical-align: center;
+	opacity: 0.3;
+	visibility: collapse;
+}
+
+.HasStatImage .StatImageArea
+{
+	visibility: visible;
+	vertical-align: middle;
+}
+
+.NewOverride
+{
+	horizontal-align: center;
+	vertical-align: center;
+	visibility: collapse;
+}
+
+Label.NewOverride
+{
+	font-size: 10px;
+	color: gold;
+	text-shadow: 0px 0px 0px 3.0 courageDarkerColor;
+}
+
+.isNewStat .NewOverride
+{
+	visibility: visible;
+}
+
+.ImportantStat Label.NewOverride
+{
+	font-size: 12px;
+}
+
+#CourageStatsContainer Label.NewOverride
+{
+	text-shadow: 0px 0px 0px 3.0 courageDarkerColor;
+}
+
+#FortitudeStatsContainer Label.NewOverride
+{
+	text-shadow: 0px 0px 0px 3.0 fortitudeDarkerColor;
+}
+
+#TierBonusStatImage
+{
+	visibility: collapse;
+	width: 15px;
+	height: 15px;
+	background-size: contain;
+	margin-left: 2px;
+	vertical-align: center;
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+.HasTierBonusStatImage #TierBonusStatImage
+{
+	visibility: visible;
+}
+
+.WeaponMod #TierBonusStatImage
+{
+	background-image: url("s2r://panorama/images/hud/core/icon_courage.vsvg");
+	wash-color: courageBrightColor;
+}
+
+.ArmorMod #TierBonusStatImage
+{
+	background-image: url("s2r://panorama/images/hud/core/icon_fortitude.vsvg");
+	wash-color: fortitudeBrightColor;
+}
+
+.TechMod #TierBonusStatImage
+{
+	background-image: url("s2r://panorama/images/hud/core/icon_spirit.vsvg");
+	wash-color: spiritBrightColor;
+}
+
+.Elevated Label
+{
+	font-weight: bold;
+}
+
+.corrupted_rng
+{
+	font-size: 10px;
+	font-family: block;
+	text-transform: uppercase;
+	color: colorEnemy;
+	text-shadow: 0px 0px 0px 3.0 offBlack;
+	vertical-align: middle;
+	horizontal-align: right;
+	padding: 2px;
+	text-overflow: shrink;
+	visibility: collapse;
+	animation-name: UIGroove1;
+	animation-duration: 1s;
+	animation-iteration-count: infinite;
+	animation-frame-time: 0.5s;
+}
+
+#AbilityType_Innate .isNegative.Corrupted .corrupted_rng
+{
+	visibility: visible;
+}
+

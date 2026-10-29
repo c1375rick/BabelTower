@@ -1,0 +1,70 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/hud_abilities.vcss_c");
+.passive_cooldown_basic_active .items .ability_container.item_passive.Hidden
+{
+	visibility: visible;
+}
+
+.simplify_ability_icons_active .ability_bg
+{
+	wash-color: #ffffff00;
+}
+
+.support_16_10_active .hud_abilities
+{
+	vertical-align: bottom;
+	margin-bottom: 0px;
+	border-radius: 6px;
+	flow-children: down;
+}
+
+.support_16_10_active .gShopOpen CitadelHudAbilities:hover #abilities,.support_16_10_active .wants_scoreboard #abilities,.support_16_10_active .gDetailView #abilities
+{
+	height: 220px;
+}
+
+.support_16_10_active #abilities
+{
+	width: fit-children;
+	height: 220px;
+	vertical-align: top;
+	flow-children: right;
+	ui-scale: 90%;
+}
+
+.minecraft_healthbar_active #hud_signature:hover .hud_abilities,.minecraft_healthbar_active .wants_scoreboard #hud_signature .hud_abilities,.minecraft_healthbar_active .gDetailView #hud_signature .hud_abilities
+{
+	padding: 0px;
+	border-top: 0px;
+}
+
+.minecraft_healthbar_active .Tier1 .button_container
+{
+	width: 65px;
+}
+
+.minecraft_healthbar_active #abilities
+{
+	height: 150px;
+}
+
+.minecraft_healthbar_active .gShopOpen CitadelHudAbilities:hover #abilities,.minecraft_healthbar_active .wants_scoreboard #abilities,.minecraft_healthbar_active .gDetailView #abilities
+{
+	height: 150px;
+}
+
+.minecraft_healthbar_active .stack_charges
+{
+	width: 85%;
+	border-radius: 5px;
+	margin-bottom: 50px;
+}
+
+.minecraft_healthbar_active .hud_abilities
+{
+	margin-right: 0px;
+	margin-bottom: 5px;
+	border-radius: 6px;
+}
+

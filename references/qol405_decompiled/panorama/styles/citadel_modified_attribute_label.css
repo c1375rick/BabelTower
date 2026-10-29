@@ -1,0 +1,14 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/citadel_modified_attribute_label.vcss_c");
+.simplify_shop_stats_active #TestPanel .LabelsContainer
+{
+	ui-scale: 150%;
+	margin-top: 2px;
+}
+
+.support_4_3_active #BaseLabel
+{
+	max-height: 25px;
+}
+

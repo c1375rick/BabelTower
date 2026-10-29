@@ -1,0 +1,396 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/citadel_hero_builds_shared.vcss");
+CitadelShopModsBuild
+{
+	height: 100%;
+	width: 100%;
+	flow-children: none;
+}
+
+CitadelShopModsBuild .BuildDetails
+{
+	width: 25px;
+	height: 25px;
+	margin-right: 5px;
+	vertical-align: middle;
+	horizontal-align: left;
+	tooltip-position: left;
+	transition-property: brightness, pre-transform-scale2d;
+	transition-duration: 0.15s;
+	wash-color: offBlack;
+	brightness: 0.8;
+}
+
+CitadelShopModsBuild .BuildDetails:hover
+{
+	pre-transform-scale2d: 1.15;
+}
+
+CitadelShopModsBuild .BuildDetails:hover
+{
+	brightness: 1.2;
+}
+
+CitadelShopModsBuild .BuildHeaderShared
+{
+	width: 100%;
+	horizontal-align: left;
+	height: 70px;
+	flow-children: right;
+	background-image: url("s2r://panorama/images/shop/catalog/catalog_shop_builds_header_bg_psd.vtex");
+	background-size: cover;
+	background-repeat: no-repeat;
+}
+
+CitadelShopModsBuild .BuildHeaderContainer
+{
+	flow-children: right;
+	width: fill-parent-flow( 1.0 );
+	height: 50px;
+}
+
+CitadelShopModsBuild .BuildHeaderContainer:hover
+{
+	brightness: 1.0;
+}
+
+CitadelShopModsBuild .BuildHeaderContainer:hover .SelectedBuildName
+{
+	brightness: 1.5;
+}
+
+CitadelShopModsBuild #SelectedBuildOuter
+{
+	max-width: 600px;
+	width: 100%;
+	vertical-align: middle;
+	flow-children: down;
+}
+
+CitadelShopModsBuild #SelectedBuild
+{
+	transition-property: background-color, background-image;
+	transition-duration: 0.2s;
+}
+
+CitadelShopModsBuild #SelectedBuild:hover
+{
+	background-color: offWhite&30;
+	background-image: url("s2r://panorama/images/icons/icon_carat_blk.vsvg");
+	background-position: right 30px center;
+	background-repeat: no-repeat;
+}
+
+CitadelShopModsBuild #ControlButtons
+{
+	flow-children: right;
+	vertical-align: center;
+	horizontal-align: right;
+}
+
+CitadelShopModsBuild #ControlButtons CitadelButton
+{
+	margin: 0px 5px;
+	tooltip-position: bottom;
+}
+
+CitadelShopModsBuild #ControlButtons .EditModeButton
+{
+	visibility: collapse;
+}
+
+.gEditingBuilds CitadelShopModsBuild #ControlButtons .EditModeButton
+{
+	visibility: visible;
+}
+
+CitadelShopModsBuild #ControlButtons #CopyToClipboardButton
+{
+	visibility: collapse;
+}
+
+CitadelShopModsBuild #ControlButtons #PasteFromClipboardButton
+{
+	visibility: collapse;
+}
+
+.gEditingBuilds CitadelShopModsBuild #ControlButtons #CopyToClipboardButton
+{
+	visibility: visible;
+}
+
+.gEditingBuilds CitadelShopModsBuild.HasPasteableBulid #ControlButtons #PasteFromClipboardButton
+{
+	visibility: visible;
+}
+
+CitadelShopModsBuild .AddCategoryButton
+{
+	margin-left: 30px;
+	horizontal-align: right;
+	vertical-align: center;
+	opacity: 1;
+	visibility: collapse;
+	margin-right: 20px;
+	max-width: 160px;
+}
+
+.gEditingBuilds CitadelShopModsBuild .AddCategoryButton
+{
+	visibility: visible;
+}
+
+.gEditingBuilds CitadelShopModsBuild .BuildHeader .BuildHeaderButton
+{
+	visibility: collapse;
+}
+
+.gEditingBuilds CitadelShopModsBuild.CanEditBuild .BuildHeader #EditHeroBuildButton
+{
+	visibility: collapse;
+}
+
+.gEditingBuilds CitadelShopModsBuild:not(.CanEditBuild) .BuildHeader #CopyBuildButton
+{
+	visibility: collapse;
+}
+
+.gEditingBuilds CitadelShopModsBuild #AddToQueueButton
+{
+	visibility: collapse;
+}
+
+CitadelShopModsBuild.CanEditBuild .BuildHeader #EditHeroBuildButton
+{
+	visibility: visible;
+}
+
+CitadelShopModsBuild:not(.CanEditBuild) .BuildHeader #CopyBuildButton
+{
+	visibility: visible;
+}
+
+CitadelShopModsBuild .BuildControls
+{
+	vertical-align: center;
+	flow-children: right;
+}
+
+CitadelShopModsBuild .SelectedBuildName
+{
+	max-width: 100%;
+	vertical-align: center;
+	font-weight: bold;
+	font-size: 28px;
+	margin-left: 0px;
+	margin-right: 10px;
+	text-overflow: shrink;
+	font-family: oracle;
+	color: offBlack;
+}
+
+CitadelShopModsBuild .SelectedBuildDescription
+{
+	margin: 4px;
+	vertical-align: center;
+	font-weight: bold;
+	font-size: 20px;
+	margin-left: 10px;
+	visibility: collapse;
+}
+
+CitadelShopModsBuild .FavoriteBuildsSelector
+{
+	margin-top: 4px;
+	vertical-align: center;
+	width: 18px;
+	height: 18px;
+	background-image: url("s2r://panorama/images/shop/builds/icon_fave_active.vsvg");
+	background-size: contain;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+
+CitadelShopModsBuild .BuildHeader #EditHeroBuildButton
+{
+	visibility: collapse;
+}
+
+CitadelShopModsBuild .BuildHeader #CopyBuildButton
+{
+	visibility: collapse;
+	margin: 5px;
+	margin-right: 18px;
+	padding: 4px 6px;
+}
+
+CitadelShopModsBuild .BuildHeader #BrowseBuildsButton
+{
+	horizontal-align: right;
+	opacity: 1;
+	margin-right: 18px;
+}
+
+CitadelShopModsBuild .BuildHeader #QueueBuildButton,CitadelShopModsBuild .BuildHeader #ClearQueueButton
+{
+	horizontal-align: left;
+	opacity: 1;
+	margin: 5px;
+	margin-right: 18px;
+	padding: 4px 6px;
+}
+
+.gEditingBuilds CitadelShopModsBuild .BuildHeader #QueueBuildButton,.gEditingBuilds CitadelShopModsBuild .BuildHeader #ClearQueueButton
+{
+	visibility: collapse;
+}
+
+.gEditingBuilds CitadelShopModsBuild .BuildBG
+{
+	background-color: citadelBuildsColorDarkBlue;
+	height: 886px;
+	width: 100%;
+	vertical-align: bottom;
+	ignore-parent-flow: true;
+}
+
+CitadelShopModsBuild .BuildHeaderContainer
+{
+	vertical-align: center;
+}
+
+CitadelShopModsBuild .BuildHeaderContainer:hover .FavoriteBuildsSelector
+{
+	brightness: 2;
+}
+
+CitadelShopModsBuild.NoBuild .BuildHeaderContainer
+{
+	visibility: collapse;
+}
+
+CitadelShopModsBuild.NoBuild #ControlButtons #CopyBuildButton
+{
+	visibility: collapse;
+}
+
+CitadelShopModsBuild .FavoriteBuildEntryContainer
+{
+	vertical-align: center;
+	flow-children: right;
+	width: 100%;
+	padding: 2px 10px;
+}
+
+CitadelShopModsBuild .FavoriteBuildEntryContainer:hover
+{
+	brightness: 1.3;
+}
+
+CitadelShopModsBuild .FavoriteBuildEntryContainer .TagList
+{
+	horizontal-align: left;
+	flow-children: right;
+	margin-bottom: 4px;
+	vertical-align: center;
+	min-width: 125px;
+	visibility: collapse;
+}
+
+CitadelShopModsBuild .FavoriteBuildEntryContainer .TagList CitadelBuildTag
+{
+	width: 28px;
+	height: 28px;
+}
+
+CitadelShopModsBuild #FavoriteBuildList .FavoriteBuildEntryContainer
+{
+	background-color: citadelBuildsColorDarkBlue&95;
+}
+
+CitadelShopModsBuild #FavoriteBuildList .FavoriteBuildEntryContainer:nth-child(odd)
+{
+	background-color: citadelBuildsColorDarkBlue&75;
+}
+
+CitadelShopModsBuild #FavoriteBuildList
+{
+	background-color: offWhite;
+	margin-top: 60px;
+	width: 670px;
+	ignore-parent-flow: true;
+	flow-children: down;
+	visibility: collapse;
+}
+
+CitadelShopModsBuild.ShowFavoriteSelector #FavoriteBuildList
+{
+	visibility: visible;
+}
+
+CitadelShopModsBuild #CategoryContainer
+{
+	margin-top: 50px;
+	flow-children: right-wrap;
+	padding: 10px 20px 10px 20px;
+	overflow: squish scroll;
+	width: 100%;
+	padding-top: 30px;
+}
+
+CitadelShopModsBuild #ControlsContainer
+{
+	flow-children: right;
+	height: 60px;
+	vertical-align: bottom;
+}
+
+.ClipboardToast
+{
+	ignore-parent-flow: true;
+	opacity: 0;
+	flow-children: down;
+	vertical-align: center;
+	horizontal-align: center;
+	padding: 20px;
+	background-color: citadelBuildsColorLightBlue;
+}
+
+.ClipboardToast Label
+{
+	color: black;
+	visibility: collapse;
+	font-size: 30px;
+}
+
+.CopyToast .ClipboardToast
+{
+	opacity: 1;
+}
+
+.CopyToast .ClipboardToast .CopyLabel
+{
+	visibility: visible;
+}
+
+.PasteToast .ClipboardToast
+{
+	opacity: 1;
+}
+
+.PasteToast .ClipboardToast .PasteLabel
+{
+	visibility: visible;
+}
+
+CitadelShopModsBuild.ReadOnly .BuildHeader
+{
+	visibility: collapse;
+}
+
+CitadelShopModsBuild.ReadOnly #CategoryContainer
+{
+	padding: 0px;
+}
+

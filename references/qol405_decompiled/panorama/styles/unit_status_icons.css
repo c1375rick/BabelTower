@@ -1,0 +1,14 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/unit_status_icons.vcss_c");
+.minecraft_healthbar_active #gameplay_hud #stacks
+{
+	text-align: right;
+	font-family: "Mojang";
+}
+
+CitadelHud #StatusEffectContainer
+{
+	height: fit-children;
+}
+

@@ -1,0 +1,73 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+.hud_shift_active .ModsContainer
+{
+	margin-left: 40px;
+}
+
+.hud_shift_active .player_selected #hudPlayerStats
+{
+	margin-left: 40px;
+}
+
+.support_4_3_active #health_and_abilities_container
+{
+	margin-left: 0px;
+	margin-right: 960px;
+}
+
+.support_16_10_active .ModsContainer
+{
+	horizontal-align: left;
+	vertical-align: bottom;
+	height: 102px;
+	width: 380px;
+	margin-bottom: 16px;
+	margin-left: 16px;
+	flow-children: right;
+	visibility: visible;
+	ui-scale: 90%;
+}
+
+.support_16_10_active #BarGraphContainer
+{
+	height: 100%;
+	width: 70px;
+	margin: 2px;
+	visibility: visible;
+}
+
+.support_16_10_active .AspectRatio16x10 #health_and_abilities_container
+{
+	horizontal-align: center;
+	margin-right: 1030px;
+	margin-left: 0px;
+	transform: translateX(6%) translateY(7%);
+}
+
+.support_16_10_active #health_and_abilities_container
+{
+	ui-scale: 104%;
+}
+
+.support_16_10_active #hudPlayerStats
+{
+	vertical-align: bottom;
+	horizontal-align: left;
+	flow-children: down;
+	margin-bottom: 270px;
+	width: 280px;
+	transform: translateY(7%) translateX(-1.1%);
+	visibility: visible;
+}
+
+.support_16_10_active #APContainer .unlock_availabl:not(.ability_radial_keybind_found) #UnlockBinding_Scoreboard.APUnlockBinding,.support_16_10_active #APContainer .upgrade_reminder:not(.ability_radial_keybind_found) #UnlockBinding_Scoreboard.APUnlockBinding
+{
+	visibility: collapse;
+}
+
+.support_16_10_active .unlock_availabl:not(.ability_radial_keybind_found) #APContainer #UnlockBinding_Scoreboard.APUnlockBinding,.support_16_10_active .upgrade_reminder:not(.ability_radial_keybind_found) #APContainer #UnlockBinding_Scoreboard.APUnlockBinding
+{
+	visibility: collapse;
+}
+

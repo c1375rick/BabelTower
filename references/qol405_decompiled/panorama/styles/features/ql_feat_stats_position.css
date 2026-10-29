@@ -1,0 +1,24 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+#hudPlayerStats.QolStatsRight
+{
+	horizontal-align: right;
+	width: fit-children;
+}
+
+#hudPlayerStats.QolStatsRight .miniModifier
+{
+	horizontal-align: right;
+	width: fit-children;
+}
+
+#hudPlayerStats.QolStatsRight .miniModifierCore
+{
+	horizontal-align: right;
+}
+
+#hudPlayerStats.QolStatsRight .movementSpeedContainer
+{
+	horizontal-align: right;
+}
+

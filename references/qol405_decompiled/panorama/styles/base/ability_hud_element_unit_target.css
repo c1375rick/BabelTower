@@ -1,0 +1,196 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@define cppMaxDistScale: 0.4;
+@define cppMinDistScale: 1.5;
+@define cppMinDist: 200;
+@define cppMaxDist: 1500;
+@define cppDistanceBias: 0.2;
+.ability_element_unit_target
+{
+	height: 100%;
+	width: 100%;
+	vertical-align: center;
+	horizontal-align: center;
+	visibility: visible;
+}
+
+#unit_target
+{
+	width: 100%;
+	height: 100%;
+}
+
+#scaled_panel
+{
+	width: 300px;
+	height: 300px;
+}
+
+#unscaled_panel
+{
+	width: 300px;
+	height: 300px;
+}
+
+.target_shape
+{
+	width: 40px;
+	height: 40px;
+	vertical-align: center;
+	horizontal-align: center;
+	overflow: noclip;
+}
+
+.diamond
+{
+	width: 50%;
+	height: 50%;
+	vertical-align: center;
+	horizontal-align: center;
+	border: 2px solid #c0fff790;
+	transform: rotateZ( 45deg );
+	border-radius: 5px;
+	visibility: collapse;
+	animation-name: Outer_Flash;
+	animation-duration: 0.7s;
+	animation-iteration-count: infinite;
+	animation-timing-function: ease-in;
+}
+
+@keyframes 'Outer_Flash'
+{
+	0%
+	{
+		opacity: 1;
+		wash-color: none;
+		background-color: #ffffff00;
+	}
+	
+	100%
+	{
+		opacity: 1;
+		wash-color: #ff6161;
+		background-color: #ffffff20;
+	}
+	
+}
+
+.diamond_inner
+{
+	width: 100%;
+	height: 100%;
+	vertical-align: center;
+	horizontal-align: center;
+	border: 6px solid #ffffff;
+	transform: rotateZ( 45deg );
+	border-radius: 5px;
+	animation-name: Focus_In;
+	animation-duration: 0.5s;
+	animation-iteration-count: infinite;
+	animation-timing-function: ease-in;
+	wash-color: red;
+}
+
+@keyframes 'Focus_In'
+{
+	0%
+	{
+		pre-transform-scale2d: 0.7;
+		opacity: 0.7;
+		wash-color: #ffffff90;
+	}
+	
+	100%
+	{
+		pre-transform-scale2d: 0.3;
+		opacity: 0.7;
+		wash-color: #ff6767;
+	}
+	
+}
+
+.friendly .diamond_inner,.friendly .diamond
+{
+	border-color: #ffaeae;
+	border-color: #ffffffff;
+	border-radius: 100px;
+	animation-direction: reverse;
+	clip: none;
+}
+
+.friendly .diamond
+{
+	animation-name: Outer_Flash_Friend;
+}
+
+.friendly .diamond_inner
+{
+	animation-name: Focus_In_Friend;
+}
+
+@keyframes 'Focus_In_Friend'
+{
+	0%
+	{
+		pre-transform-scale2d: 0.7;
+		opacity: 0.7;
+		wash-color: #ffffff;
+	}
+	
+	100%
+	{
+		pre-transform-scale2d: 0.3;
+		opacity: 0.7;
+		wash-color: #80f191;
+	}
+	
+}
+
+@keyframes 'Outer_Flash_Friend'
+{
+	0%
+	{
+		opacity: 1;
+		wash-color: none;
+		background-color: #ffffff00;
+	}
+	
+	100%
+	{
+		opacity: 1;
+		wash-color: #ffffff;
+		background-color: #ffffff10;
+	}
+	
+}
+
+.shiv_can_kill .diamond,.shiv_can_kill .diamond_inner
+{
+	animation-duration: 0.4s;
+}
+
+.shiv_can_kill .target_shape
+{
+	width: 100px;
+	height: 100px;
+}
+
+.small_unit_target .target_shape
+{
+	width: 40px;
+	height: 40px;
+}
+
+#hint_container
+{
+	horizontal-align: center;
+	flow-children: right;
+	y: 170px;
+}
+
+.buttonRow
+{
+	horizontal-align: middle;
+	margin-top: 5px;
+}
+

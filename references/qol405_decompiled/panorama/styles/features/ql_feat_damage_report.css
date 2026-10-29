@@ -1,0 +1,21 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+.disable_damage_report_active .HudDamageReport,.disable_damage_report_active #CitadelHudDamageReport,.disable_damage_report_active CitadelHudDamageReport
+{
+	ui-scale: 0%;
+	opacity: 0;
+	visibility: collapse;
+	width: 0px;
+	height: 0px;
+	transform: translate3d(9999px, 0px, 0px);
+	hittest: false;
+	pointer-events: none;
+}
+
+.disable_damage_report_active .HudDamageReport.ShowAlways,.disable_damage_report_active .HudDamageReport.Compact,.disable_damage_report_active .HudDamageReport.gScoreboardOpen,.disable_damage_report_active .dead .HudDamageReport,.disable_damage_report_active .spec_mode .HudDamageReport,.disable_damage_report_active .HudDamageReport *
+{
+	visibility: collapse;
+	opacity: 0;
+	ui-scale: 0%;
+}
+

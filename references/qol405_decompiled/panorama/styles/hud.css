@@ -1,0 +1,25 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/hud.vcss_c");
+@import url("s2r://panorama/styles/qollock_global.vcss_c");
+@import url("s2r://panorama/styles/ql_core_styles.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_settings_loader.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_item_mirror.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_compass.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_aspect_ratio.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_minimap.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_passive_cooldown.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_ability_icons.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_cast_failed.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_damage_report.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_damage_numbers.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_zip_boost.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_unsecured_souls.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_stat_bonuses.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_crosshair_stats.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_stats_position.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_combat_status.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_keyboard.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_healthbar.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_cursor.vcss_c");
+@import url("s2r://panorama/styles/features/ql_feat_signatures.vcss_c");

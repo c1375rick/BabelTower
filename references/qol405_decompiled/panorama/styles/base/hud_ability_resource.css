@@ -1,0 +1,220 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+#ability_resource_progress
+{
+	width: 440px;
+	height: 25px;
+	horizontal-align: center;
+	opacity: 0.7;
+}
+
+.resource_container.rage
+{
+	margin-top: 38px;
+	width: 330px;
+	height: 20px;
+}
+
+.rage #ability_resource_progress
+{
+	width: 330px;
+	height: 20px;
+	border: 2px solid #00000030;
+	border-radius: 50px;
+}
+
+.rage #type_label
+{
+	font-size: 16px;
+	font-weight: semi-bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	vertical-align: bottom;
+	z-index: 1;
+	margin-top: -1px;
+	opacity: 0.7;
+	horizontal-align: center;
+	vertical-align: middle;
+	text-shadow: 0px 0px 3px #00000090;
+	ignore-parent-flow: true;
+}
+
+@keyframes 'full_heat'
+{
+	0%
+	{
+		border: 5px solid rgba(0, 0, 0, 0 );
+	}
+	
+	50%
+	{
+		border: 5px solid rgba(255, 0, 0, 1);
+	}
+	
+	100%
+	{
+		border: 5px solid rgba(0, 0, 0, 0 );
+	}
+	
+}
+
+.resource_container.heat
+{
+	margin-top: 38px;
+	width: 330px;
+	height: 20px;
+	visibility: collapse;
+}
+
+.resource_container.heat.isFull
+{
+	border-radius: 5px;
+	animation-name: full_heat;
+	animation-duration: 0.4s;
+	animation-iteration-count: infinite;
+}
+
+.heat #ability_resource_progress
+{
+	width: 330px;
+	height: 20px;
+	border: 2px solid #00000030;
+	border-radius: 50px;
+}
+
+.heat #type_label
+{
+	font-size: 16px;
+	font-weight: semi-bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	vertical-align: bottom;
+	z-index: 1;
+	margin-top: -1px;
+	opacity: 0.7;
+	horizontal-align: center;
+	vertical-align: middle;
+	text-shadow: 0px 0px 3px #00000090;
+	ignore-parent-flow: true;
+}
+
+.ink #ability_resource_progress
+{
+	width: 330px;
+	height: 20px;
+	border: 2px solid #00000030;
+	border-radius: 50px;
+}
+
+.ink #type_label
+{
+	font-size: 16px;
+	font-weight: semi-bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	vertical-align: bottom;
+	z-index: 1;
+	margin-top: -1px;
+	opacity: 0.7;
+	horizontal-align: center;
+	vertical-align: middle;
+	text-shadow: 0px 0px 3px #00000090;
+	ignore-parent-flow: true;
+}
+
+.rage #ability_resource_progress .ProgressBarLeft
+{
+	background-image: url("s2r://panorama/images/hud/custom_abilities/shiv_rage_progress_color_png.vtex");
+	background-size: 100% 100%;
+}
+
+.resource_container.blood
+{
+	margin-top: 38px;
+	width: 230px;
+	height: 20px;
+}
+
+.resource_container.blood.isFull
+{
+	border-radius: 5px;
+	border: 1px solid rgba(200, 200, 200, 0.2 );
+}
+
+.blood #ability_resource_progress
+{
+	width: 230px;
+	height: 20px;
+	border: 2px solid #00000030;
+	border-radius: 50px;
+}
+
+.blood #ability_resource_progress .ProgressBarLeft
+{
+	background-color: spiritDarkColor;
+}
+
+.blood #type_label
+{
+	font-size: 13px;
+	font-weight: semi-bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	vertical-align: bottom;
+	z-index: 1;
+	margin-top: -1px;
+	opacity: 0.7;
+	horizontal-align: center;
+	vertical-align: middle;
+	text-shadow: 0px 0px 3px #00000090;
+	ignore-parent-flow: true;
+}
+
+#ability_resource_progress .ProgressBarRight
+{
+	background-color: black;
+}
+
+@keyframes 'red_flash_bg'
+{
+	0%
+	{
+		border: 5px solid rgba(255, 0, 0, 1 );
+	}
+	
+	10%
+	{
+		border: 5px solid rgba(255, 0, 0, 1 );
+	}
+	
+	100%
+	{
+		border: 5px solid rgba(0, 0, 0, 1);
+	}
+	
+}
+
+.cast_failed #ability_resource_progress
+{
+	animation-name: red_flash_bg;
+	animation-duration: 0.2s;
+	animation-iteration-count: 4;
+}
+
+#resource_available
+{
+	horizontal-align: center;
+	visibility: collapse;
+}
+
+#resource_available_visible
+{
+	margin-left: 190px;
+	font-size: 16px;
+	font-weight: semi-bold;
+	ignore-parent-flow: true;
+	text-shadow: 0px 0px 3px #00000090;
+	color: copperFlat;
+	text-overflow: shrink;
+}
+

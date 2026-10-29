@@ -1,0 +1,120 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/ability_hud_elements/element_gun.vcss_c");
+#clip_status
+{
+	visibility: visible;
+}
+
+#clip_status.qol-ammo-visual-enabled,#clip_status_mirrored.qol-ammo-visual-enabled
+{
+	visibility: visible !important;
+}
+
+#clip_status.qol-ammo-visual-enabled #clip_progress_bar,#clip_status_mirrored.qol-ammo-visual-enabled #clip_progress_bar
+{
+	visibility: visible !important;
+}
+
+.has_bonus_clip #clip_status.qol-ammo-visual-enabled #clip_bonus_progress_bar,.has_bonus_clip #clip_status_mirrored.qol-ammo-visual-enabled #clip_bonus_progress_bar
+{
+	visibility: visible !important;
+}
+
+#clip_status.qol-ammo-visual-enabled.qol-ammo-pips-populated #clip_progress_bar
+{
+	visibility: collapse !important;
+}
+
+#clip_status.qol-ammo-pips-populated #clip_bullet
+{
+	visibility: collapse !important;
+}
+
+.qol-ammo-pip
+{
+	width: 96px;
+	height: 96px;
+	vertical-align: center;
+	horizontal-align: center;
+	border-radius: 50%;
+	border: 6px solid clipEmptyBulletColor;
+	opacity: 0.35;
+}
+
+.qol-ammo-pip.qol-ammo-pip-live
+{
+	border-color: clipLiveBulletColor;
+	opacity: 0.8;
+}
+
+.lowAmmo .qol-ammo-pip.qol-ammo-pip-live
+{
+	border-color: clipLowBulletColor;
+	opacity: 1;
+}
+
+.hide_ammo_custom #clip_status,.hide_ammo_custom #clip_status_mirrored,#clip_status.qol-ammo-visual-disabled,#clip_status_mirrored.qol-ammo-visual-disabled
+{
+	opacity: 0 !important;
+	visibility: collapse;
+}
+
+.reloading #clip_status,.reloading #clip_status_mirrored
+{
+	opacity: 0 !important;
+	visibility: collapse !important;
+}
+
+.hide_magazine_active #ammo_panel .weapon_ammo_max
+{
+	opacity: 0 !important;
+}
+
+.hide_current_ammo_active #ammo_panel .weapon_ammo
+{
+	opacity: 0 !important;
+	visibility: collapse;
+}
+
+#QOLReloadCooldownText
+{
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: center;
+	text-align: center;
+	z-index: 20;
+	color: #e83e38;
+	font-size: 28px;
+	font-weight: bold;
+	margin: 0px;
+	padding: 0px;
+	text-shadow: 0px 0px 6px #000000dd;
+	opacity: 0.6;
+}
+
+.hide_reload_icon_active #attackDelayedReloading
+{
+	opacity: 0 !important;
+}
+
+.hide_reload_circle_active #reticle_status_progress_bar_bg
+{
+	opacity: 0 !important;
+}
+
+.hide_reload_circle_active #attack_delayed_progress_bar
+{
+	opacity: 0 !important;
+}
+
+.hide_reload_circle_active.hide_reload_circle_exception_active #reticle_status_progress_bar_bg
+{
+	opacity: 0.35 !important;
+}
+
+.hide_reload_circle_active.hide_reload_circle_exception_active #attack_delayed_progress_bar
+{
+	opacity: 1 !important;
+}
+

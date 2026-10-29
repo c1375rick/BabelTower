@@ -1,0 +1,247 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/hud_minimap.vcss_c");
+#hud_minimap,.useZoomedMinimap #hud_minimap
+{
+	transition-property: transform, ui-scale, opacity, pre-transform-scale2d;
+}
+
+.minimalist_minimap_active #map_render
+{
+	opacity: .9;
+}
+
+.minimalist_minimap_active .client_cone_fov.active
+{
+	opacity: 0;
+}
+
+.minimalist_minimap_active .map_button.shop_tunnel
+{
+	background-image: url("s2r://panorama/images/qollock/minimap_midtown_mid_tunnels_qollock_psd_png.vtex");
+}
+
+.map_button.doorman_doorway.ability_castrange #CastRange
+{
+	width: 100%;
+	height: 100%;
+	border-radius: 9999px;
+}
+
+.qol_minimap_elevation_markers_active .map_button.player.enemy.arrowUp,.qol_minimap_elevation_markers_active .map_button.player.enemy.arrowDown,.qol_minimap_elevation_markers_active .map_button.player.friend.arrowUp,.qol_minimap_elevation_markers_active .map_button.player.friend.arrowDown,.qol_minimap_elevation_markers_active .map_button.player.arrowUp,.qol_minimap_elevation_markers_active .map_button.player.arrowDown
+{
+	visibility: visible;
+}
+
+.qol_minimap_elevation_markers_active .map_button.player #ArrowImage
+{
+	background-image: url("s2r://panorama/images/minimap/player_arrow_friend_psd.vtex");
+	background-size: 100% 100%;
+	width: 150%;
+	height: 100%;
+	z-index: 100;
+	brightness: 2.5;
+}
+
+.qol_minimap_elevation_markers_active .map_button.player.arrowUp #ArrowImage
+{
+	wash-color: orange;
+	transform: rotateZ(-90deg);
+	visibility: visible;
+}
+
+.qol_minimap_elevation_markers_active .map_button.player.arrowDown #ArrowImage
+{
+	wash-color: limegreen;
+	transform: rotateZ(90deg);
+	visibility: visible;
+}
+
+.qol_minimap_elevation_markers_active .map_button.player.localplayer #ArrowImage
+{
+	opacity: 0;
+}
+
+.gScoreboardOpen .map_button.player
+{
+	transform: scaleX(1) scaleY(1);
+	pre-transform-scale2d: 1.3;
+	border-radius: 50%;
+	overflow: clip clip;
+	clip: radial(50% 50%, 0deg, 360deg);
+}
+
+.gScoreboardOpen .map_button.player.enlarge_entry
+{
+	transform: scaleX(1) scaleY(1);
+	pre-transform-scale2d: 1.5;
+}
+
+.gScoreboardOpen .map_button.player #BackgroundImage,.gScoreboardOpen .map_button.player #MainImage,.gScoreboardOpen .map_button.player .button_image,.gScoreboardOpen .map_button.player .hero_button_image,.gScoreboardOpen .map_button.player .dead_button_image,.gScoreboardOpen .map_button.player .speaking_button_image
+{
+	border-radius: 50%;
+	overflow: clip clip;
+	clip: radial(50% 50%, 0deg, 360deg);
+}
+
+.map_button.player.enemy,.map_button.player.enemy.active,.map_button.player.enemy.arrowUp,.map_button.player.enemy.arrowDown
+{
+	border-radius: 50%;
+	overflow: clip clip;
+	clip: radial(50% 50%, 0deg, 360deg);
+	transition-property: opacity;
+}
+
+.map_button.player.enemy #BackgroundImage,.map_button.player.enemy #MainImage,.map_button.player.enemy .button_image,.map_button.player.enemy .hero_button_image,.map_button.player.enemy .dead_button_image,.map_button.player.enemy .speaking_button_image,.map_button.player.enemy #ArrowImage,.map_button.player.enemy.active #BackgroundImage,.map_button.player.enemy.active #MainImage,.map_button.player.enemy.active .button_image,.map_button.player.enemy.active .hero_button_image,.map_button.player.enemy.active .dead_button_image,.map_button.player.enemy.active .speaking_button_image,.map_button.player.enemy.active #ArrowImage
+{
+	border-radius: 50%;
+	overflow: clip clip;
+	clip: radial(50% 50%, 0deg, 360deg);
+}
+
+.map_button.idol_spawn
+{
+	z-index: 30;
+}
+
+.qol_minimap_flip_active.HudMinimap
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.qol_minimap_flip_active .button_image
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.qol_minimap_flip_active .map_button.mid_stairs.right_stairs
+{
+	transform: rotateZ(180deg);
+}
+
+.qol_minimap_flip_active .map_button.mid_stairs
+{
+	transform: rotateZ(180deg);
+	transform: scaleY(-1);
+}
+
+.qol_minimap_flip_active .held_idol_image
+{
+	transform: rotateZ(180deg) translateX(8px) translateY(7px);
+}
+
+.qol_minimap_flip_active .map_button
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.qol_minimap_flip_active .map_button.powerup_spawn
+{
+	transform: rotateZ(180deg);
+}
+
+.qol_minimap_flip_active .speaking_button_image
+{
+	transform: rotateZ(180deg);
+}
+
+.qol_minimap_flip_active .map_button.enlarge_entry
+{
+	transform: scaleY(-1.2) scaleX(-1.2);
+}
+
+.qol_minimap_flip_active .map_button.player
+{
+	transform: scaleY(1) scaleX(1);
+	border-radius: 50%;
+	overflow: clip clip;
+	clip: radial(50% 50%, 0deg, 360deg);
+}
+
+.qol_minimap_flip_active .map_button.player #BackgroundImage,.qol_minimap_flip_active .map_button.player #MainImage,.qol_minimap_flip_active .map_button.player .button_image,.qol_minimap_flip_active .map_button.player .hero_button_image,.qol_minimap_flip_active .map_button.player .dead_button_image,.qol_minimap_flip_active .map_button.player .speaking_button_image,.qol_minimap_flip_active .map_button.player #ArrowImage
+{
+	border-radius: 50%;
+	overflow: clip clip;
+	clip: radial(50% 50%, 0deg, 360deg);
+}
+
+.invert_map.qol_minimap_flip_active.HudMinimap
+{
+	transform: scaleY(1) scaleX(1);
+}
+
+.invert_map.qol_minimap_flip_active .button_image
+{
+	transform: scaleY(1) scaleX(1);
+}
+
+.invert_map.qol_minimap_flip_active .map_button.mid_stairs.right_stairs
+{
+	transform: rotateZ(0deg);
+}
+
+.invert_map.qol_minimap_flip_active .map_button.mid_stairs
+{
+	transform: rotateZ(0deg) scaleY(1);
+}
+
+.invert_map.qol_minimap_flip_active .held_idol_image
+{
+	transform: rotateZ(0deg) translateX(0px) translateY(0px);
+}
+
+.invert_map.qol_minimap_flip_active .map_button
+{
+	transform: scaleY(1) scaleX(1);
+}
+
+.invert_map.qol_minimap_flip_active .map_button.powerup_spawn
+{
+	transform: rotateZ(0deg);
+}
+
+.invert_map.qol_minimap_flip_active .speaking_button_image
+{
+	transform: rotateZ(0deg);
+}
+
+.invert_map.qol_minimap_flip_active .map_button.enlarge_entry
+{
+	transform: scaleY(1.2) scaleX(1.2);
+}
+
+.invert_map.qol_minimap_flip_active .map_button.player
+{
+	transform: scaleY(1) scaleX(1);
+}
+
+.qol_minimap_flip_active #tunnel_overlay,.qol_minimap_flip_active #QOLMinimapCrateOverlay,.qol_minimap_flip_active #QOLMinimapTimersRoot
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.qol_minimap_flip_active #QOLMinimapCrateOverlay .minimap_crate_marker,.qol_minimap_flip_active #QOLMinimapTimersRoot .QOLMinimapTimer
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.localPlayerTeam2 #tunnel_overlay,.localPlayerTeam2 #QOLMinimapCrateOverlay,.localPlayerTeam2 #QOLMinimapTimersRoot
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.localPlayerTeam2 #QOLMinimapCrateOverlay .minimap_crate_marker,.localPlayerTeam2 #QOLMinimapTimersRoot .QOLMinimapTimer
+{
+	transform: scaleY(-1) scaleX(-1);
+}
+
+.localPlayerTeam2 .qol_minimap_flip_active #tunnel_overlay,.localPlayerTeam2 .qol_minimap_flip_active #QOLMinimapCrateOverlay,.localPlayerTeam2 .qol_minimap_flip_active #QOLMinimapTimersRoot
+{
+	transform: scaleY(1) scaleX(1);
+}
+
+.localPlayerTeam2 .qol_minimap_flip_active #QOLMinimapCrateOverlay .minimap_crate_marker,.localPlayerTeam2 .qol_minimap_flip_active #QOLMinimapTimersRoot .QOLMinimapTimer
+{
+	transform: scaleY(1) scaleX(1);
+}
+

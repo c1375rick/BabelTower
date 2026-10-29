@@ -1,0 +1,89 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/citadel_hud_ability_upgrade_pips.vcss_c");
+.hide_ability_suggestion_active .build_suggestion.canAffordUpgrade .upgradeReadyFlash,.hide_ability_suggestion_active .build_suggestion .canAffordUpgrade .upgradeReadyFlash
+{
+	wash-color: #ce88d7;
+}
+
+.support_16_10_active .abilityUpgradeContainer
+{
+	width: 100%;
+	horizontal-align: middle;
+	height: 32px;
+	margin-top: 5px;
+	border-radius: 30px;
+	background-color: rgba(26, 26, 26, 0.8);
+	animation-iteration-count: 0;
+	tooltip-position: left;
+	flow-children: none;
+}
+
+.minecraft_healthbar_active .hud_abilities CitadelHudAbilityUpgradePips
+{
+	width: 100%;
+	margin-right: 0px;
+	margin-left: 0px;
+	padding-top: 0px;
+	vertical-align: bottom;
+	margin-bottom: 50px;
+}
+
+.minecraft_healthbar_active .abilityUpgradeContainer
+{
+	border-radius: 12px;
+}
+
+.minecraft_healthbar_active .hud_abilities #AbilityUpgradePips
+{
+	width: 50%;
+	horizontal-align: center;
+}
+
+.minecraft_healthbar_active .isUnlocked .canAffordUpgrade .abilityUpgradeCostLabel
+{
+	color: offWhite;
+}
+
+.minecraft_healthbar_active .unlockText
+{
+	font-size: 20px;
+	text-align: center;
+}
+
+.minecraft_healthbar_active #TrainButton
+{
+	width: 50%;
+	horizontal-align: center;
+}
+
+.minecraft_healthbar_active .abilityLevelPip
+{
+	img-shadow: 0px 0px 0px 2.0 offBlack;
+	margin-right: 3px;
+	background-image: url("s2r://panorama/images/minecraft/xp_orb_ap_png.vtex");
+}
+
+.minecraft_healthbar_active .isUnlocked .canAffordUpgrade .abilityLevelPip,.minecraft_healthbar_active .isReadOnly .abilityLevelPip,.minecraft_healthbar_active .isReadOnly .canAffordUpgrade .abilityLevelPip,.minecraft_healthbar_active .isUnlocked .canUnlock .abilityLevelPip
+{
+	background-image: url("s2r://panorama/images/minecraft/xp_orb_ap_png.vtex");
+}
+
+.minecraft_healthbar_active .isUnlocked .hasAbilityUpgrade .abilityLevelPip
+{
+	background-image: url("s2r://panorama/images/minecraft/xp_orb_ap_png.vtex");
+}
+
+.minecraft_healthbar_active .abilityUpgradeCostLabel
+{
+	margin-top: 1.5px;
+	font-size: 24px;
+	font-family: "Mojang";
+	text-shadow: 0px 0px 0px 4.0 offBlack;
+}
+
+.minecraft_healthbar_active .isUnlocked .canAffordUpgrade .abilityLevelPip
+{
+	wash-color: spiritBrightColor;
+}
+

@@ -1,0 +1,84 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+#QOLCrosshairStatsOverlay
+{
+	visibility: visible;
+	horizontal-align: center;
+	vertical-align: center;
+	width: fit-children;
+	height: fit-children;
+	margin-left: 135px;
+	flow-children: down;
+	padding: 2px 0px;
+}
+
+.QOLCrosshairStatRow
+{
+	flow-children: right;
+	vertical-align: center;
+	width: fit-children;
+	margin: 2px 0px;
+	padding: 2px 7px 2px 5px;
+	border-radius: 3px;
+	border-left: 2px solid #ffffff30;
+	background-color: #000000a6;
+	transition-property: background-color;
+	transition-duration: 0.15s;
+}
+
+.QOLCrosshairStatRow.isDebuff
+{
+	border-left: 2px solid #ff6e6e;
+}
+
+.QOLCrosshairStatRow.isBuff
+{
+	border-left: 2px solid #7ae66e;
+}
+
+.InHideout .QOLCrosshairStatRow
+{
+	opacity: 0;
+}
+
+.QOLCrosshairStatIcon
+{
+	width: 17px;
+	height: 17px;
+	vertical-align: center;
+	margin-right: 6px;
+	background-size: contain;
+	background-repeat: no-repeat;
+	wash-color: #FFEFD7;
+}
+
+.QOLCrosshairStatRow.isDebuff .QOLCrosshairStatIcon
+{
+	wash-color: #FFEFD7;
+}
+
+.QOLCrosshairStatRow.isBuff .QOLCrosshairStatIcon
+{
+	wash-color: #FFEFD7;
+}
+
+.QOLCrosshairStatValue
+{
+	font-size: 14px;
+	font-weight: bold;
+	font-family: sansMono;
+	color: offWhite;
+	vertical-align: center;
+	text-shadow: 0px 1px 3px 2.0 #000000;
+}
+
+.QOLCrosshairStatRow.isDebuff .QOLCrosshairStatValue
+{
+	color: #ff6e6e;
+}
+
+.QOLCrosshairStatRow.isBuff .QOLCrosshairStatValue
+{
+	color: #7ae66e;
+}
+

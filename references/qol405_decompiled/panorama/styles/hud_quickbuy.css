@@ -1,0 +1,298 @@
+/* Prettified by Source 2 Viewer 20.1.0.0 - https://valveresourceformat.github.io */
+
+@import url("s2r://panorama/styles/base/hud_quickbuy.vcss_c");
+.gShopOpen #CitadelHudQuickbuy .QuickbuyQueueOuter
+{
+	margin-left: 90px;
+	margin-bottom: 0px;
+	opacity: 0;
+}
+
+.gShopOpen #CitadelHudQuickbuy.gQuickbuyShopShowQueue .QuickbuyQueueOuter
+{
+	opacity: 1;
+}
+
+#QuickbuyNextSoulsNeeded,.QuickbuyUpcomingPreviewSoulsNeeded
+{
+	width: 70px;
+	height: 28px;
+	padding: 4px 6px;
+	flow-children: right;
+	border-radius: 3px;
+	background-color: #cdcdcd10;
+	border: 2px solid #ffffff10;
+	world-blur: ingameHudBlur;
+}
+
+#QuickbuyNextSoulsNeeded
+{
+	vertical-align: bottom;
+	horizontal-align: left;
+	margin-left: 450px;
+	margin-bottom: 96px;
+	visibility: collapse;
+}
+
+.purchasingDisabled #QuickbuyNextSoulsNeeded
+{
+	opacity: 0.4;
+}
+
+#QuickbuyNextSoulsNeeded .QuickbuyNextSoulsNeededIcon,.QuickbuyUpcomingPreviewSoulsNeededIcon
+{
+	width: 11px;
+	height: 18px;
+	margin-right: 4px;
+	vertical-align: center;
+	wash-color: shardColor;
+}
+
+#QuickbuyNextSoulsNeeded #QuickbuyNextSoulsNeededLabel,.QuickbuyUpcomingPreviewSoulsNeeded Label
+{
+	color: shardColor;
+	font-family: sansMono;
+	font-size: 16px;
+	font-weight: bold;
+	vertical-align: center;
+	text-overflow: shrink;
+}
+
+#QuickbuyUpcomingPreviewContainer
+{
+	vertical-align: bottom;
+	horizontal-align: left;
+	margin-left: 530px;
+	margin-bottom: 20px;
+	flow-children: right;
+	visibility: collapse;
+}
+
+.QuickbuyUpcomingPreviewSlot
+{
+	flow-children: down;
+	margin-right: 8px;
+	visibility: collapse;
+}
+
+.QuickbuyUpcomingPreviewSlot.HasPreviewItem
+{
+	visibility: visible;
+}
+
+.QuickbuyUpcomingPreviewSoulsNeeded
+{
+	margin-bottom: 6px;
+	horizontal-align: center;
+}
+
+.QuickbuyUpcomingMini
+{
+	opacity: 0.35;
+	width: 70px;
+	height: 70px;
+	vertical-align: bottom;
+	border: 3px solid offWhite&30;
+	border-radius: 5px;
+	background-color: #ffffff10;
+}
+
+.QuickbuyUpcomingPreviewSlot.CanAffordUpcoming .QuickbuyUpcomingMini
+{
+	opacity: 0.5;
+	border: 3px solid shardColor;
+	background-color: shardColor&60;
+}
+
+.QuickbuyUpcomingMini CitadelModIcon
+{
+	ui-scale: 120%;
+	horizontal-align: center;
+	vertical-align: middle;
+}
+
+.purchasingDisabled .QuickbuyUpcomingMini
+{
+	opacity: 0.2;
+	border: 3px solid offWhite&20;
+	background-color: #34343444;
+}
+
+#QuickbuyShopTotalSummary
+{
+	background-color: #cdcdcd10;
+	width: 191px;
+	height: 65px;
+	padding: 6px 10px;
+	margin-right: 4px;
+	flow-children: right;
+	border-radius: 3px;
+	border: 2px solid #ffffff10;
+	world-blur: ingameHudBlur;
+	visibility: collapse;
+	pre-transform-scale2d: 1;
+}
+
+#QuickbuyShopTotalSummary .QuickbuyShopTotalSummaryIconFrame
+{
+	width: 48px;
+	height: 48px;
+	margin-right: 10px;
+	vertical-align: center;
+	border-radius: 3px;
+	background-color: #ffffff12;
+	border: 1px solid #ffffff10;
+}
+
+#QuickbuyShopTotalSummary .QuickbuyShopTotalSummaryIcon
+{
+	width: 24px;
+	height: 40px;
+	horizontal-align: center;
+	vertical-align: center;
+	wash-color: shardColor;
+	img-shadow: 0px 0px 4px 1.0 #00000088;
+}
+
+#QuickbuyShopTotalSummary .Labels
+{
+	vertical-align: center;
+	flow-children: down;
+}
+
+#QuickbuyShopTotalSummary .BindingLabel
+{
+	flow-children: right;
+	vertical-align: center;
+}
+
+#QuickbuyShopTotalSummary .ShopSummaryLabel
+{
+	font-weight: bold;
+	font-size: 16px;
+	text-overflow: shrink;
+	max-height: 20px;
+}
+
+#QuickbuyShopTotalSummary .QuickbuyShopTotalCostRow
+{
+	flow-children: right;
+	margin-top: 1px;
+	vertical-align: center;
+}
+
+#QuickbuyShopTotalSummary .QuickbuyShopTotalCostIcon
+{
+	width: 11px;
+	height: 18px;
+	margin-right: 4px;
+	vertical-align: center;
+	wash-color: shardColor;
+}
+
+#QuickbuyShopTotalSummary .QuickbuyShopTotalCostLabel
+{
+	color: shardColor;
+	font-family: sansMono;
+	font-size: 16px;
+	font-weight: bold;
+	max-height: 20px;
+	opacity: 0.9;
+	text-overflow: shrink;
+}
+
+.Empty #QuickbuyShopTotalSummary
+{
+	opacity: 0.2;
+}
+
+.Empty #QuickbuyShopTotalSummary .Labels
+{
+	horizontal-align: center;
+}
+
+.Empty #QuickbuyShopTotalSummary .QuickbuyShopTotalSummaryIconFrame
+{
+	visibility: collapse;
+}
+
+.gStreetBrawl #QuickbuyShopTotalSummary,#CitadelHudQuickbuy.gStreetBrawl #QuickbuyShopTotalSummary
+{
+	visibility: collapse;
+}
+
+.disable_quick_buy_active.gShopOpen .HudQuickbuy,.disable_quick_buy_active .gShopOpen .HudQuickbuy
+{
+	visibility: collapse;
+}
+
+#CitadelHudQuickbuy:not(.enhanced_quickbuy_active) #QuickbuyNextSoulsNeeded,#CitadelHudQuickbuy:not(.enhanced_quickbuy_active) #QuickbuyUpcomingPreviewContainer,#CitadelHudQuickbuy:not(.enhanced_quickbuy_active) #QuickbuyShopTotalSummary
+{
+	visibility: collapse;
+}
+
+#CitadelHudQuickbuy.enhanced_quickbuy_active:not(.Empty) #QuickbuyNextSoulsNeeded,#CitadelHudQuickbuy.enhanced_quickbuy_active:not(.Empty) #QuickbuyUpcomingPreviewContainer
+{
+	visibility: visible;
+}
+
+.gShopOpen #CitadelHudQuickbuy.enhanced_quickbuy_active #QuickbuyNextSoulsNeeded,.gShopOpen #CitadelHudQuickbuy.enhanced_quickbuy_active #QuickbuyUpcomingPreviewContainer,#CitadelHudQuickbuy.enhanced_quickbuy_active.gShopOpen #QuickbuyNextSoulsNeeded,#CitadelHudQuickbuy.enhanced_quickbuy_active.gShopOpen #QuickbuyUpcomingPreviewContainer,.viewing_as_player.dead #CitadelHudQuickbuy #QuickbuyNextSoulsNeeded,.viewing_as_player.dead #CitadelHudQuickbuy #QuickbuyUpcomingPreviewContainer
+{
+	visibility: collapse;
+}
+
+.gShopOpen #CitadelHudQuickbuy.enhanced_quickbuy_active:not(.Empty) #QuickbuyShopTotalSummary,#CitadelHudQuickbuy.enhanced_quickbuy_active.gShopOpen:not(.Empty) #QuickbuyShopTotalSummary
+{
+	visibility: visible;
+}
+
+#CitadelHudQuickbuy.enhanced_quickbuy_active #HudMini
+{
+	opacity: 0.35;
+}
+
+#CitadelHudQuickbuy.enhanced_quickbuy_active.ItemsReady #HudMini
+{
+	opacity: 1;
+}
+
+#CitadelHudQuickbuy.enhanced_quickbuy_active .HudQuickbuyElement,#CitadelHudQuickbuy.enhanced_quickbuy_active #QuickbuyNextSoulsNeeded
+{
+	margin-left: 450px;
+}
+
+#CitadelHudQuickbuy.enhanced_quickbuy_active #QuickbuyUpcomingPreviewContainer
+{
+	margin-left: 530px;
+}
+
+.support_4_3_active .QuickbuyShopSummaryContainer
+{
+	margin-left: 0px;
+}
+
+.support_4_3_active .gShopOpen #QuickbuyQueue,.support_4_3_active .gShopOpen #QuickbuySellQueue
+{
+	width: 210px;
+}
+
+.support_4_3_active .gShopOpen #CitadelHudQuickbuy .QuickbuyQueueOuter
+{
+	margin-left: 10px;
+}
+
+.hud_shift_active #CitadelHudQuickbuy .HudQuickbuyElement
+{
+	margin-left: 480px;
+}
+
+.hud_shift_active #CitadelHudQuickbuy.enhanced_quickbuy_active .HudQuickbuyElement,.hud_shift_active #CitadelHudQuickbuy.enhanced_quickbuy_active #QuickbuyNextSoulsNeeded
+{
+	margin-left: 500px;
+}
+
+.hud_shift_active #CitadelHudQuickbuy.enhanced_quickbuy_active #QuickbuyUpcomingPreviewContainer
+{
+	margin-left: 580px;
+}
+
