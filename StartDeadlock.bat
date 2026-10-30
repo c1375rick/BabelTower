@@ -43,6 +43,13 @@ if not defined NODE_EXE (
 set "FIND_EXE=%SystemRoot%\System32\find.exe"
 set "BRIDGE_OK="
 
+rem 2026-10-30: self-heal the https certificate chain (idempotent, silent).
+rem Renews the 397-day leaf before it expires and installs the Root CA into
+rem the current-user trust store when missing. NOTE: after the FIRST trust
+rem install a FULL Steam restart (tray too) is required - the trust store is
+rem cached by the Steam host process, restarting the game alone is not enough.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\gen_bridge_cert.ps1" -Trust >nul 2>nul
+
 rem 2026-10-28: reuse an already-running bridge instead of blind-starting a
 rem second instance (port 8791 conflict kills the new one and dirties logs).
 rem Also start core\bridge_https.js here - booting only bridge_server leaves
