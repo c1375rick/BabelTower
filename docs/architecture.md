@@ -93,6 +93,9 @@
 | --- | --- | --- | --- |
 | ① | **https 面板**(终结于 `core/bridge_https.js` 8792) | 出站翻译、入站聊天翻译、配置读写、测试、读数 | ✅ **优先**:探针**事件驱动秒级 ALIVE**;hash 快通道(常驻页 1 RTT,漂移自愈);标题回程经 `CitadelHTMLPanel` + 面板绑定复活。10-29 曾三连击全灭,教训与纯 CEF 评估见 [btipc-https-v1.md](btipc-https-v1.md) §11 |
 | ② | **BTIPC**(协议 [btipc-v1.md](btipc-v1.md),实现在 `core/btipc/`) | 同上全部(https 硬失败时原样交回,不扣重试;探针判死则全程走它) | ✅ **兜底**:`BTIPC TRQ w=.. op=config` + `boot: config synced from bridge`。上/下行机制(日志 tail + 128×Image 位信号)与 CEF 层隔离,10-29 全程存活——**不退役**(见 §11.1) |
+
+> 四路线(https / BTIPC / 纯 CEF 无桥 / OCR)的专门总对照见
+> [routes-comparison.md](routes-comparison.md)(2026-10-31,含分层模型与各路线触发器)。
 | ③ | http 面板 `SetURL` → `/bridge` + `document.title` 轮询 | BTIPC 恰好接不下(busy/too_long)时 | ⚠️ 判死冷却 10min,最后一级 |
 | ✕ | 直连 `$.AsyncWebRequest` → `/api/v1/*` | 无(仅留探测) | ❌ 游戏已移除该 API,调用即抛 `AsyncWebRequest has been removed.` |
 
