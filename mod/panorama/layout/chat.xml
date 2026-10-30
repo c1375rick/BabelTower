@@ -279,6 +279,6 @@
 		</Panel>
 	</Panel>
 	<!-- Babel Tower 隐藏 HTML 桥面板(必须用 <HTML> 标签在 XML 声明,运行时 CreatePanel 不生效) -->
-		<HTML id="LCTBridgePanel" class="LCTBridgePanel" />
+		<CitadelHTMLPanel id="LCTBridgePanel" class="LCTBridgePanel" hittest="false" acceptsfocus="false" />
 	</CitadelChat>
 </root>

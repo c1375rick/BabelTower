@@ -1227,6 +1227,8 @@ function bridgePage(query) {
 "};",
 "if(q.get('boot')==='1'){",
 "try{document.title='lct-alive';}catch(e){}",
+"try{fetch('/api/v1/probe-ack?id='+encodeURIComponent(id)+'&ok=1&stage=boot').catch(function(e){});}catch(e){}",
+"setTimeout(function(){try{document.title='lct-x';}catch(e){}setTimeout(function(){try{document.title='lct-alive';}catch(e){}},250);},500);",
 "window.addEventListener('hashchange',onHash);",
 "return;",
 "}",

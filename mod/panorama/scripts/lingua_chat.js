@@ -3068,7 +3068,10 @@ function injectTranslation(row, sig, text, fragment) {
     if (panel && typeof $.RegisterEventHandler === "function") {
       try {
         $.RegisterEventHandler("HTMLTitle", panel, onBridgeEvent);
-      } catch (eR) {}
+        log("bridge: panel-bound HTMLTitle registered");
+      } catch (eR) {
+        log("bridge: panel-bound HTMLTitle register FAILED: " + expErr(eR));
+      }
     }
     log("bridge events registered");
   }
