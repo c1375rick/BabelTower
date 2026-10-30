@@ -2395,7 +2395,7 @@ function injectTranslation(row, sig, text, fragment) {
       log("https panel: no usable HTML panel declared in chat.xml — staying on BTIPC");
       return;
     }
-    ensureBridgeEvents();
+    ensureBridgeEvents(panel);
     // 2026-10-30 统一槽重构:探针回归 State.pending(与 job 同机制)——onBridgeEvent 的
     // sawAlive/tryResolveFromText 结算只认 State.pending,独立槽导致 lct-alive 不被认、
     // 3s 必触发重试、重载页面杀死 fetch 响应、竞态恒失败(10-29 23:55 实车)。
@@ -2479,7 +2479,7 @@ function injectTranslation(row, sig, text, fragment) {
       }
       return;
     }
-    ensureBridgeEvents();
+    ensureBridgeEvents(panel);
     // EXP-6726b:疑似新引擎不为“不可见/非激活”面板加载网页(诊断 act=0 且页面从未加载)。
     // 导航前把面板置为可见 + 尝试激活;首次成功后保持(不反复切换)。
     try { panel.visible = true; } catch (e) {}
@@ -2539,12 +2539,13 @@ function injectTranslation(row, sig, text, fragment) {
       setPending(job.id, function (payload2) {
         // hash 超时连击(2026-10-30):页面常驻无新 lct-alive,3s nav 失败判定已跳过
         // (sawAlive 预置);连续 2 次超时 → hashReady=false 回 nav 模式(引擎降级保险)。
+        // 降级【静默】——此回调体在 lc_panel_nav_guard 的零 log 热路径断言范围内;
+        // 降级后探针的 not usable 日志天然可见,不丢可观测性。
         if (payload2 && !payload2.ok && (payload2.error === "timeout" || payload2.error === "bridge_timeout")) {
           State.hashFailStreak = (State.hashFailStreak || 0) + 1;
           if (State.hashFailStreak >= 2) {
             State.hashReady = false;
             State.hashFailStreak = 0;
-            log("hash channel: consecutive timeouts, falling back to nav mode");
           }
         } else {
           State.hashFailStreak = 0;
@@ -3054,13 +3055,20 @@ function injectTranslation(row, sig, text, fragment) {
     }
   }
 
-  function ensureBridgeEvents() {
+  function ensureBridgeEvents(panel) {
     if (State.eventsRegistered) return;
     State.eventsRegistered = true;
     for (let i = 0; i < BRIDGE_EVENT_CANDIDATES.length; i += 1) {
       try {
         $.RegisterForUnhandledEvent(BRIDGE_EVENT_CANDIDATES[i], onBridgeEvent);
       } catch (e) {}
+    }
+    // 面板专属事件绑定(2026-10-30 补,QOL 4.0.5 同款):未处理总线的 HTMLTitle
+    // 派发在 10-29 更新后不再到达;RegisterEventHandler 绑定面板对象仍工作。
+    if (panel && typeof $.RegisterEventHandler === "function") {
+      try {
+        $.RegisterEventHandler("HTMLTitle", panel, onBridgeEvent);
+      } catch (eR) {}
     }
     log("bridge events registered");
   }

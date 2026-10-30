@@ -1,0 +1,10 @@
+const fs = require("fs");
+const path = require("path");
+const src = fs.readFileSync(path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js"), "utf8");
+const gateIdx = src.indexOf("navSuppressedFor");
+const useIdx = gateIdx;
+const branchEnd = src.indexOf("ensureBridgeEvents();", useIdx);
+const branchBody = src.slice(useIdx, branchEnd);
+const logs = (branchBody.match(/log\([^\r\n]{0,80}/g) || []);
+console.log("branchBody 长度: " + branchBody.length);
+logs.forEach(l => console.log("  log: " + l));

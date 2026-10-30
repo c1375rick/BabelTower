@@ -54,7 +54,9 @@ check("https 豁免必须由 dispatchJob 显式声明",
 const useIdx = gateIdx;
 check("dispatchViaPanel 冷却内不导航(直接走 !panel 快速失败分支)",
   useIdx > supIdx && useIdx > 0, "useIdx=" + useIdx);
-const branchEnd = src.indexOf("ensureBridgeEvents();", useIdx);
+// 2026-10-30:ensureBridgeEvents 现在带 panel 参数,锚点放宽为前缀匹配
+const ebStart = src.indexOf("ensureBridgeEvents(", useIdx);
+const branchEnd = ebStart > useIdx ? src.indexOf(");", ebStart) + 2 : -1;
 const branchBody = useIdx > 0 && branchEnd > useIdx ? src.slice(useIdx, branchEnd) : "";
 check("冷却内快速失败不打日志(复用原 !panel 分支,零 log)",
   !!branchBody && !/log\(/.test(branchBody), branchBody ? "" : "未切到 !panel 分支");
