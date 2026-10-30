@@ -1212,7 +1212,7 @@ function bridgePage(query) {
     ".catch(function(e){/* 被导航顶掉/失败:不写标题,避免盖掉请求应答的标题 */});",
     "return;",
     "}",
-    "function onHash(){",
+    "function onHash(){var lastH=null;",
 "var h=location.hash.slice(1);if(h.indexOf('LCTQ:')!==0)return;",
 "var msg;try{msg=JSON.parse(decodeURIComponent(h.slice(5)));}catch(e){return;}",
 "if(!msg||!msg.q||msg.q===lastH)return;lastH=msg.q;",

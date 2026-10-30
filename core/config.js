@@ -77,6 +77,9 @@ const DEFAULTS = {
 };
 
 function configDir() {
+  // 2026-10-30:simtest 隔离钩子——模拟环境的桥实例用独立 config 目录(独立端口/状态),
+  // 不碰生产 config.json。默认行为不变(未设 env 时与原路径完全一致)。
+  if (process.env.BABEL_TOWER_CONFIG_DIR) return process.env.BABEL_TOWER_CONFIG_DIR;
   return path.join(__dirname, "..", "config");
 }
 

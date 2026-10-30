@@ -2414,6 +2414,9 @@ function injectTranslation(row, sig, text, fragment) {
     }
     const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
       "/bridge?op=health&id=probe&boot=1&lang=" + gameUiLang();
+    // 2026-10-30 模拟环境首测:hash 通道 base 在派发处捕获——settleProbe 读
+    // State.pending.navUrl 时 pending 已置 null,原捕获路径永远拿空串。
+    State.hashBase = probeUrl;
     // 对照探针(2026-10-29):http 的 Image 加载与 https 页面加载走不同判定路径——
     // IMG-HIT 到桥 = CEF 网络活(问题在 https/证书/title);不来 = CEF 对外加载全死(引擎级)。
     // 桥日志 IMG-HIT id=p<seq> 即为证据。
@@ -2526,12 +2529,15 @@ function injectTranslation(row, sig, text, fragment) {
     // 2026-10-30 修:条件去掉 hooks.httpsChannel 要求——enqueueBridge 路径的 job
     // (config/gamenames/quickchat)不带该标记,漏掉会导致它们走 nav 重载页面、
     // 破坏页面常驻(01:54 实车:hash 模式建立后被 gamenames sync 的 nav 打断)。
-    if (State.hashReady && !forceHttp) {
+    if (State.hashReady && State.hashBase && !forceHttp) {
+      // 2026-10-30 模拟环境首测:hash 分支先于 buildBridgeUrl 执行,job.id 尚未赋值,
+      // JSON.stringify 会把 undefined 的 id 丢掉 → 页面静默拒收 → 作业必超时。
+      if (!job.id) job.id = "r" + (++State.requestSeq).toString(36);
       const payload = {
         q: "h" + (++State.hashSeq) + "_" + nowMs(),
         id: job.id,
         op: job.kind === "bridge" ? job.op : "translate",
-        d: job.kind === "bridge" ? (function () { try { return JSON.parse(job.data || "{}"); } catch (eD) { return {}; } })() :
+        d: job.kind === "bridge" ? (function () { try { return JSON.parse(decodeURIComponent(job.data) || "{}"); } catch (eD) { return {}; } })() :
            { text: (job.record && job.record.text) || "", source: "auto",
              target: job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage(),
              timeoutMs: job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000) },
@@ -2556,6 +2562,14 @@ function injectTranslation(row, sig, text, fragment) {
       // 页面常驻:hash 请求后无新 lct-alive,必须跳过 3s nav 失败判定(响应由 deadline/到达结算)
       try { if (State.pending) State.pending.sawAlive = true; } catch (eSA) {}
       try { if (State.pending) State.pending.navUrl = null; } catch (eNU) {}
+      // 2026-10-30 模拟环境首测:此分支原先只 setPending 不导航,页面永远收不到
+      // hash,作业必超时连击降级(hash 通道从未接线)。真正把请求送到常驻页面:
+      try {
+        const hp = ensurePanel();
+        if (isValid(hp) && typeof hp.SetURL === "function") {
+          hp.SetURL(State.hashBase + "#LCTQ:" + encodeURIComponent(JSON.stringify(payload)));
+        }
+      } catch (eHU) {}
       return; // 响应经 pollTitle 现有解析(LCT+id+JSON 格式不变)
     }
     const url = buildBridgeUrl(job, forceHttp);
@@ -3052,6 +3066,16 @@ function injectTranslation(row, sig, text, fragment) {
     if (t === TITLE_ALIVE) {
       markBridgeUp();
       if (State.pending) State.pending.sawAlive = true;
+      // 2026-10-30 12:40 boot 实证:事件已到达(bridge online 即本分支打的),但探针
+      // 结算只认 pollTitle 的 panel.GetTitle() 属性轮询——属性陈旧永远读不到,6s 必
+      // 超时。结算改事件驱动:探针 pending 在手即结算(与 job 的 tryResolveFromText
+      // 同一哲学;pollTitle 的属性分支保留兜底)。
+      if (State.pending && State.pending.id === "probe") {
+        State.navDeadStreak = 0;
+        State.navDeadUntil = 0;
+        State.pending = null;
+        settleProbe(true, "ok");
+      }
     }
   }
 
