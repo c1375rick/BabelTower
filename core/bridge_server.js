@@ -1284,7 +1284,17 @@ async function handleApi(req, res, url, bodyObj) {
     return;
   }
 
-  if (p === "/api/v1/health") {
+  if (p === "/api/v1/probe-ack") {
+    // 探针回执(2026-10-30):页面 JS 收到 health 响应后回执——ack 到达即证明
+    // 页面执行+响应送达;若同 boot 探针仍失败,则 document.title 赋值静默失败
+    // (10-29 引擎变化:title→Panorama 同步被切)。
+    const ackId = String(url.searchParams.get("id") || "?");
+    const ackOk = url.searchParams.get("ok") === "1";
+    log("info", "PROBE-ACK id=" + ackId + " ok=" + (ackOk ? "1" : "0") +
+      " (page received response" + (ackOk ? "" : " with error") + ")");
+    return sendJson(res, 200, { ok: true });
+  }
+if (p === "/api/v1/health") {
     // 探针轻量响应(2026-10-29):CEF 的 document.title 容量 ~1024 字符——全量 health
     // 响应(1030+ 字符,加 sysLang/foreignPaks 后)超限,title 写回被截断 → 游戏
     // JSON.parse 失败 → 探针恒 bridge_nav_failed(10-29 全天实车)。探针只需
