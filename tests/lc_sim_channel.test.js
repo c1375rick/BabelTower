@@ -158,12 +158,38 @@ async function main() {
       row.__lctTestForce = true;
       const navsSnapshot = sim.navigations.length;
       await sim.sleep(8000); // 扫描(0.4s)+入队+hash 派发+页面 fetch(bing 外部,放宽)
-      const newHashNav = sim.navigations.slice(navsSnapshot).some(function (n) {
-        return n.kind === "hash" && n.url.indexOf("LCTQ") >= 0;
+      // hash 分支开火的证据:URL 带 #LCTQ(纯 hashchange 或 漂移后整页加载均算——
+      // 2026-10-30 页面修复后,漂移整页加载也能完成作业,属正常自愈路径)
+      const newHashAttempt = sim.navigations.slice(navsSnapshot).some(function (n) {
+        return n.url.indexOf("LCTQ:") >= 0;
       });
-      check("C2 翻译作业经 hash 通道派发", newHashNav,
+      check("C2 翻译作业经 hash 通道派发", newHashAttempt,
         "snapshot 后新增导航: " + sim.navigations.slice(navsSnapshot).map(function (n) { return n.kind + ":" + n.url.slice(-40); }).join(" | "));
     }
+
+    // 场景 D:常驻漂移自愈(2026-10-30 实车 14:39 实证:cfg nav 破坏常驻后,hash
+    // 作业 SetURL 陈旧 hashBase → 整页重载探针页 → 作业丢失 → PROBE-ACK 泄漏)。
+    // 修复:页面 boot 分支处理初始 #LCTQ fragment → 整页加载也能完成作业 + 常驻自愈。
+    // 模拟:先制造漂移(整页加载 watch 类页面),再派 hash 翻译作业 → 应结算且常驻恢复。
+    sim.cef.navigate(sim.panels.bridgePanel, BASE + "/bridge?op=watch&rev=drifttest");
+    await sim.sleep(600); // 漂移页加载
+    const drifted = !(sim.cef.docs.get(sim.panels.bridgePanel).base.indexOf("op=health") >= 0);
+    check("D1 已制造常驻漂移", drifted);
+    let dDone = null, dSettled = false;
+    const dNavSnapshot = sim.navigations.length;
+    LCTNS.bridgePost("translate", {
+      operation: "translate", text: "drift test", sourceLanguage: "auto",
+      targetLanguage: "zh-Hans", timeoutMs: 15000,
+    }, function (payload) { dSettled = true; dDone = payload; });
+    await sim.waitFor(function () { return dSettled; }, 30000, "drifted hash job settle").catch(function () {});
+    check("D2 漂移后 hash 作业仍结算(自愈)", dSettled === true,
+      "payload=" + JSON.stringify(dDone || null).slice(0, 150));
+    // 自愈证据:漂移后 hash 分支对 hashBase(op=health) 带 #LCTQ 整页加载
+    // (该加载里 boot 分支处理初始 fragment 完成作业;之后 watch 页空闲重武装属正常设计)
+    const driftRecovery = sim.navigations.slice(dNavSnapshot).some(function (n) {
+      return n.url.indexOf("op=health") >= 0 && n.url.indexOf("LCTQ:") >= 0;
+    });
+    check("D3 自愈整页加载(hashBase+#LCTQ)已发生", driftRecovery);
 
     // 汇总
     console.log("\nSIM RESULT: PASS " + pass + " / FAIL " + fail);

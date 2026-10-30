@@ -1230,6 +1230,7 @@ function bridgePage(query) {
 "try{fetch('/api/v1/probe-ack?id='+encodeURIComponent(id)+'&ok=1&stage=boot').catch(function(e){});}catch(e){}",
 "setTimeout(function(){try{document.title='lct-x';}catch(e){}setTimeout(function(){try{document.title='lct-alive';}catch(e){}},250);},500);",
 "window.addEventListener('hashchange',onHash);",
+"if(location.hash.indexOf('#LCTQ:')===0){setTimeout(onHash,0);}",
 "return;",
 "}",
 "try{document.title='lct-alive';}catch(e){}",
