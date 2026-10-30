@@ -570,23 +570,23 @@ GameBanana/GitHub 双端 1.2.4 发布。
 ## 12. 第三路径对照:OCR 屏幕识别(2026-10-30)
 
 > 补全三路对照:§11 评的是**传输层**(CEF hash/nav vs BTIPC);第三条路——**OCR 屏幕
-> 识别**——根本不在传输层,它在**获取层**(怎么拿到聊天文本)。代表项目:
-> [RSTGameTranslation](https://github.com/thanhkeke97/RSTGameTranslation)(OneOCR/
-> Windows OCR,明确支持聊天窗口)、[TranslateOverlay](https://github.com/chiutse/TranslateOverlay)、
-> [OCR-Translator](https://github.com/tomkam1702/OCR-Translator) 等。用户在 https 方案调研期
-> 提及此路,本节补正式对照。
+> 识别**——根本不在传输层,它在**获取层**(怎么拿到聊天文本)。**代表项目(Deadlock 专用,
+> 2026-10-31 用户指认):[锁语 · LockLingo](https://github.com/piaobo2233/deadlock-translator)
+> (MIT,Python + Tesseract 本机 OCR + OpenCV,安装包零额外依赖);同类通用工具:
+> [RSTGameTranslation](https://github.com/thanhkeke97/RSTGameTranslation)(OneOCR/Windows OCR)、
+> [TranslateOverlay](https://github.com/chiutse/TranslateOverlay)、[OCR-Translator](https://github.com/tomkam1702/OCR-Translator)。本节对照以 LockLingo 的真实设计为准。
 
 ### 12.1 三路径对照(同一场翻译要过三道关:获取 → 传输 → 回显)
 
 | | ① CEF 面板(hash/nav,本项目主路) | ② BTIPC(本项目兜底) | ③ OCR 屏幕识别(外部路线) |
 | --- | --- | --- | --- |
 | 所在层 | 传输(获取仍是 Panorama DOM) | 传输(获取同左) | **获取**(截屏 + OneOCR/Windows OCR/PaddleOCR) |
-| 文本获取 | `scanChatMessages` 直读 DOM:结构化(**发送者/队伍/频道元数据齐全**) | 同左(BTIPC 只换传输) | 像素→文本:**无元数据**;小字号/花体/背景干扰;译文标签同屏会互相污染(需区域管理) |
+| 文本获取 | `scanChatMessages` 直读 DOM:结构化(**发送者/队伍/频道元数据齐全**) | 同左(BTIPC 只换传输) | 像素→文本:**无元数据**;小字号/背景干扰;区域假设是真成本——LockLingo 为此做了整套「个人识别区域」工具(拖框/放大/按分辨率保存) |
 | 引擎依赖 | 重(CEF 面板行为 + DOM 结构,10-29 三连击证明) | 中(Image 面板 + 日志 tail,原始机制) | **获取层零引擎依赖**(引擎更新对它无感)——但对**渲染层**仍有区域假设 |
 | 延迟 | hash 1 RTT / nav +0.3-0.5s 页载 | 帧泵(config delta ≈7.8s;翻译多帧) | **+0.3~1s**(捕获+识别)再 + 翻译 |
-| 出站翻译 | ✓(输入框钩子,双语外发独有) | ✓ | ✗(发送前内容无法可靠截取;各 OCR 项目均为入站) |
+| 出站翻译 | ✓(输入框钩子,**自动**双语外发) | ✓ | △ LockLingo 有——但走**剪贴板中继**(游戏内复制中文→译文回剪贴板→用户手动粘贴发送,默认关闭非自动);自动注入输入框无解 |
 | 额外依赖 | 零(证书链已自愈化) | 零 | OCR 引擎(Windows OCR 免费/OneOCR/PaddleOCR)或云 API;持续截屏的 GPU/CPU 占用 |
-| 挂掉的样子 | 10-29:页面 JS 不执行/标题事件被砍 → 全灭(BTIPC 兜住) | 上/下行机制 6726 以来未被动过 | DOM 怎么变它都活着;但聊天框**挪位/缩放/换肤**会静默降准确率 |
+| 挂掉的样子 | 10-29:页面 JS 不执行/标题事件被砍 → 全灭(BTIPC 兜住) | 上/下行机制 6726 以来未被动过 | DOM 怎么变它都活着(引擎零集成,连 vpk 都没有);但聊天框**挪位/缩放/换肤**会静默降准确率——且译文只能显示在**游戏外的字幕气泡**(无注入通道) |
 
 ### 12.2 OCR 路线的真实优劣(就「聊天翻译」这个场景)
 
@@ -599,6 +599,27 @@ GameBanana/GitHub 双端 1.2.4 发布。
 - **与本项目的关系**:不是竞争关系,是**不同层的备胎**。OCR 替换不了传输层(BTIPC 的位);
   BTIPC 替换不了获取层(若 DOM 死了,BTIPC 运的是一个已经拿不到文本的管线)。
 
+
+### 12.2.1 实例:锁语 · LockLingo 的设计选择印证了上表(2026-10-31 核对)
+
+LockLingo 是 Deadlock 生态里 OCR 路径的完整实现(1.1.0,安装包零额外依赖),它的每个
+设计选择都能在上表找到对应行:
+
+- **本机 Tesseract + 个人识别区域工具**:区域假设的成本真实到值得做一整套校准 UI
+  (拖框/放大/按分辨率保存,不开游戏可导入局内截图调试)——印证「区域假设」行;
+- **外部字幕气泡显示**:OCR 路线没有任何注入游戏 UI 的通道(无 vpk),译文只能在
+  游戏外渲染——印证「回显」差异(本项目译文直接挂在聊天行下);
+- **出站走剪贴板中继且默认关闭**:OCR 拿不到输入框内容,只能借游戏复制 + 剪贴板
+  监听中继,且需要用户手动粘贴——印证「出站翻译 △」行;
+- **本地词库/记忆/缓存优先,API 可选**:对外部翻译服务的成本与延迟做了本地化缓冲
+  (本项目 provider 层等价物是 bing 免 Key + 多 provider 兜底);
+- **引擎零集成**:没有 vpk、没有 Panorama 脚本——10-29 那类更新对它**完全无感**,
+  这正是 OCR 路线在获取层的核心优势(§12.2 第一条);代价清单也如作者自述:
+  仅主屏全屏/无边框、4K/超宽/DPI 未验收、可能漏译误识别、无自动 HUD 定位。
+
+小结:LockLingo 证明了 OCR 获取层路线在 Deadlock 上**可行且可用**(MIT,值得尊敬的
+完整实现),同时它的每个补丁(区域工具/外部气泡/剪贴板中继)都在反证:获取层一旦
+能走 DOM(本项目),注入式回显与自动出站是 OCR 路线拿不到的体验。
 ### 12.3 组合可能与触发器
 
 - **获取层灾备**(远景):若某次引擎更新砍掉 `ChatMessages` DOM 读取(类比 10-29 对 CEF
