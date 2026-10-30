@@ -3056,16 +3056,21 @@ function injectTranslation(row, sig, text, fragment) {
   }
 
   function ensureBridgeEvents(panel) {
-    if (State.eventsRegistered) return;
-    State.eventsRegistered = true;
-    for (let i = 0; i < BRIDGE_EVENT_CANDIDATES.length; i += 1) {
-      try {
-        $.RegisterForUnhandledEvent(BRIDGE_EVENT_CANDIDATES[i], onBridgeEvent);
-      } catch (e) {}
+    // 总线注册:一次即可(10-29 后总线派发已死,保留兜底)
+    if (!State.eventsRegistered) {
+      State.eventsRegistered = true;
+      for (let i = 0; i < BRIDGE_EVENT_CANDIDATES.length; i += 1) {
+        try {
+          $.RegisterForUnhandledEvent(BRIDGE_EVENT_CANDIDATES[i], onBridgeEvent);
+        } catch (e) {}
+      }
+      log("bridge events registered");
     }
-    // 面板专属事件绑定(2026-10-30 补,QOL 4.0.5 同款):未处理总线的 HTMLTitle
-    // 派发在 10-29 更新后不再到达;RegisterEventHandler 绑定面板对象仍工作。
-    if (panel && typeof $.RegisterEventHandler === "function") {
+    // 面板专属绑定:与总线守卫解耦(2026-10-30 12:20 boot 实证)——boot() 先调
+    // ensureBridgeEvents()(无 panel)锁死 eventsRegistered,探针路径带 panel
+    // 再到时被 early-return 挡死,QOL 同款绑定从未注册。独立守卫 + 可补挂。
+    if (panel && typeof $.RegisterEventHandler === "function" && !State.panelBound) {
+      State.panelBound = true;
       try {
         $.RegisterEventHandler("HTMLTitle", panel, onBridgeEvent);
         log("bridge: panel-bound HTMLTitle registered");
@@ -3073,7 +3078,6 @@ function injectTranslation(row, sig, text, fragment) {
         log("bridge: panel-bound HTMLTitle register FAILED: " + expErr(eR));
       }
     }
-    log("bridge events registered");
   }
 
   // ---- 诊断（DIAG-6726）：面板状态快照，用于区分“页面没加载”与“加载了但标题读不到”
