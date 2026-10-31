@@ -1010,14 +1010,26 @@
   }
 
   function saveUiConfig() {
+    // 2026-10-31 评审修复(convar_seed 实证):json 原声明在首个 try 块内,第二个 try 的
+    // SetValue 引用它必抛 ReferenceError 且被空 catch 吞掉——convar 从未被写入(存量 bug)。
+    // 同批加幂等:值相同不写,防 OnConVarChanged 事件风暴。纯本地写入,无 dirty/无网络副作用。
+    let json = "";
+    try { json = JSON.stringify(State.cfg); } catch (e) { return; }
     try {
-      const json = JSON.stringify(State.cfg);
-      $.GetContextPanel().SetAttributeString(UI_CONVAR, json);
+      const panel = $.GetContextPanel();
+      if (panel.GetAttributeString) {
+        if (panel.GetAttributeString(UI_CONVAR, "") !== json) panel.SetAttributeString(UI_CONVAR, json);
+      } else {
+        panel.SetAttributeString(UI_CONVAR, json);
+      }
     } catch (e) {}
     try {
       if (typeof Convars !== "undefined") {
         if (Convars.RegisterConVar) Convars.RegisterConVar(UI_CONVAR, "{}", 0, "LinguaChat UI settings");
-        if (Convars.SetValue) Convars.SetValue(UI_CONVAR, json);
+        if (Convars.SetValue) {
+          const cur = Convars.GetStr ? Convars.GetStr(UI_CONVAR, "") : "";
+          if (cur !== json) Convars.SetValue(UI_CONVAR, json);
+        }
       }
     } catch (e) {}
   }
@@ -1639,6 +1651,16 @@ function injectTranslation(row, sig, text, fragment) {
     } catch (e) {}
   }
   function closeSelectMenus() {}
+  function labelFor(options, value) {
+    // 兜底版:面板文件不再加载;查表返回 key,不命中回退原值(签名与面板真实现一致)。
+    try {
+      const arr = options || [];
+      for (let i = 0; i < arr.length; i += 1) {
+        if (arr[i] && arr[i].value === value) return String(arr[i].key || arr[i].value || "");
+      }
+    } catch (e) {}
+    return String(value || "");
+  }
 
   function targetLanguage() {
     // 面板里选的目标语言优先;选了自定义则用自定义输入框的值
@@ -1651,6 +1673,19 @@ function injectTranslation(row, sig, text, fragment) {
 
   // 发送目标语言(处理自定义)
   function resolveOutgoingTarget() {
+    // 2026-10-31 评审修复(conc-1/conc-5):convar 优先——双上下文下,差分应用发生在
+    // 拉取的上下文,另一上下文的 State.cfg.outgoingTarget 滞后 60-120s;
+    // convar(lct_ui)是全局共享的,saveUiConfig 在差分应用时立即写入——它是唯一
+    // 的跨上下文新鲜源。同上下文时 convar==State.cfg,顺序无回退风险。
+    try {
+      if (typeof Convars !== "undefined" && Convars.GetStr) {
+        const raw = Convars.GetStr(UI_CONVAR, "");
+        if (raw) {
+          const j = JSON.parse(raw);
+          if (j && typeof j.outgoingTarget === "string" && j.outgoingTarget) return j.outgoingTarget;
+        }
+      }
+    } catch (e) {}
     let lang = State.cfg.outgoingTarget || "en";
     if (lang === "custom") {
       lang = fieldValue("LCTOutgoingTargetCustom") || "en";
@@ -4480,6 +4515,9 @@ function injectTranslation(row, sig, text, fragment) {
       function (text, res) {
         if (reqRev && State.cfgRev && State.cfgRev !== reqRev) {
           log("cfg sync: stale delta discarded (reqRev=" + reqRev + " cur=" + State.cfgRev + ")");
+          // conc-2 评审修复:丢弃后 2s 立即重同步(携带已推进的 rev,一次即收敛),
+          // 不干等 60s 兜底轮询。重试发送的是当前 rev → 桥历史必有基线 → 一轮收敛。
+          try { $.Schedule(2.0, function () { try { syncConfigDelta(onDone); } catch (eR) {} }); } catch (eR2) {}
           return false;
         }
         return applyConfigPayload(text, res);
