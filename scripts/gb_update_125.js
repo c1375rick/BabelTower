@@ -71,48 +71,65 @@ function mdToHtml(md) {
   if (!/Edit\s*:/i.test(title)) { console.log("NOT_EDIT_PAGE:", title); await browser.close(); process.exit(1); }
   console.log("EDIT PAGE:", title);
 
-  // ---- 1. 自动挂 zip:点 "Select files" + waitForFileChooser 并发 ----
+  // ---- 1. 自动挂 zip:限定 #Files 容器(2026-10-31 探针:页面有两组 Select files,上次点了别的区) ----
   const rowsBefore = await page.evaluate(() => document.querySelectorAll('input[name="_sVersion"]').length);
   console.log("VERSION ROWS BEFORE: " + rowsBefore);
-  const btnCount = await page.evaluate(() =>
-    [...document.querySelectorAll("a,button,span")].filter((b) => /select files/i.test((b.innerText || "").trim())).length);
-  console.log("SELECT FILES 按钮: " + btnCount + " 个");
-  if (!btnCount) { console.log("找不到 Select files 按钮 —— 停止(未保存)。"); await browser.close(); process.exit(1); }
+  const filesDiv = await page.evaluate(() => {
+    const f = document.getElementById("Files");
+    return f ? {
+      inputs: f.querySelectorAll("input[type=file]").length,
+      btns: [...f.querySelectorAll("button,span,a")].filter((b) => /select files/i.test((b.innerText || "").trim())).length,
+      rows: f.querySelectorAll("li").length,
+    } : null;
+  });
+  console.log("#Files 容器:", JSON.stringify(filesDiv));
+  if (!filesDiv) { console.log("无 #Files 容器 —— 停止(未保存)。"); await browser.close(); process.exit(1); }
 
   let uploaded = false;
-  try {
-    const [chooser] = await Promise.all([
-      page.waitForFileChooser({ timeout: 20000 }),
-      page.evaluate(() => {
-        const btn = [...document.querySelectorAll("a,button,span")].find((b) => /select files/i.test((b.innerText || "").trim()));
-        if (btn) btn.click();
-        return !!btn;
-      }),
-    ]);
-    console.log("FILE CHOOSER 弹出 ✓,提交 zip...");
-    await chooser.accept([zip]);
-    uploaded = true;
-    console.log("zip 已交给选择器: " + path.basename(zip));
-  } catch (e) {
-    console.log("fileChooser 路线失败: " + e.message);
-    const inp = await page.$('input[type=file]');
-    if (inp) {
-      await inp.uploadFile(zip);
+  // 路线 A(历史验证,gb_replace_file.js 同款):#Files 内 input[type=file] 直接 uploadFile
+  if (filesDiv.inputs > 0) {
+    const handle = await page.$("#Files input[type=file]");
+    if (handle) {
+      await handle.uploadFile(zip);
       uploaded = true;
-      console.log("备选路线: uploadFile 到 input[type=file]");
+      console.log("路线 A: uploadFile 到 #Files input[type=file] ✓");
+    }
+  }
+  // 路线 B:#Files 内的 Select files 按钮 + waitForFileChooser(严格限定容器内,不点外区的)
+  if (!uploaded && filesDiv.btns > 0) {
+    try {
+      const [chooser] = await Promise.all([
+        page.waitForFileChooser({ timeout: 20000 }),
+        page.evaluate(() => {
+          const f = document.getElementById("Files");
+          if (!f) return false;
+          const btn = [...f.querySelectorAll("button,span,a")].find((b) => /select files/i.test((b.innerText || "").trim()));
+          if (btn) btn.click();
+          return !!btn;
+        }),
+      ]);
+      console.log("路线 B: FILE CHOOSER 弹出 ✓,提交 zip...");
+      await chooser.accept([zip]);
+      uploaded = true;
+    } catch (e) {
+      console.log("路线 B 失败: " + e.message);
     }
   }
   if (!uploaded) { console.log("两条上传路线都失败 —— 停止(未保存)。"); await browser.close(); process.exit(1); }
 
-  // 轮询等 125-win64 出现(38MB 上传需 1-3 分钟)
+  // 轮询等 babeltower-125-win64 行出现在 #Files(GB 规范化文件名:点号去掉;38MB 需 1-5 分钟)
   let zipShown = false;
   const waitStart = Date.now();
   while (Date.now() - waitStart < 30 * 60 * 1000) {
     await sleep(10000);
-    zipShown = await page.evaluate(() => /1\.2\.5-win64/i.test(document.body ? document.body.innerText : ""));
+    zipShown = await page.evaluate(() => {
+      const f = document.getElementById("Files");
+      if (!f) return false;
+      return [...f.querySelectorAll("li")].some((li) => /babeltower-125-win64/i.test(li.innerText || ""));
+    });
     const mins = Math.round((Date.now() - waitStart) / 60000 * 10) / 10;
     console.log("  t=" + mins + "min zipShown=" + zipShown);
-    if (zipShown) { console.log("  ✓ 1.2.5 zip 已出现在页面!"); break; }
+    if (zipShown) { console.log("  ✓ 1.2.5 zip 行已出现在 #Files!"); break; }
   }
   if (!zipShown) { console.log("30 分钟内未检测到 1.2.5 zip —— 停止(未保存)。"); await browser.close(); process.exit(1); }
 
@@ -123,7 +140,7 @@ function mdToHtml(md) {
     for (const inp of list) {
       let el = inp;
       for (let i = 0; i < 6 && el; i++) {
-        if (/1\.2\.5-win64/i.test(el.innerText || el.textContent || "")) { target = inp; el = null; i = 99; break; }
+        if (/babeltower-125-win64/i.test(el.innerText || el.textContent || "")) { target = inp; el = null; i = 99; break; }
         el = el.parentElement;
       }
     }
