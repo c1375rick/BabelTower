@@ -4188,10 +4188,14 @@ function injectTranslation(row, sig, text, fragment) {
     const outgoingMode = State.cfg.outgoing || "off";
     if (State.cfg.enabled && outgoingMode !== "off" && trimmed.charAt(0) !== "/" && !State.c5) {
       const outTarget = resolveOutgoingTarget();
-      // 防重复发送:同一文本翻译中,重复按 Enter 直接忽略(避免队列积压发多条)
+      // 防重复发送:同一文本翻译中,重复按 Enter/Shift+Enter **原样立即发出**(2026-10-31 实车:
+      // 旧逻辑直接 return 静默吞消息——第 2 个 gg 消失;dedupe 不区分聊天通道,Shift 通道同受影响)。
+      // 原样发出不进翻译队列(不积压),消息绝不丢;第 1 条翻译完成后照常发双语。
       // 不同文本则排队(前一文本的翻译结果已提交,不冲突)
       if (State.outgoingPending === trimmed) {
-        log("outgoing dedupe: same text pending, ignored: " + trimmed.slice(0, 40));
+        log("outgoing dedupe: same text pending -> sending original verbatim: " + trimmed.slice(0, 40));
+        try { triggerStockSubmit(input); } catch (eDq) {}
+        clearInput();
         return;
       }
       State.outgoingPending = trimmed;

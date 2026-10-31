@@ -2,7 +2,7 @@
 
 Teammates' messages translated in ~1 second, shown right below the original. Translate your own messages before sending, too. Bing works out of the box with no key; Microsoft / OpenAI-compatible / DeepL / Google supported, with automatic fallback if the main provider fails.
 
-**1.2.4**: fixes the Oct-29 game update breaking the https bridge (page JS blocked + title events cut). Certificates are now issued by a **local CA chain** (397-day leaf, auto-renewed by the launcher — after the first trust, fully restart Steam, tray included); the bridge panel now uses the engine's `CitadelHTMLPanel` (QOL-style) and title events arrive via panel-bound handlers; the probe settles **event-driven** (instant ALIVE at boot); the fast hash channel is fully wired with drift self-healing. If chat translation ever dies after a game update, run `scripts\gen_bridge_cert.ps1 -Status` first.
+**1.2.5** (pre-requisite update for users): fixes the **reversed outgoing translation direction** in 1.2.4 (Chinese messages were silently sent untranslated) — **1.2.4 users must upgrade**. This release consolidates the foundation: outgoing direction field name, non-Latin language scan (Russian/Korean/Japanese messages were skipped as symbols), config eventual consistency (stale-delta guard + 2s re-sync after discard — web changes apply in-game within seconds), dual-context direction freshness (convar read-through), and a root fix for a latent bug where the convar write never took effect. The in-game settings panel has been removed; all settings live on the web `/tr` page. Certificates and the bridge are unchanged — just replace the vpk and restart the game. Future updates will focus on features and UX, no more foundation changes.
 
 ## Install
 
