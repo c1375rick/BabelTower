@@ -165,8 +165,8 @@ ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1, configsync: 
 ok(/function syncConfigDelta\(onDone\)/.test(lc), "syncConfigDelta 已定义");
 ok(/function applyConfigPayload\(text, res\)/.test(lc), "applyConfigPayload 已定义");
 ok(/function cfgPathApply\(obj, path, value\)/.test(lc), "cfgPathApply 已定义(路径合并/删除)");
-ok(/syncViaBtipc\("configsync", State\.cfgRev \|\| ""/.test(lc),
-  "握手上报本地指纹 State.cfgRev");
+ok(/const reqRev = State\.cfgRev \|\| ""/.test(lc) && /syncViaBtipc\("configsync", reqRev\b/.test(lc),
+  "握手上报本地指纹(reqRev 捕获 State.cfgRev;陈旧差分防护)");
 ok(/State\.cfgMask = c;/.test(lc), "applyBridgeConfig 留存差分基准 cfgMask");
 ok(/cfgMask: null,/.test(lc), "State.cfgMask 已声明");
 // 轮询走差分(不再 revOnly + 全量二次拉)

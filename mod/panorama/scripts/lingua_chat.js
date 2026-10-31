@@ -1618,6 +1618,28 @@ function injectTranslation(row, sig, text, fragment) {
 
   // ================= 翻译队列与桥接 =================
 
+  // 2026-10-31:游戏内设置面板已移除——主文件引用的面板全局函数在此兜底。
+  // 面板元素不存在时自然空操作;将来面板文件恢复加载,其 exportGlobal 真实现覆盖这些兜底。
+  function fieldValue(id) {
+    try {
+      const el = findChild(getRoot(), id);
+      return el ? safeText(el) : "";
+    } catch (e) { return ""; }
+  }
+  function setSelectText(id, text) {
+    try {
+      const el = findChild(getRoot(), id);
+      if (el) el.text = String(text);
+    } catch (e) {}
+  }
+  function setToggleText(id, val) {
+    try {
+      const el = findChild(getRoot(), id);
+      if (el) el.text = val ? "ON" : "OFF";
+    } catch (e) {}
+  }
+  function closeSelectMenus() {}
+
   function targetLanguage() {
     // 面板里选的目标语言优先;选了自定义则用自定义输入框的值
     let lang = State.cfg.targetLanguage || "zh-Hans";
@@ -2302,7 +2324,7 @@ function injectTranslation(row, sig, text, fragment) {
              targetLanguage: job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage(),
              timeoutMs: job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000) },
       };
-      log("outgoing dispatch: ctx=" + State.ctxId + " flat=" + State.cfg.outgoingTarget +
+      log("hash dispatch: ctx=" + State.ctxId + " flat=" + State.cfg.outgoingTarget +
         " d.targetLanguage=" + ((payload.d && payload.d.targetLanguage) || "-") + " mode=" + (State.cfg.outgoing || "-"));
       setPending(job.id, function (payload2) {
         // hash 超时连击(2026-10-30):页面常驻无新 lct-alive,3s nav 失败判定已跳过

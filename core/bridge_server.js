@@ -288,13 +288,6 @@ async function runBtipcOp(op, body, timeoutMs) {
       const next = configStore.applyMaskedUpdate(current, obj.config);
       configStore.save(next);
       // 2026-10-31 诊断:写入来源(方向错乱排查——上次两次写入来源不明)
-      try {
-        const ua = String(req.headers["user-agent"] || "-").slice(0, 60);
-        const ref = String(req.headers["referer"] || "-").slice(0, 60);
-        const opf = obj && obj.op ? String(obj.op) : (obj && obj.config ? "web-form" : "?");
-        const uiFields = obj && obj.config && obj.config.ui ? Object.keys(obj.config.ui).join(",") : (obj && obj.config ? Object.keys(obj.config).join(",") : "-");
-        log("info", "config WRITE source: op=" + opf + " uiFields=[" + uiFields + "] UA=" + ua + " ref=" + ref);
-      } catch (eD) {}
       log("info", "config saved (btipc)");
       onConfigSaved(); // 面板保存 → 同样叫醒游戏的长轮询
       // btipc05b:写应答只回 {ok:true}。原先回 maskCompact(≈400B=40 帧)在真机
@@ -1532,6 +1525,14 @@ if (p === "/api/v1/health") {
       // body 带 config = 保存;不带 = 加载(面板通道下两者都走 POST)。
       // 统一回精简 config(约 366 字符,远低于 title 通道 ~512 上限;2026-08-14 保存失效根因)
       if (bodyObj.config) {
+        // 2026-10-31 写入来源审计(方向错乱排查):op 字段区分游戏面板中继(op=config)与网页表单
+        try {
+          const ua = String(req.headers["user-agent"] || "-").slice(0, 60);
+          const ref = String(req.headers["referer"] || "-").slice(0, 60);
+          const srcOp = bodyObj && bodyObj.op ? String(bodyObj.op) : "web-form";
+          const uiFields = bodyObj && bodyObj.config && bodyObj.config.ui ? Object.keys(bodyObj.config.ui).join(",") : "-";
+          log("info", "config WRITE source: op=" + srcOp + " uiFields=[" + uiFields + "] UA=" + ua + " ref=" + ref);
+        } catch (eD) {}
         log("info", "config saved");
         onConfigSaved(); // 网页保存 → 立刻叫醒游戏的长轮询(即时生效)
       }
