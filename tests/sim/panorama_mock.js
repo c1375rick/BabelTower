@@ -43,8 +43,9 @@ function createSim(opts) {
     pageErrors: [],
   };
 
+  const t0 = Date.now();
   function slog(s) {
-    sim.logs.push(String(s));
+    sim.logs.push("+" + Math.round((Date.now() - t0) / 100) / 10 + "s " + String(s));
     if (opts.verbose) process.stdout.write("  [sim] " + s + "\n");
   }
 

@@ -4371,6 +4371,7 @@ function injectTranslation(row, sig, text, fragment) {
     let changed = false;
     const ui = c.ui || {};
     const dirty = State.cfgDirty || {};
+    if (tag === "cfg-watch") log("applyBridgeConfig probe: dirty=" + JSON.stringify(dirty) + " incoming.ui.outgoingTarget=" + (ui.outgoingTarget || "-"));
     if (typeof ui.displayMode === "string" && !dirty.displayMode) { State.cfg.displayMode = ui.displayMode; changed = true; }
     if (typeof ui.outgoing === "string" && !dirty.outgoing) { State.cfg.outgoing = ui.outgoing; changed = true; }
     if (typeof ui.outgoingTarget === "string" && !dirty.outgoingTarget) { State.cfg.outgoingTarget = ui.outgoingTarget; changed = true; }
@@ -4443,13 +4444,24 @@ function injectTranslation(row, sig, text, fragment) {
     applyBridgeConfig(mask, "cfg-watch");
     State.cfgMask = mask; // 基准 = 合并结果(下一轮差分的起点)
     if (typeof d.fingerprint === "string" && d.fingerprint) State.cfgRev = d.fingerprint;
-    log("cfg sync applied: " + (d.delta ? "delta" : "full") + " (rev=" + State.cfgRev + ")");
+    log("cfg sync applied: " + (d.delta ? "delta" : "full") + " (rev=" + State.cfgRev + ")" +
+      (d.delta && d.set ? " set=" + JSON.stringify(d.set).slice(0, 200) : ""));
     return true;
   }
   function syncConfigDelta(onDone) {
-    syncViaBtipc("configsync", State.cfgRev || "",
+    // 2026-10-31:陈旧差分防护。请求时的 rev 若在响应落地前已被更新的应用推进
+    // (多个在途同步乱序到达),本次差分是过期的——应用它会回退刚生效的配置
+    // (实测:网页改 en 后被陈旧 zh-Hans 差分覆盖,出站方向"整反"复发)。丢弃并等下次轮询。
+    const reqRev = State.cfgRev || "";
+    syncViaBtipc("configsync", reqRev,
       function () { log("cfg sync: fingerprint match, no transfer"); return true; },
-      applyConfigPayload,
+      function (text, res) {
+        if (reqRev && State.cfgRev && State.cfgRev !== reqRev) {
+          log("cfg sync: stale delta discarded (reqRev=" + reqRev + " cur=" + State.cfgRev + ")");
+          return false;
+        }
+        return applyConfigPayload(text, res);
+      },
       function (ok) { if (onDone) onDone(ok); });
   }
 

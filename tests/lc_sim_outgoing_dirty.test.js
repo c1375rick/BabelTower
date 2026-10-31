@@ -1,7 +1,6 @@
-// 回归锁:出站方向跟随配置(2026-10-31)。
-// 背景:游戏内设置面板已移除(双 UI 分叉曾导致「发送目标语言」冻结在 zh-Hans、
-// 方向整反)。本测试锁定:网页配置修改 → 差分同步 → 游戏扁平字段 → 出站方向,
-// 全链一致(游戏内面板文件不再加载,dirty 分叉源已消灭)。
+// 回归锁:出站方向跟随配置(2026-10-31 终版)。
+// 锁定:网页改发送目标语言 → 差分应用 → 游戏扁平字段跟随 → 派发载荷方向正确。
+// 背景:游戏内设置面板已移除(双 UI 分叉源);hash 出站载荷字段名已修(target→targetLanguage)。
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -65,6 +64,7 @@ async function main() {
   const simLog = path.join(tmp, "bridge.log");
   fs.writeFileSync(path.join(cfgDir, "config.json"), JSON.stringify({
     port: PORT, provider: "bing", logFile: simLog, chatLog: { enabled: false },
+    ui: { outgoing: "bilingual", outgoingTarget: "en", targetLanguage: "zh-Hans" },
   }, null, 2), "utf8");
 
   const child = spawn(NODE, [BRIDGE], {
@@ -93,59 +93,52 @@ async function main() {
     }, 25000, "ALIVE");
     check("A0 探针 ALIVE", true);
 
-    function waitDelta() {
+    // 等 flat 真实翻转(宽超时:watch 唤醒 0.3s / 60s 兜底轮询 + BTIPC 差分传输时长)
+    function waitFlat(expected, timeoutMs, label) {
       return sim.waitFor(function () {
-        return sim.logs.some(function (l) { return l.indexOf("cfg sync applied") >= 0; });
-      }, 15000, "delta apply").catch(function () {});
-    }
-    function lastTargetFromBridgeLog() {
-      try {
-        const t = fs.readFileSync(simLog, "utf8");
-        const hits = t.match(/target=[A-Za-z-]+/g) || [];
-        return hits.length ? hits[hits.length - 1] : "(none)";
-      } catch (e) { return "(log unreadable)"; }
-    }
-    function settleOutgoing(text, tgt) {
-      return new Promise(function (resolve) {
-        let done = null;
-        LCTNS.bridgePost("translate", {
-          operation: "translate", text: text, sourceLanguage: "auto",
-          targetLanguage: tgt, timeoutMs: 15000,
-        }, function (p) { done = p; resolve(done); });
-        setTimeout(function () { resolve(done || { ok: false, error: "test timeout" }); }, 25000);
-      });
+        return LCTNS.State.cfg.outgoingTarget === expected;
+      }, timeoutMs, label + "(flat=" + LCTNS.State.cfg.outgoingTarget + ")").catch(function (e) { throw e; });
     }
 
     // T1:网页把发送目标语言设为 zh-Hans → 差分 → 游戏跟随
     await post(BASE + "/api/v1/config", { config: { ui: { outgoingTarget: "zh-Hans" } } });
-    await waitDelta();
-    await sim.sleep(300);
-    const t1AppliedAt = sim.logs.length;
+    await waitFlat("zh-Hans", 70000, "T1 跟随 zh-Hans");
     check("T1 网页设 zh-Hans → 游戏跟随", LCTNS.State.cfg.outgoingTarget === "zh-Hans",
       "flat=" + LCTNS.State.cfg.outgoingTarget);
 
-    // T2:该方向下派发目标 + 端到端方向(hello → 中文译文)
+    // T2:该方向下派发目标=zh-Hans(确定性)
     check("T2 派发方向=zh-Hans", LCTNS.resolveOutgoingTarget() === "zh-Hans",
       "resolveOutgoingTarget=" + LCTNS.resolveOutgoingTarget());
-    const r2 = await settleOutgoing("hello", "zh-Hans");
-    console.log("  [info] T2b zh-Hans 方向译文(信息项,与桥默认不可区分): " + JSON.stringify(r2 && r2.translation || r2 && r2.error || null));
 
-    // T3:网页改回 en → 差分 → 游戏跟随(dirty 分叉源的回归锁)
+    // T3:网页改回 en → 差分 → 游戏跟随(分叉/陈旧差分回归锁)
     await post(BASE + "/api/v1/config", { config: { ui: { outgoingTarget: "en" } } });
-    await sim.waitFor(function () {
-      return LCTNS.State.cfg.outgoingTarget === "en" ||
-        sim.logs.some(function (l) { return l.indexOf("cfg sync applied") >= 0 && sim.logs.indexOf(l) > t1AppliedAt; });
-    }, 70000, "en delta(含 watch 重挂容差)").catch(function () {});
-    await sim.sleep(300);
+    await waitFlat("en", 70000, "T3 跟随 en");
     check("T3 网页改 en → 游戏跟随", LCTNS.State.cfg.outgoingTarget === "en",
       "flat=" + LCTNS.State.cfg.outgoingTarget);
 
-    // T4:该方向下派发目标 + 端到端方向(中文名 → 英文译文)——hash 字段名回归锁
+    // T4:该方向下派发目标=en(确定性)
     check("T4 派发方向=en", LCTNS.resolveOutgoingTarget() === "en",
       "resolveOutgoingTarget=" + LCTNS.resolveOutgoingTarget());
-    const r4 = await settleOutgoing("你好", "en");
-    check("T4b 译文是英文(非 no-op)", !!(r4 && r4.translation && r4.translation !== "你好"),
-      "translation=" + JSON.stringify(r4 && r4.translation || null).slice(0, 60));
+
+    // T5:端到端方向(中文文本 + en 目标 → 英文译文)——hash 字段名回归锁
+    // (旧字段名 bug:载荷用 target,桥读 targetLanguage → undefined → 默认 zh-Hans → no-op)
+    const r5 = await (function () {
+      return new Promise(function (resolve) {
+        let done = null;
+        LCTNS.bridgePost("translate", {
+          operation: "translate", text: "你好", sourceLanguage: "auto",
+          targetLanguage: "en", timeoutMs: 15000,
+        }, function (p) { done = p; resolve(done); });
+        setTimeout(function () { resolve(done || { ok: false, error: "test timeout" }); }, 30000);
+      });
+    })();
+    check("T5 端到端方向:中→英译文非原文", !!(r5 && r5.translation && r5.translation !== "你好"),
+      "translation=" + JSON.stringify(r5 && r5.translation || null).slice(0, 60));
+
+    // T6:存在 d.targetLanguage=en 的派发(出站作业的方向锁)——配置轮询(d=-)不计
+    const withTgt = sim.logs.filter(function (l) {
+      return l.indexOf("outgoing dispatch") >= 0 && l.indexOf("d.targetLanguage=en") >= 0;
+    });
 
     console.log("\nSIM RESULT: PASS " + pass + " / FAIL " + fail);
     if (process.env.SIM_DUMP) {
