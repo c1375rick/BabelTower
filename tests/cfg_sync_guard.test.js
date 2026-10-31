@@ -50,7 +50,9 @@ ok(/function markCfgDirty\(key\)/.test(lc), "markCfgDirty 已定义");
 ok(/function LCTPickProvider\(value\) \{\s*\n\s*State\.cfg\.provider = value;\s*\n\s*markCfgDirty\("provider"\);/.test(lc), "选服务商置脏");
 ok(/markCfgDirty\(which\);\s*\n\s*saveUiConfig\(\);\s*\n\s*log\("toggle:/.test(lc), "toggle 置脏");
 ok(/markCfgDirty\(which\);\s*\n\s*saveUiConfig\(\);\s*\n\s*log\("cycle:/.test(lc), "cycle 置脏");
-ok(/markCfgDirty\(field\);\s*\n\s*saveUiConfig\(\);\s*\n\s*closeSelectMenus\(\);\s*\n\s*log\("pickLang:/.test(lc), "pickLang 置脏");
+// 2026-10-31:pickLang 在 saveUiConfig 后新增推桥块(推桥+清 dirty),行序断言放宽
+ok(/markCfgDirty\(field\);\s*\n\s*saveUiConfig\(\);\s*\n[\s\S]*?closeSelectMenus\(\);\s*\n\s*log\("pickLang:/.test(lc), "pickLang 置脏(含推桥块)");
+ok(/pick persist: 推桥同步/.test(lc), "pickLang 推桥块存在");
 ok(/markCfgDirty\(field\);\s*\n\s*saveUiConfig\(\);\s*\n\s*closeSelectMenus\(\);\s*\n\s*log\("pickOption:/.test(lc), "pickOption 置脏");
 ok((lc.match(/!dirty\.provider/g) || []).length >= 2, "sync 落地与 _mask 回填都跳过脏 provider(两处)");
 ok(/!dirty\.translateOwn/.test(lc) && /!dirty\.chatLog/.test(lc), "顶层开关同样跳脏");

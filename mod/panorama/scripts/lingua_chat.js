@@ -921,6 +921,8 @@
   // (ctprobe 实测 typeof 均 undefined),$.Schedule 句柄的官方取消器是 $.CancelScheduled
   // (diag-globals 枚举证实存在)。取消失败的后果:旧通道 outgoing 20s 超时回调晚到 →
   // 双 finishJob → 槽位超发(MAX_ACTIVE_REQUESTS=1 被击穿)。
+  // 2026-10-31:游戏内设置面板已移除(双 UI 分叉导致方向错乱),齿轮按钮改开网页。
+  globalThis.LCTOpenWebSettings = function () { log("UI_OPEN " + trOpenSummary()); };
   function cancelSched(h) {
     if (!h) return;
     try {
@@ -4296,12 +4298,11 @@ function injectTranslation(row, sig, text, fragment) {
     //   /tr        通知桥用系统默认浏览器打开 http://127.0.0.1:<port>/ui(附一行状态摘要进日志),
     //              不开发送链路
     //   /tr ui     同上(等价别名)
-    //   /tr panel  只开旧面板(调试/兜底),不发 UI_OPEN、不拉网页
+    //   /tr panel  旧面板已移除(2026-10-31):别名到网页设置(与 /tr 等价)
     if (trimmed === "/tr" || trimmed.indexOf("/tr ") === 0) {
       clearInput();
       const trArg = trimmed.slice(3).trim();
-      if (trArg === "panel") openSettingsPanel();
-      else log("UI_OPEN " + trOpenSummary());
+      log("UI_OPEN " + trOpenSummary()); // 旧面板已移除:panel 别名到网页
       return;
     }
 
@@ -4647,6 +4648,14 @@ function injectTranslation(row, sig, text, fragment) {
     if (value === undefined) delete cur[ps[ps.length - 1]];
     else cur[ps[ps.length - 1]] = value;
   }
+  function clearDirtyForPaths(paths) {
+    if (!State.cfgDirty) return;
+    for (const p of paths || []) {
+      const key = String(p).split(".").pop();
+      delete State.cfgDirty[key];
+    }
+  }
+
   function applyConfigPayload(text, res) {
     let d = null;
     try { d = JSON.parse(text); } catch (e) { d = null; }
@@ -4657,7 +4666,14 @@ function injectTranslation(row, sig, text, fragment) {
       const set = d.set || {};
       for (const p of Object.keys(set)) cfgPathApply(mask, p, set[p]);
       for (const p of (d.unset || [])) cfgPathApply(mask, p, undefined);
-    } else if (d.config && typeof d.config === "object") { mask = d.config; }
+      // 2026-10-31 应用路径清 dirty(发送方向整反实证):桥侧变更是更新的用户意图
+      // (网页保存);面板未保存的编辑被显式保存覆盖时,不得再拦后续回填。
+      clearDirtyForPaths(Object.keys(set).concat(d.unset || []));
+    } else if (d.config && typeof d.config === "object") {
+      mask = d.config;
+      // full 载荷 = 桥侧完整权威状态,清全部 dirty(2026-10-31)
+      if (State.cfgDirty) for (const k of Object.keys(State.cfgDirty)) delete State.cfgDirty[k];
+    }
     else { log("cfg sync: bad payload"); return false; }
     applyBridgeConfig(mask, "cfg-watch");
     State.cfgMask = mask; // 基准 = 合并结果(下一轮差分的起点)
@@ -5050,6 +5066,7 @@ function injectTranslation(row, sig, text, fragment) {
   LCTNS.isValid = isValid;
   LCTNS.log = log;
   LCTNS.markCfgDirty = markCfgDirty;
+  LCTNS.resolveOutgoingTarget = resolveOutgoingTarget;
   LCTNS.nowMs = nowMs;
   LCTNS.readMessageRow = readMessageRow;
   LCTNS.resolveChatMessages = resolveChatMessages;

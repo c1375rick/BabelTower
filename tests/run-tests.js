@@ -33,6 +33,7 @@ const files = [
   "tests/lc_p4_partition.test.js",
   "tests/lc_panel_nav_guard.test.js",
 "tests/lc_sim_channel.test.js",
+"tests/lc_sim_outgoing_dirty.test.js",
   "tests/loc_parser.test.js",
   "tests/log_redaction.test.js",
   "tests/providers.test.js",

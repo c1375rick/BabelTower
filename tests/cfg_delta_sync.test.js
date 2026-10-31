@@ -198,6 +198,7 @@ function extractFn(src, name) {
 }
 const fnPath = extractFn(lc, "cfgPathApply");
 const fnApply = extractFn(lc, "applyConfigPayload");
+const fnClear = extractFn(lc, "clearDirtyForPaths");
 ok(!!fnPath, "抽出 cfgPathApply");
 ok(!!fnApply, "抽出 applyConfigPayload");
 if (fnPath && fnApply) {
@@ -210,6 +211,7 @@ if (fnPath && fnApply) {
   };
   const fns = new Function("State", "log", "applyBridgeConfig",
     "var cfgPathApply = " + fnPath + ";\nvar applyConfigPayload = " + fnApply + ";\n" +
+    "var clearDirtyForPaths = " + (fnClear || "function () {}") + ";\n" +
     "return { cfgPathApply: cfgPathApply, applyConfigPayload: applyConfigPayload };");
   let api = null;
   try { api = fns(sandbox.State, sandbox.log, sandbox.applyBridgeConfig); }
