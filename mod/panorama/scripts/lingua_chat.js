@@ -2300,7 +2300,7 @@ function injectTranslation(row, sig, text, fragment) {
              timeoutMs: job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000) },
       };
       log("outgoing dispatch: ctx=" + State.ctxId + " flat=" + State.cfg.outgoingTarget +
-        " payload.target=" + payload.target + " mode=" + (State.cfg.outgoing || "-"));
+        " d.target=" + ((payload.d && payload.d.target) || "-") + " mode=" + (State.cfg.outgoing || "-"));
       setPending(job.id, function (payload2) {
         // hash 超时连击(2026-10-30):页面常驻无新 lct-alive,3s nav 失败判定已跳过
         // (sawAlive 预置);连续 2 次超时 → hashReady=false 回 nav 模式(引擎降级保险)。
@@ -4385,6 +4385,7 @@ function injectTranslation(row, sig, text, fragment) {
     if (changed) {
       saveUiConfig();
       log((tag || "config") + ": synced from bridge (outgoing=" + State.cfg.outgoing +
+        ", outgoingTarget=" + State.cfg.outgoingTarget +
         ", translateOwn=" + State.cfg.translateOwn + ")");
     }
     // btipc05b:留全量 mask 给面板秒开(openSettingsPanel 直接消费,免 24s 现场读)
@@ -4732,7 +4733,7 @@ function injectTranslation(row, sig, text, fragment) {
 
   function boot() {
     try { LCTBTIPC.init({ State: State, log: log, expErr: expErr, nowMs: nowMs, findChild: findChild, getRoot: getRoot, isValid: isValid, BRIDGE_HOST: BRIDGE_HOST, BRIDGE_PORT: BRIDGE_PORT, markBridgeUp: markBridgeUp, setBridgeStatus: setBridgeStatus, t: t }); } catch (eI) {}
-    State.cfg = loadUiConfig();
+    State.cfg = loadUiConfig(); log("boot probe: loadUiConfig outgoingTarget=" + State.cfg.outgoingTarget + " outgoing=" + State.cfg.outgoing);
     // 2026-10-28:applyUILang 现在要用面板文件挂的全局(setSelectText 等);面板缺失时不能让 boot 抛死
     try { applyUILang(); } catch (eL) { log("boot: applyUILang failed: " + expErr(eL)); } // 初始化界面语言
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
