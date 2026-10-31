@@ -4162,7 +4162,14 @@ function injectTranslation(row, sig, text, fragment) {
         } else if (translated === trimmed) {
           // 翻译结果与原文相同(如 API 未做实质翻译):按原文发送
           log("outgoing: no-op (translation === original), sending original");
-          setStatus("翻译结果与原文相同,按原文发送");
+          // 2026-10-31 UX 防呆:detected == 发送目标语言时,静默 no-op 会被当成"失效"。
+          // 给出可行动提示,让用户知道去改「发送目标语言」。
+          const ot = resolveOutgoingTarget();
+          if (detected && ot && detected === ot) {
+            setStatus("发送目标语言(" + ot + ")与输入语言相同,未翻译——要译成其他语言请在设置改「发送目标语言」");
+          } else {
+            setStatus("翻译结果与原文相同,按原文发送");
+          }
         }
         log("outgoing mode=" + outgoingMode + " detected=" + (detected || "-") + " -> " + send.slice(0, 80));
         // 覆盖前先捕获当前输入框内容:若用户已输入新消息,不能丢失
