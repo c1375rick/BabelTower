@@ -2296,11 +2296,11 @@ function injectTranslation(row, sig, text, fragment) {
         op: job.kind === "bridge" ? job.op : "translate",
         d: job.kind === "bridge" ? (function () { try { return JSON.parse(decodeURIComponent(job.data) || "{}"); } catch (eD) { return {}; } })() :
            { text: (job.record && job.record.text) || "", source: "auto",
-             target: job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage(),
+             targetLanguage: job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage(),
              timeoutMs: job.kind === "outgoing" ? OUTGOING_TIMEOUT_MS : (State.cfg.timeoutMs || 15000) },
       };
       log("outgoing dispatch: ctx=" + State.ctxId + " flat=" + State.cfg.outgoingTarget +
-        " d.target=" + ((payload.d && payload.d.target) || "-") + " mode=" + (State.cfg.outgoing || "-"));
+        " d.targetLanguage=" + ((payload.d && payload.d.targetLanguage) || "-") + " mode=" + (State.cfg.outgoing || "-"));
       setPending(job.id, function (payload2) {
         // hash 超时连击(2026-10-30):页面常驻无新 lct-alive,3s nav 失败判定已跳过
         // (sawAlive 预置);连续 2 次超时 → hashReady=false 回 nav 模式(引擎降级保险)。

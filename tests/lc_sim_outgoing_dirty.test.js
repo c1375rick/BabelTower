@@ -124,11 +124,11 @@ async function main() {
     check("T1 网页设 zh-Hans → 游戏跟随", LCTNS.State.cfg.outgoingTarget === "zh-Hans",
       "flat=" + LCTNS.State.cfg.outgoingTarget);
 
-    // T2:该方向下派发目标(确定性断言,不依赖 provider 成功)
+    // T2:该方向下派发目标 + 端到端方向(hello → 中文译文)
     check("T2 派发方向=zh-Hans", LCTNS.resolveOutgoingTarget() === "zh-Hans",
       "resolveOutgoingTarget=" + LCTNS.resolveOutgoingTarget());
-    await settleOutgoing("hello", "zh-Hans"); // 冒烟:作业能走完整链
-    await sim.sleep(300);
+    const r2 = await settleOutgoing("hello", "zh-Hans");
+    console.log("  [info] T2b zh-Hans 方向译文(信息项,与桥默认不可区分): " + JSON.stringify(r2 && r2.translation || r2 && r2.error || null));
 
     // T3:网页改回 en → 差分 → 游戏跟随(dirty 分叉源的回归锁)
     await post(BASE + "/api/v1/config", { config: { ui: { outgoingTarget: "en" } } });
@@ -140,11 +140,12 @@ async function main() {
     check("T3 网页改 en → 游戏跟随", LCTNS.State.cfg.outgoingTarget === "en",
       "flat=" + LCTNS.State.cfg.outgoingTarget);
 
-    // T4:该方向下派发目标(方向正确性回归锁)
+    // T4:该方向下派发目标 + 端到端方向(中文名 → 英文译文)——hash 字段名回归锁
     check("T4 派发方向=en", LCTNS.resolveOutgoingTarget() === "en",
       "resolveOutgoingTarget=" + LCTNS.resolveOutgoingTarget());
-    await settleOutgoing("hello", "en"); // 冒烟:作业能走完整链
-    await sim.sleep(300);
+    const r4 = await settleOutgoing("你好", "en");
+    check("T4b 译文是英文(非 no-op)", !!(r4 && r4.translation && r4.translation !== "你好"),
+      "translation=" + JSON.stringify(r4 && r4.translation || null).slice(0, 60));
 
     console.log("\nSIM RESULT: PASS " + pass + " / FAIL " + fail);
     if (process.env.SIM_DUMP) {
