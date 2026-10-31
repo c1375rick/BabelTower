@@ -16,10 +16,13 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
+  // btipc14 (2026-10-31):1.2.5 用户更新前置更新——hash 出站载荷字段名修复
+  //   (target → targetLanguage,1.2.4 的出站方向整反根因)+ 游戏内设置面板移除
+  //   (双 UI 分叉源)+ UMM 集成移除。后续更新不再改底层。
   // btipc13 (2026-10-30):10-29 断裂全面修复——CA 链证书(397 天叶+启动器自愈)、
   //   桥面板 CitadelHTMLPanel、面板绑定守卫解耦、探针事件驱动结算、hash 快通道
   //   接线(hashBase 捕获/SetURL/job.id/d 解码)+ 页面 lastH/初始 fragment 自愈。
-  const VERSION = "1.2.4-6726-btipc13"; // btipc12 (2026-10-28):https 探针独立槽+判死后自动重探;quick 判定收紧(文本硬校验);outgoing 队列饿死兜底;BTIPC 传输层拆出独立文件 // 1.2.2 (2026-10-21) 内容:① 配置同步走**差分**(只传增删改,不传全量):复用
+  const VERSION = "1.2.5-6726-btipc14"; // btipc12 (2026-10-28):https 探针独立槽+判死后自动重探;quick 判定收紧(文本硬校验);outgoing 队列饿死兜底;BTIPC 传输层拆出独立文件 // 1.2.2 (2026-10-21) 内容:① 配置同步走**差分**(只传增删改,不传全量):复用
   //   gamenames/quickchat 的两段式(握手报本地指纹 → same 或只传变更字段);桥侧保留最近 16 版配置历史当差分
   //   基线(按客户端指纹查)。慢通道实测:没变 = 1 帧 ≈0.65s、改一个字段 = 120B ≈12 帧 ≈7.8s(旧路是全量
   //   392B = 40 帧 ≈26s,再加 20s 轮询)。→ 构建标 btipc11(BTIPС 请求语义变了,与 1.2.1 的 btipc10 线区分)
@@ -1406,7 +1409,7 @@
     }
     if (isQuickChatTemplate(text)) return true; // 本地化模板白名单:快捷语音渲染结果(含参数填空),精确命中即跳过
     if (text.charAt(0) === "/") return true; // 指令消息
-    if (/^[\d\s\W_]+$/.test(text)) return true; // 纯数字/符号
+    if (!/\p{L}/u.test(text)) return true; // 无任何 Unicode 字母(纯数字/符号/表情)——\W 会把西里尔/韩文当符号跳过(2026-10-31 俄语修复)
     if (record.isOwn && State.cfg.translateOwn === false) return true; // 可配置:默认翻译自己的消息
     if (!State.cfg.force && isTargetLanguageText(text)) return true; // 已为目标语言
     return false;
