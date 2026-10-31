@@ -4171,7 +4171,7 @@ function injectTranslation(row, sig, text, fragment) {
             setStatus("翻译结果与原文相同,按原文发送");
           }
         }
-        log("outgoing mode=" + outgoingMode + " detected=" + (detected || "-") + " -> " + send.slice(0, 80));
+        log("outgoing mode=" + outgoingMode + " detected=" + (detected || "-") + " -> " + send.slice(0, 80) + " [tgt=" + (State.cfg.outgoingTarget || "-") + " ui.tgt=" + ((State.cfg.ui && State.cfg.ui.outgoingTarget) || "-") + " res=" + resolveOutgoingTarget() + "]");
         // 覆盖前先捕获当前输入框内容:若用户已输入新消息,不能丢失
         const cur = safeText(input);
         try {

@@ -287,6 +287,14 @@ async function runBtipcOp(op, body, timeoutMs) {
     if (obj.config) {
       const next = configStore.applyMaskedUpdate(current, obj.config);
       configStore.save(next);
+      // 2026-10-31 诊断:写入来源(方向错乱排查——上次两次写入来源不明)
+      try {
+        const ua = String(req.headers["user-agent"] || "-").slice(0, 60);
+        const ref = String(req.headers["referer"] || "-").slice(0, 60);
+        const opf = obj && obj.op ? String(obj.op) : (obj && obj.config ? "web-form" : "?");
+        const uiFields = obj && obj.config && obj.config.ui ? Object.keys(obj.config.ui).join(",") : (obj && obj.config ? Object.keys(obj.config).join(",") : "-");
+        log("info", "config WRITE source: op=" + opf + " uiFields=[" + uiFields + "] UA=" + ua + " ref=" + ref);
+      } catch (eD) {}
       log("info", "config saved (btipc)");
       onConfigSaved(); // 面板保存 → 同样叫醒游戏的长轮询
       // btipc05b:写应答只回 {ok:true}。原先回 maskCompact(≈400B=40 帧)在真机
