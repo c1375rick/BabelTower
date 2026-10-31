@@ -13,8 +13,6 @@
 //     LCT_I18N_STRINGS  —— 文案表:key -> { zh, en }
 //     LCT_FIELD_OPTIONS —— 选项表打包:{ PROVIDER_OPTIONS, LANGUAGE_OPTIONS,
 //                            DISPLAY_MODES, OUTGOING_MODES, UI_LANG_OPTIONS, UI_CONVAR }
-// 注意:UMM_SETTINGS / localizeUmmManifest 故意留在主文件 ——
-//   tests/umm_integration.test.js 从主文件源码的 @sync-begin/@sync-end 段直接提取对账,
 //   外置会破坏双向对账。
 LCT_I18N_STRINGS = {
   panelTitle: { zh: "Babel Tower 设置", en: "Babel Tower Settings" },
