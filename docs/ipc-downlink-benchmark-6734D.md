@@ -1,5 +1,8 @@
 # exp6734-D:Bridge → Panorama 下行吞吐基准(Downlink Capacity Benchmark)
 
+> **状态**:历史(实验记录) · **适用版本**:exp6734-D(2026-10-02) · **最后核对**:2026-11-01
+> **说明**:结论已进入 BTIPC v1 参数表([btipc-v1.md](btipc-v1.md) §9);数据保留,不再复跑。
+
 > 定位:**BTIPC v1 冻结前的第一产出**。帧大小、窗口、超时不拍脑袋,全部由本基准的实测数据决定。
 > 状态:探针已实现待实车(版本 `1.0.7-6726-exp6734D`)+ 桥端 `/probe_bit` 已加 `c=` 分组;分析器 `scripts/exp6734d_analyze.js` + 单测已过(43/44,唯一失败为会话前遗留 `quickchat_match.test.js`)。
 > 上游依据:`docs/ipc-checklist-6726.md` §7(exp6734-B,64 面板 × 20 轮 1280 样本)。

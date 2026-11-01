@@ -1,5 +1,9 @@
 # POC 任务书:无桥路线(纯 CEF + 托管页)
 
+> **状态**:已完成 · **适用版本**:POC(2026-11-01 真机) · **最后核对**:2026-11-01
+> **产出**:[../poc/RESULTS.md](../poc/RESULTS.md)(GO 有条件);部署决议见 [cef-cost-decision.md](cef-cost-decision.md)。
+> **说明**:任务书原文保留以便复跑;"已有结论"以当前文档为准,历史误判见 [CORRECTIONS.md](CORRECTIONS.md)。
+
 > 2026-10-31 立项。执行方式:**子对话独立执行**,本文档自包含。
 > 结论回填:[routes-comparison.md](routes-comparison.md) §3/§7.3。
 
@@ -19,17 +23,16 @@ Babel Tower 现状 = 本地 Node 桥(双进程 8791/8792)+ CA 链证书 + CEF �
 页面 JS 直调翻译 API(用户 Key 或 CORS 友好免 Key 端点),配置持久化在 CEF localStorage
 (QOL Lock 4.0.5 已验证的存储模式)。
 
-## 2. 已有结论(不要重评,直接引用)
+## 2. 开始时的先验(已被 POC 检验;结论以结果为准)
 
 来自 [routes-comparison.md](routes-comparison.md) §3 与 [btipc-https-v1.md](btipc-https-v1.md) §11(2026-10-30 评估):
 
 1. 10-29 三连击:证书强制执行——无桥**免疫**(公开证书);标题派发被砍——无桥**同样致命**
    (需 CitadelHTMLPanel + 面板绑定,btipc13 修复对远程页同样必要);JS 策略——托管页正常执行。
-2. **CORS 墙**:免费零 Key 的 Bing 依赖桥服务端代发,托管页直连预期被拒——本项目"零 Key
-   开箱即用"卖点在无桥路线下不成立(除非加 Cloudflare Worker 类中继,新增公共依赖)。
-3. **Key 硬门槛** + 托管单点(GitHub Pages 国内可达性)+ 诊断黑暗(无 bridge.log)——评估已列,
-   POC 用数据量化,不重复辩论。
-4. hash 协议(LCTQ fragment + title 回程)与 localStorage 均为**未在远程页/跨重启实测过**的假设。
+2. hash 协议(LCTQ fragment + title 回程)与 localStorage 均为**未在远程页/跨重启实测过**的假设。
+
+> 当时另外两条先验("CORS 墙导致免 Key 不可用""Key 是硬门槛")已被真机结果推翻/降级,
+> 见 [CORRECTIONS.md](CORRECTIONS.md) C2 / D1;正文不再保留。
 
 ## 3. 环境与可复用件
 

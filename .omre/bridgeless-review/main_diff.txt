@@ -1,0 +1,316 @@
+﻿diff --git a/mod/panorama/scripts/lingua_chat.js b/mod/panorama/scripts/lingua_chat.js
+index 9825d9b..a01ed27 100644
+--- a/mod/panorama/scripts/lingua_chat.js
++++ b/mod/panorama/scripts/lingua_chat.js
+@@ -22,7 +22,7 @@
+   // btipc13 (2026-10-30):10-29 鏂鍏ㄩ潰淇鈥斺€擟A 閾捐瘉涔?397 澶╁彾+鍚姩鍣ㄨ嚜鎰?銆?   //   妗ラ潰鏉?CitadelHTMLPanel銆侀潰鏉跨粦瀹氬畧鍗В鑰︺€佹帰閽堜簨浠堕┍鍔ㄧ粨绠椼€乭ash 蹇€氶亾
+   //   鎺ョ嚎(hashBase 鎹曡幏/SetURL/job.id/d 瑙ｇ爜)+ 椤甸潰 lastH/鍒濆 fragment 鑷剤銆?-  const VERSION = "1.2.5-6726-btipc14"; // btipc12 (2026-10-28):https 鎺㈤拡鐙珛妲?鍒ゆ鍚庤嚜鍔ㄩ噸鎺?quick 鍒ゅ畾鏀剁揣(鏂囨湰纭牎楠?;outgoing 闃熷垪楗挎鍏滃簳;BTIPC 浼犺緭灞傛媶鍑虹嫭绔嬫枃浠?// 1.2.2 (2026-10-21) 鍐呭:鈶?閰嶇疆鍚屾璧?*宸垎**(鍙紶澧炲垹鏀?涓嶄紶鍏ㄩ噺):澶嶇敤
++  const VERSION = "0.1.0-ce"; // community bridgeless edition (pure CEF + hosted page)
+   //   gamenames/quickchat 鐨勪袱娈靛紡(鎻℃墜鎶ユ湰鍦版寚绾?鈫?same 鎴栧彧浼犲彉鏇村瓧娈?;妗ヤ晶淇濈暀鏈€杩?16 鐗堥厤缃巻鍙插綋宸垎
+   //   鍩虹嚎(鎸夊鎴风鎸囩汗鏌?銆傛參閫氶亾瀹炴祴:娌″彉 = 1 甯?鈮?.65s銆佹敼涓€涓瓧娈?= 120B 鈮?2 甯?鈮?.8s(鏃ц矾鏄叏閲?   //   392B = 40 甯?鈮?6s,鍐嶅姞 20s 杞)銆傗啋 鏋勫缓鏍?btipc11(BTIP小 璇锋眰璇箟鍙樹簡,涓?1.2.1 鐨?btipc10 绾垮尯鍒?
+@@ -125,6 +125,11 @@
+   // 缁濅笉鎷挎帀 BTIPC(璇佷功鏈俊浠?Steam 娌￠噸鍚殑鐢ㄦ埛閭ｆ潯閫氶亾蹇呯劧鏄鐨?蹇呴』闆舵懇鎿︾暀鍦?BTIPC):
+   //   澶辫触璺緞鍙湁涓€鏉?鈥斺€?鍘熸牱鎶?job 浜ゅ洖 BTIPC 閲嶅仛,涓?*涓嶆秷鑰?job.attempts**(涓嶆槸缈昏瘧澶辫触)銆?   const HTTPS_PANEL_ENABLED = true; // 鎬诲紑鍏?鐜板満鎺掗殰鏃剁疆 false 鍗冲埢鍏ㄩ噺閫€鍥?BTIPC
++  // COMMUNITY 0.1.0:鏃犳ˉ褰㈡€佲€斺€擝TIPC 灞備唬鐮佷繚鐣欎絾涓嶆縺娲?0.2 prune);
++  // 缈昏瘧璧?CEF 闈㈡澘鐩磋浇鎵樼椤?GitHub Pages,鍏紑璇佷功,闆舵湰鍦拌繘绋?銆?+  const BTIPC_ENABLED = false;
++  // 鎵樼椤?Pages):hash 閫氶亾 base 涓庤缃潰鏉垮潎鎸囧悜瀹?POC 鐪熸満宸查獙璇?瑙?poc/RESULTS.md)銆?+  const PAGE_URL = "https://c1375rick.github.io/babeltower-community-pages/";
+   const HTTPS_PANEL_HOST = "localhost"; // 璇佷功 SAN 鍚?DNS:localhost 涓?IP:127.0.0.1
+   const HTTPS_PANEL_PORT = 8792; // 涓?core/bridge_https.js 鐨勯粯璁ょ鍙ｄ竴鑷?   const HTTPS_PANEL_PROBE_SECONDS = 6.0; // 鎺㈤拡绐楀彛:nav 鍚庣瓑 title 鍙樺搷搴旂殑鏈€闀挎椂闂?鍚竴娆?retryNavOnce)
+@@ -907,6 +912,105 @@
+   }
+ 
+   // trOpenSummary:/tr 鎷夌綉椤垫椂闄勫湪 UI_OPEN 鍚庨潰鐨勭姸鎬佹憳瑕?鍙繘鏃ュ織,涓嶅弬涓庡垽瀹?缁濅笉鍚?Key銆?+  // ============================================================
++  // COMMUNITY 0.1.0:鏃犳ˉ閰嶇疆鍚屾 + 娓告垙鍐呭彲瑙佽缃潰鏉?+ 閰嶇疆鐮佸鍏?+  // 鏉冨▉ = 鎵樼椤?localStorage(璺ㄦ父鎴忛噸鍚寔涔?POC 鐪熸満宸查獙璇?;
++  // 娓告垙渚?State.cfg/convar 淇濇寔鍙闀滃儚,applyBridgeConfig 鏈哄埗鍘熸牱澶嶇敤銆?+  // ============================================================
++  function hashCfgSync() {
++    // 鎷夊彇椤甸潰閰嶇疆:hash {op:"cfg"} 鈫?椤甸潰鍥?{cfg:{...鎵佸钩}} 鈫?鍖呮垚 {ui:{...}} 鍠?applyBridgeConfig
++    if (!State.hashReady || !State.hashBase) return;
++    const jobId = "cfg" + (++State.requestSeq).toString(36);
++    const payload = { q: "cfg_" + nowMs(), id: jobId, op: "cfg", d: {} };
++    setPending(jobId, function (payload2) {
++      try {
++        if (!payload2 || !payload2.ok || !payload2.cfg) { log("page cfg: no cfg in response"); return; }
++        const mask = { ui: payload2.cfg };
++        applyBridgeConfig(mask, "page-cfg");
++      } catch (eC) { log("page cfg apply failed: " + expErr(eC)); }
++    }, 12000);
++    try {
++      const hp = ensurePanel();
++      if (isValid(hp) && typeof hp.SetURL === "function") {
++        hp.SetURL(State.hashBase + "#LCTQ:" + encodeURIComponent(JSON.stringify(payload)));
++      }
++    } catch (e) {}
++  }
++  function startPageCfgSync() {
++    if (State.pageCfgStarted) return;
++    State.pageCfgStarted = true;
++    hashCfgSync();
++    try {
++      $.Schedule(30.0, function pageCfgLoop() {
++        hashCfgSync();
++        $.Schedule(30.0, pageCfgLoop);
++      });
++    } catch (e) {}
++  }
++  // 娓告垙鍐呭彲瑙佽缃潰鏉?鍔ㄦ€佸垱寤?CitadelHTMLPanel(鐙珛浜庨殣钘忕炕璇戦潰鏉?浜掍笉骞叉壈)
++  function showPagePanel() {
++    try {
++      let p = findChild(getRoot(), "LCTSettingsPage");
++      if (!isValid(p)) {
++        p = $.CreatePanel("CitadelHTMLPanel", getRoot(), "LCTSettingsPage");
++        p.style.width = "640px";
++        p.style.height = "520px";
++        p.style.horizontalAlignment = "center";
++        p.style.verticalAlignment = "center";
++      }
++      p.hittest = true;
++      p.acceptsfocus = true;
++      p.visible = true;
++      p.SetURL(PAGE_URL + "#settings");
++      try { if (typeof p.Activate === "function") p.Activate(); } catch (eA) {}
++      log("settings page opened in-game (click to interact; /tr again to close)");
++      return true;
++    } catch (e) {
++      log("settings panel failed: " + expErr(e) + " 鈥?娴忚鍣ㄦ墦寮€ " + PAGE_URL);
++      return false;
++    }
++  }
++  function hidePagePanel() {
++    try {
++      const p = findChild(getRoot(), "LCTSettingsPage");
++      if (isValid(p)) { p.visible = false; p.DeleteAsync(0); }
++      return true;
++    } catch (e) { return false; }
++  }
++  function togglePagePanel() {
++    const p = findChild(getRoot(), "LCTSettingsPage");
++    if (isValid(p) && p.visible) { hidePagePanel(); return; }
++    showPagePanel();
++  }
++  function importCfgCode(code) {
++    // 閰嶇疆鐮佸厹搴?娴忚鍣?Pages銆屽鍑洪厤缃爜銆嶁啋 /tr code <base64> 鈫?缁?hash 璁╅〉闈㈠啓鑷繁鐨?localStorage
++    if (!code) {
++      log("/tr code: empty");
++      setStatus("/tr code: 閰嶇疆鐮佷负绌?);
++      return;
++    }
++    const jobId = "cfgc" + (++State.requestSeq).toString(36);
++    const payload = { q: "cfgc_" + nowMs(), id: jobId, op: "cfgcode", d: { code: String(code) } };
++    setPending(jobId, function (payload2) {
++      try {
++        if (payload2 && payload2.ok) {
++          log("cfg code imported: keys=" + JSON.stringify(payload2.keys || []));
++          setStatus("閰嶇疆宸插鍏? " + JSON.stringify(payload2.keys || []));
++          hashCfgSync(); // 绔嬪嵆鎷夋柊閰嶇疆
++        } else {
++          log("cfg code import failed: " + ((payload2 && payload2.error) || "?"));
++          setStatus("/tr code: 瀵煎叆澶辫触(妫€鏌ラ厤缃爜)");
++        }
++      } catch (eC) { log("cfg code settle threw: " + expErr(eC)); }
++    }, 12000);
++    try {
++      const hp = ensurePanel();
++      if (isValid(hp) && typeof hp.SetURL === "function") {
++        hp.SetURL(State.hashBase + "#LCTQ:" + encodeURIComponent(JSON.stringify(payload)));
++      }
++    } catch (e) {}
++  }
++
+   function trOpenSummary() {
+     const c = State.cfg || {};
+     const u = c.ui || {};
+@@ -2132,6 +2236,10 @@ function injectTranslation(row, sig, text, fragment) {
+   // 浜ゆ帴鍓嶅繀椤诲厛鎾ゆ帀闈㈡澘璺緞鎸傜殑鍑虹珯瓒呮椂鍙ユ焺,鍚﹀垯瀹冪◢鍚庤Е鍙戜細浜屾 job.done/finishJob,
+   // 鎶?MAX_ACTIVE_REQUESTS=1 鐨勬Ы浣嶈秴鍙?杩欐鏄?0.1.3 閭ｄ釜"鍙戜腑鏂囧崱姝?浜嬫晠鐨勫悓娆炬満鍒?銆?   function demoteToBtipc(job) {
++    if (!BTIPC_ENABLED) {
++      log("demote: BTIPC off (community bridgeless) 鈥?hash failed, job settles to original text");
++      return false;
++    }
+     try {
+       if (job._timeout) { cancelSched(job._timeout); job._timeout = null; }
+       // 宸茶秴鏃剁殑鍑虹珯 job 涓嶅啀浜ゆ帴:鐢ㄦ埛宸茬粡绛夊埌浜嗗厹搴曟椂鍒?鍐嶆嫋 3~27s 鏄噣鎹熷け銆?@@ -2229,7 +2337,7 @@ function injectTranslation(row, sig, text, fragment) {
+       try { panel.RemoveClass("LCTBridgePanel"); panel.AddClass("LCTBridgePanelActive"); } catch (e) {}
+       log("diag-activate: panel made visible/active before probe");
+     }
+-    const probeUrl = "https://" + HTTPS_PANEL_HOST + ":" + HTTPS_PANEL_PORT +
++    const probeUrl = PAGE_URL + "?boot=1&lang=" + gameUiLang(); // COMMUNITY: 鎺㈤拡鍗抽〉闈㈠姞杞?title 鍚?lct-alive 鍗?ALIVE
+       "/bridge?op=health&id=probe&boot=1&lang=" + gameUiLang();
+     // 2026-10-30 妯℃嫙鐜棣栨祴:hash 閫氶亾 base 鍦ㄦ淳鍙戝鎹曡幏鈥斺€攕ettleProbe 璇?     // State.pending.navUrl 鏃?pending 宸茬疆 null,鍘熸崟鑾疯矾寰勬案杩滄嬁绌轰覆銆?@@ -2238,14 +2346,6 @@ function injectTranslation(row, sig, text, fragment) {
+     // IMG-HIT 鍒版ˉ = CEF 缃戠粶娲?闂鍦?https/璇佷功/title);涓嶆潵 = CEF 瀵瑰鍔犺浇鍏ㄦ(寮曟搸绾?銆?     // 妗ユ棩蹇?IMG-HIT id=p<seq> 鍗充负璇佹嵁銆?     try {
+-      const imgProbe = "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT + "/test.png?id=p" +
+-        (State.imgProbeCount = (State.imgProbeCount || 0) + 1);
+-      let imgPanel = null;
+-      try { imgPanel = findChild(getRoot(), "LCTImgProbe"); } catch (eI0) {}
+-      if (!isValid(imgPanel)) { try { imgPanel = $.CreatePanel("Image", getRoot(), "LCTImgProbe"); } catch (eI1) {} }
+-      if (isValid(imgPanel) && typeof imgPanel.SetImage === "function") {
+-        try { imgPanel.SetImage(imgProbe); } catch (eI3) {}
+-      }
+     } catch (eI) {}
+     try {
+       panel.SetURL(probeUrl);
+@@ -3608,7 +3708,7 @@ function injectTranslation(row, sig, text, fragment) {
+     // btipc04:BTIPC 鍋ュ悍鏂伴矞鏈?45s 鍐呮湁鎴愬姛)鐢?REQ 鍥炲０(15s/娆?鏇夸唬蹇呮鐨?nav health;
+     // 6726(DIAG-6726)鍚?SetURL 瀵艰埅鍏ㄧ伃 鈥斺€?nav 鍙湪 BTIPC 涔熷搼鎺?>45s 鏃犳垚鍔?鏃跺厹搴曞垽绾?
+     // 鍚﹀垯姣?5s 鎵撲竴娆″繀姝荤殑 nav 鍙細鍒峰睆 + 鍫典覆琛岄槦鍒椼€傚洖澹拌蛋 REQ(translate=false),妗ョ鐜版垚銆?-    if (BTIPC) {
++    if (BTIPC_ENABLED && BTIPC) {
+       const nowH = nowMs();
+       const freshH = State.btipcLastOk && nowH - State.btipcLastOk <= 45000;
+       if (!BTIPC.busy()) {
+@@ -4108,15 +4208,14 @@ function injectTranslation(row, sig, text, fragment) {
+ 
+     if (!trimmed) return;
+ 
+-    // /tr:璁剧疆宸茬粡鎼埌妗岄潰娴忚鍣?2026-10-19)銆備袱鏉¤矾褰诲簳鍒嗗紑(鐢ㄦ埛 2026-10-19 婢勬竻):
+-    //   /tr        閫氱煡妗ョ敤绯荤粺榛樿娴忚鍣ㄦ墦寮€ http://127.0.0.1:<port>/ui(闄勪竴琛岀姸鎬佹憳瑕佽繘鏃ュ織),
+-    //              涓嶅紑鍙戦€侀摼璺?-    //   /tr ui     鍚屼笂(绛変环鍒悕)
+-    //   /tr panel  鏃ч潰鏉垮凡绉婚櫎(2026-10-31):鍒悕鍒扮綉椤佃缃?涓?/tr 绛変环)
++    // COMMUNITY 0.1.0:鏃犳ˉ璁剧疆鍏ュ彛銆備富璺緞=娓告垙鍐呭彲瑙佽缃潰鏉?鍔ㄦ€?CitadelHTMLPanel,
++    // 浜や簰寰呯湡鏈洪獙璇?;鍏滃簳=/tr code <base64>(娴忚鍣?Pages銆屽鍑洪厤缃爜銆嶇矘璐村鍏?銆?     if (trimmed === "/tr" || trimmed.indexOf("/tr ") === 0) {
+       clearInput();
+       const trArg = trimmed.slice(3).trim();
+-      log("UI_OPEN " + trOpenSummary()); // 鏃ч潰鏉垮凡绉婚櫎:panel 鍒悕鍒扮綉椤?+      if (trArg.indexOf("code") === 0) { importCfgCode(trArg.slice(4).trim()); return; }
++      togglePagePanel();
++      log("UI_OPEN " + trOpenSummary()); // 鏃犳ˉ:璁剧疆闈㈡澘鍦ㄦ父鎴忓唴;鎴栨祻瑙堝櫒鎵撳紑 PAGE_URL 鐨勫€?       return;
+     }
+ 
+@@ -4151,31 +4250,6 @@ function injectTranslation(row, sig, text, fragment) {
+ 
+     // !lcttest 娴嬭瘯鍛戒护:鍚?HUD 椤舵爮鑱婂ぉ娉ㄥ叆涓€鏉¤嫳鏂囨秷鎭?涓嶇湡瀹炲彂閫?
+     // 鐢ㄩ€?鏃犻槦鍙?鏃?bot 鏃堕獙璇?HUD 鎵弿+缈昏瘧閫氳矾;杩涜缁冨満鍗冲彲娴?-    // /bt6736 [n] [text]: BTIPC v1 鍥炲０ conformance(搂12.4),涓嶅彂閫?榛樿 1脳"Hello BTIPC",鏁板瓧=杩炲彂娆℃暟
+-    if (trimmed === "/bt6736" || trimmed.indexOf("/bt6736 ") === 0) {
+-      const echoArg = trimmed.slice(8);
+-      clearInput();
+-      runBtipcEcho(echoArg);
+-      return;
+-    }
+-
+-    // /bt6737 [text]: BTIPC v1 缈昏瘧閾?smoke(鈶?鈥斺€?TRQ 鈫?BUSY 鈫?璇戞枃;涓嶅彂閫?-    if (trimmed === "/bt6737" || trimmed.indexOf("/bt6737 ") === 0) {
+-      const trArg = trimmed.slice(8).trim();
+-      clearInput();
+-      runBtipcTranslate(trArg || "hello can you push mid");
+-      return;
+-    }
+-
+-    // /bt6738 [stop]: 涓夌偣銆屾鍦ㄥ彂閫併€嶅箍鎾寚绀哄櫒 + 鑱婂ぉ琛岀粨鏋勫彇璇?9/30 鏈哄埗),涓嶅彂閫?-    //   鏃犲弬 = toggle;stop = 鏄庣‘鍋滄銆傛棩蹇楀墠缂€ exp6738:
+-    if (trimmed === "/bt6738" || trimmed.indexOf("/bt6738 ") === 0) {
+-      const p6738Arg = trimmed.slice(7).trim();
+-      clearInput();
+-      expCall("runExp6738", p6738Arg);
+-      return;
+-    }
+-
+     if (trimmed === "!lcttest" || trimmed.indexOf("!lcttest ") === 0) {
+       const testText = trimmed.length > 9 ? trimmed.slice(9).trim() : "hello can you push mid";
+       injectHudTestMessage(testText);
+@@ -4409,7 +4483,7 @@ function injectTranslation(row, sig, text, fragment) {
+   function startCfgSync() {
+     if (State.cfgSyncStarted) return;
+     State.cfgSyncStarted = true;
+-    syncBridgeConfig();
++    startPageCfgSync(); // COMMUNITY: 閰嶇疆鏉冨▉ = 鎵樼椤?localStorage,缁?hash cfg get 鍚屾
+   }
+   function waitProbeForSync() {
+     if (State.cfgSyncStarted || State.cfgSynced) { State.cfgSyncStarted = true; return; }
+@@ -4826,7 +4900,7 @@ function injectTranslation(row, sig, text, fragment) {
+     try { $.Schedule(2.0, waitProbeForSync); } catch (eW) { startCfgSync(); }
+     // EXP6734-B/C/D/E: 鎵嬪姩瑙﹀彂(杩涘灞€鍚庤亰澶╄緭鍏?/bt6734b | /bt6734c | /bt6734d | /bt6734e);6734-A 宸查噰瀹屼笉鑷姩璺?     // DMM 鐢ㄦ埛寮曞:鍚姩鍚?12s 妗ヤ粛鏈湪绾?=> 闈㈡澘鏄剧ず鏈繍琛?+ 瀹夎鎸囧紩
+-    $.Schedule(12.0, checkBridgeMissing);
++    // COMMUNITY: checkBridgeMissing 宸茬Щ闄?鏃犳ˉ褰㈡€?鏃犳ˉ缂哄け鎸囧紩姒傚康)
+     $.Schedule(SLOW_POLL_SECONDS, scanChatMessages);
+     // 妗ュ仴搴锋帰娴?姣?5 绉?涓庣炕璇戣姹傚叡鐢ㄤ覆琛岄槦鍒?閲忔瀬灏忎笉褰卞搷缈昏瘧)
+     $.Schedule(2.0, function healthLoop() {
+diff --git a/pages/index.html b/pages/index.html
+index 8090160..c87fcb7 100644
+--- a/pages/index.html
++++ b/pages/index.html
+@@ -26,6 +26,7 @@
+ 
+ <h2>璁剧疆(瀛樻湰鏈?localStorage,涓嶇粡浠讳綍鏈嶅姟鍣?</h2>
+ <div class="row">OpenAI 鍏煎 Key(鍙€夊寮?鐣欑┖鍒欏彧鐢ㄥ厤 Key 涓婃父): <input id="cfgKey" size="44" type="password" /> <button id="saveKey">淇濆瓨</button> <span id="keyState"></span></div>
++<div class="row"><button id="expCode">瀵煎嚭閰嶇疆鐮?绮樿创鍒版父鎴?/tr code)</button> <input id="codeOut" size="46" readonly placeholder="鐐瑰鍑虹敓鎴? /></div>
+ 
+ <h2>缈昏瘧娴嬭瘯</h2>
+ <div class="row">
+@@ -91,7 +92,7 @@
+     if (typeof navigator !== "undefined" && navigator) setText("ua", String(navigator.userAgent || ""));
+   } catch (e) {}
+ 
+-  var ALIVE = "BTC-ALIVE " + PAGE_VERSION + " " + new Date().toISOString();
++  var ALIVE = "lct-alive BTC-ALIVE " + PAGE_VERSION + " " + new Date().toISOString();
+   function setTitle(t) { try { document.title = String(t); } catch (e) {} }
+ 
+   // ---------- 鍥炵▼鍗忚:title = "LCT" + id + JSON(涓庢父鎴忎晶 hash 閫氶亾涓€鑷? ----------
+@@ -334,6 +335,18 @@
+         }
+         return;
+       }
++              if (op === "cfgcode") {
++          // 娓告垙渚?/tr code <base64> 瀵煎叆:base64(JSON{閿?鍊紏) 閫愰敭鍐?localStorage
++          var okAll2 = true, keys2 = [];
++          try {
++          var raw = atob(String(d.code || "").replace(/\s+/g, ""));
++          var obj = JSON.parse(decodeURIComponent(escape(raw)));
++          for (var k2 in obj) { if (setCfg(k2, obj[k2])) keys2.push(k2); else okAll2 = false; }
++          } catch (eCC) { okAll2 = false; }
++          renderHealth();
++          reply(id, { ok: okAll2, keys: keys2, error: okAll2 ? null : "parse_or_write_failed" });
++          return;
++        }
+       if (op === "store") {
+         var sv = "store_failed";
+         try { localStorage.setItem(String(d.k), String(d.v)); sv = "stored:" + String(d.v); } catch (e) { sv = "store_error:" + e.message; }
+@@ -354,19 +367,20 @@
+         return;
+       }
+       if (op === "translate") {
+-        // 鑷姩杞崲:d={text, from(auto|璇█鐮?, to};d.provider 浠嶅彲寮哄埗鎸囧畾(璇婃柇鐢?
+         var t0 = Date.now();
+-        var p;
++        var from = d.from || d.source || "auto";   // 涓荤嚎杞借嵎瀛楁:source
++        var to = d.to || d.targetLanguage || d.target || "zh-Hans"; // 涓荤嚎瀛楁:targetLanguage
++        var pr;
+         if (d.provider && PROVIDERS[d.provider]) {
+-          p = callProvider(d.provider, d.text || "", d.from || "auto", d.to || "zh-Hans", getCfg()).then(function (r) {
++          pr = callProvider(d.provider, d.text || "", from, to, getCfg()).then(function (r) {
+             if (r && r.ok) markOk(d.provider, r.ms || 0); else markFail(d.provider, (r && r.error) || "?");
+             renderHealth();
+             return r;
+           });
+         } else {
+-          p = translateAuto(d.text || "", d.from || "auto", d.to || "zh-Hans");
++          pr = translateAuto(d.text || "", from, to); // 鍏?Key 杞崲:bing-edge 鈫?mymemory 鈫?鐢ㄦ埛 Key
+         }
+-        p.then(function (r) { r.ms = Date.now() - t0; reply(id, r); });
++        pr.then(function (r) { r.ms = Date.now() - t0; reply(id, r); });
+         return;
+       }
+       reply(id, { ok: false, error: "unknown_op:" + op });
+@@ -389,7 +403,11 @@
+ 
+   // ---------- 椤甸潰鍚姩 ----------
+   setStatus(ALIVE);
+-  setTitle(ALIVE);
++  // 娓告垙渚у绾?lingua_chat.js):alive 鏍囬蹇呴』**涓ユ牸绛変簬** "lct-alive" 鈥斺€?+  // 浜嬩欢璺緞 `t === TITLE_ALIVE` 涓?pollTitle 鐨?`title === TITLE_ALIVE` 閮芥槸涓ユ牸姣旇緝,
++  // 甯﹀悗缂€(鏃堕棿鎴?鐗堟湰)鐨?ALIVE 姘歌繙settle涓嶄簡鎺㈤拡 鈫?閫氶亾琚垽姝?鈫?鏃犳ˉ褰㈡€佷笅绛変簬涓嶇炕璇戙€?+  // 甯︽椂闂存埑鐨勫舰寮忓彧鐢ㄤ簬椤甸潰鐘舵€佽(setStatus),涓嶈繘 title銆?+  setTitle("lct-alive");
+   log("boot lsOk=" + LS_OK + " bootCount=" + BOOT_COUNT);
+   renderHealth();
+ 
+@@ -434,6 +452,18 @@
+       log("ui translate -> " + (r.ok ? r.translation : r.error));
+     });
+   };
++  var expBtn = el("expCode");
++  if (expBtn) expBtn.onclick = function () {
++    try {
++      var cfg = getCfg();
++      var json = JSON.stringify(cfg);
++      var b64 = btoa(unescape(encodeURIComponent(json)));
++      var out = el("codeOut");
++      if (out) out.value = b64;
++      log("config code exported (" + b64.length + " chars)");
++    } catch (e) { log("export failed: " + e.message); }
++  };
++
+   var corsBtn = el("cors");
+   if (corsBtn) corsBtn.onclick = function () {
+     var names = Object.keys(ENDPOINTS), lines = [], i = 0;

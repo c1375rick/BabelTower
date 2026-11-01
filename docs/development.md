@@ -1,9 +1,14 @@
 # 开发文档
 
+> **状态**:现行 · **适用版本**:1.2.5 · **最后核对**:2026-11-01
+> **上游/证据**:本地端到端测试、实车日志(2026-10-15/16/30)、[compatibility.md](compatibility.md) 窗口快照
+> **一句话**:构建、冒烟测试、本地测试与开发约定;改代码前先看 §4.5(注释会随包分发)。
+
 ## 1. 当前状态与验证情况
 
-**发布状态**:`1.2.1 (2026-10-20)` 开发版(网页设置页 + 配置即时下发),本地构建已出包;
-版本号跨渠道共用、口径见 `ipc-checklist-6726.md` §16.7。上一版 `1.2.0 (2026-10-16)`。
+**发布状态**:`1.2.5 (2026-10-31)` 已发布(GitHub Release + GameBanana);1.2.4 用户必须更新
+(修 1.2.4 的 hash 通道回归,避免消息被静默丢弃)。版本号跨渠道共用、口径见
+`ipc-checklist-6726.md` §16.7。上一版 `1.2.4`。
 
 **本地桥(core/)**:零依赖 Node.js,已通过本地端到端测试
 (health / config 读写与打码回传 / translate 与 test 的真实 HTTP 链路;
@@ -25,9 +30,9 @@ Bing 免 Key 与 Microsoft 双服务商均已实测,真实译文验证通过)。
 | http 面板 `SetURL` 导航 | ⚠️ 判死冷却(10 分钟),仅作最后一级兜底 | `bridge nav failed: panel dead` 摘要 |
 | health / 快捷语音 / 名称保护同步 | ✅ 已迁出(经 BTIPC `get` 或 https,指纹一致时零传输) | `gamenames sync: fingerprint match` / `quickchat templates delta applied` |
 
-### 已确认的技术事实(通过 DLCT VPK 解编译验证,2026-08-03)
+### 面板机制:已确认事实与待复核项(DLCT 发行包验证,2026-08-03 / 复核 2026-10-15)
 
-> **2026-10-15 复核**:下列 8 条已用 DLCT 的**完整发行包**逐条实测,全部属实 ——
+> **2026-10-15 复核**:下列已确认项均已用 DLCT 的**完整发行包**逐条实测属实 ——
 > 实物在游戏安装根目录的 `DLCT\` 下(含 `bridge_server.js` /
 > `pak01_dir.vpk` / `LICENSE_NOTICE.md`,不是只有 vpk)。解包出
 > `panorama/scripts/deadlock_chat_translator.js`(54,576 B)。
@@ -36,9 +41,11 @@ Bing 免 Key 与 Microsoft 双服务商均已实测,真实译文验证通过)。
 > `docs/btipc-https-v1.md` §2),不在此列。完整技术对账见
 > `docs/btipc-https-v1.md` §2.6。
 
-1. **HTML 面板必须用 XML `<HTML id="..." />` 标签声明**
-   (运行时 `$.CreatePanel("HTML", ...)` 不会得到可用的 HTML 面板;
-   DLCT 声明为 `<HTML id="DlctBridge" class="DlctBridge" />`)
+1. **HTML 面板用 XML `<HTML id="..." />` 声明是已验证可用路径**
+   (DLCT 声明为 `<HTML id="DlctBridge" class="DlctBridge" />`)。
+   **运行时 `$.CreatePanel("HTML", ...)` 是否可用:待复核** —— DeadlockTranslate 0.7.0
+   声称运行时创建并跑通,但本项目未复现;在复核通过前,新增面板仍按 XML 声明写。
+   见 [CORRECTIONS.md](CORRECTIONS.md) P1。
 2. **加载方法:`panel.SetURL(url)`**(不是 BLoadUrl)—— http 面板直连在 6726 后失效,
    现仅作判死冷却后的最后一级兜底;https 面板通道见 §1 状态表
 3. **读回:`panel.title`**(页面把 `id+JSON` 写进 document.title,Panorama 轮询读取;
@@ -121,6 +128,12 @@ curl.exe http://127.0.0.1:8791/api/v1/health
 curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: application/json" -d "{\"text\":\"hello world\",\"targetLanguage\":\"zh-Hans\"}"
 curl.exe -X POST http://127.0.0.1:8791/api/v1/test -H "Content-Type: application/json" -d "{}"
 curl.exe http://127.0.0.1:8791/api/v1/config
+```
+
+**文档体检**(改完 `docs/` 必跑;零依赖):
+
+```powershell
+node scripts\check_docs.js
 ```
 
 ## 4.5 注释与署名约定(2026-10-15)

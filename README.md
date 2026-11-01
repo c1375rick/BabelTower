@@ -76,13 +76,21 @@ BabelTower/
 ├── scripts/uninstall_babeltower.ps1 卸载/还原:mod + 自启 + 桥 + 证书 + 状态目录,默认保守逐项确认
 ├── BabelTower-维护菜单.bat  维护总入口(先选语言再进菜单:安装/更新/卸载/诊断/自启开关,也支持带参数)
 ├── StartDeadlock.bat       手动启动:桥 + 游戏
-├── docs/                   架构与开发文档
+├── docs/                   架构与开发文档(入口:docs/README.md)
+│   ├── README.md             文档索引:读法 / 状态图例 / 冲突优先级 / 维护规则
+│   ├── CORRECTIONS.md        已撤回结论账本(查"这条还作不作数")
 │   ├── architecture.md       架构总览 + 三条通信通道 + 翻译服务商协议
 │   ├── btipc-v1.md           BTIPC 协议规格(冻结)
 │   ├── btipc-https-v1.md     https 面板通道(低延迟回程)+ 路线来源逐项对账
-│   ├── ipc-checklist-6726.md 6726 版本 IPC 排查记录与发版口径
-│   ├── compatibility.md      兼容性快照 + 冻结清单/解冻边界(2026-10-10 起)
-│   └── development.md        构建 / 冒烟测试 / 常见问题
+│   ├── routes-comparison.md  四路线总对照 + 分层模型 + 触发器
+│   ├── cef-cost-decision.md  部署形态与成本决策(默认 = 纯托管页)
+│   ├── development.md        构建 / 冒烟测试 / 常见问题
+│   ├── debugging.md          用户排障与 Bug 反馈
+│   ├── compatibility.md      兼容性快照 + 冻结清单/解冻边界
+│   ├── risk_register.md      维护控制基线 + 新风险项
+│   ├── ipc-checklist-6726.md 6726 版本 IPC 排查记录(历史)
+│   └── poc_bridgeless_cef.md 无桥 POC 任务书(已完成)
+├── poc/                    无桥 POC 产物与真机结果(见 poc/RESULTS.md)
 └── references/             研究参考材料(原版布局反编译等)
 ```
 

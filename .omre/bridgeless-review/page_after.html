@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Babel Tower Community</title>
+<style>
+  html,body{background:#101418;color:#dfe7ef;font:14px/1.5 Consolas,Menlo,monospace;margin:0;padding:16px}
+  h1{font-size:16px;margin:0 0 4px;color:#7fe08a}
+  h2{font-size:13px;margin:18px 0 6px;color:#8ab4f8}
+  #status{font-size:15px;color:#ffd479}
+  pre{background:#0a0d10;border:1px solid #24303c;padding:8px;max-height:300px;overflow:auto;white-space:pre-wrap}
+  input,select,button{font:inherit;background:#0a0d10;color:#dfe7ef;border:1px solid #24303c;padding:4px 6px}
+  button{cursor:pointer;background:#1b2733}
+  .row{margin:4px 0}
+  a{color:#8ab4f8}
+  .src{font-size:12px;color:#5c708a;margin-top:14px}
+</style>
+</head>
+<body>
+<h1>Babel Tower Community <span style="font-size:11px;color:#5c708a">page v0.1.0 / protocol LCTQ</span></h1>
+<div id="status">boot…</div>
+<div class="row">bootCount=<span id="bootCount">?</span> localStorage=<span id="lsOk">?</span> chain=<span id="chain">?</span></div>
+<div class="row">userAgent=<span id="ua"></span></div>
+
+<h2>设置(存本机 localStorage,不经任何服务器)</h2>
+<div class="row">OpenAI 兼容 Key(可选增强,留空则只用免 Key 上游): <input id="cfgKey" size="44" type="password" /> <button id="saveKey">保存</button> <span id="keyState"></span></div>
+<div class="row"><button id="expCode">导出配置码(粘贴到游戏 /tr code)</button> <input id="codeOut" size="46" readonly placeholder="点导出生成" /></div>
+
+<h2>翻译测试</h2>
+<div class="row">
+  <input id="tx" size="40" value="hello world" />
+  <select id="tgt"><option value="zh-Hans">zh-Hans</option><option value="en">en</option><option value="ja">ja</option><option value="ru">ru</option></select>
+  <button id="go">翻译(自动轮换)</button>
+</div>
+<div class="row" id="transOut">—</div>
+
+<h2>上游健康表</h2>
+<pre id="health">—</pre>
+
+<h2>POC 诊断(复跑用)</h2>
+<div class="row"><button id="cors">跑 CORS 矩阵</button></div>
+<pre id="corsOut">—</pre>
+
+<h2>日志</h2>
+<pre id="log"></pre>
+
+<div class="src">AGPL-3.0 · 源码:<a href="https://github.com/c1375rick/babeltower-community">游戏侧 babeltower-community</a> · <a href="https://github.com/c1375rick/babeltower-community-pages">本页面仓库</a> · 主线:<a href="https://github.com/c1375rick/BabelTower">BabelTower</a></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 工具(全部防御式:仿真沙箱里没有 DOM/navigator) ----------
+  function el(id) {
+    try {
+      if (typeof document !== "undefined" && document && typeof document.getElementById === "function") {
+        return document.getElementById(id);
+      }
+    } catch (e) {}
+    return null;
+  }
+  function setText(id, s) { var n = el(id); if (n) { try { n.textContent = String(s); } catch (e) {} } }
+
+  var PAGE_VERSION = "0.1.0";
+  var LOG = [];
+  function log(m) {
+    var line = new Date().toISOString() + " " + m;
+    LOG.push(line);
+    try { console.log("[BTC-PAGE] " + m); } catch (e) {}
+    setText("log", LOG.slice(-60).join("\n"));
+  }
+  function setStatus(s) { setText("status", s); }
+
+  // ---------- localStorage 探测 + boot 计数 ----------
+  var LS_OK = false, BOOT_COUNT = null;
+  try {
+    localStorage.setItem("__btc_probe__", "1");
+    localStorage.removeItem("__btc_probe__");
+    LS_OK = true;
+  } catch (e) { LS_OK = false; }
+  if (LS_OK) {
+    try {
+      BOOT_COUNT = parseInt(localStorage.getItem("btcBootCount") || "0", 10) + 1;
+      localStorage.setItem("btcBootCount", String(BOOT_COUNT));
+    } catch (e) { BOOT_COUNT = null; }
+  }
+  setText("bootCount", BOOT_COUNT === null ? "n/a" : BOOT_COUNT);
+  setText("lsOk", LS_OK ? "yes" : "no");
+  try {
+    if (typeof navigator !== "undefined" && navigator) setText("ua", String(navigator.userAgent || ""));
+  } catch (e) {}
+
+  var ALIVE = "lct-alive BTC-ALIVE " + PAGE_VERSION + " " + new Date().toISOString();
+  function setTitle(t) { try { document.title = String(t); } catch (e) {} }
+
+  // ---------- 回程协议:title = "LCT" + id + JSON(与游戏侧 hash 通道一致) ----------
+  function reply(id, obj) {
+    try { obj.pv = PAGE_VERSION; setTitle("LCT" + String(id) + JSON.stringify(obj)); } catch (e) {}
+  }
+
+  // ---------- fetch(带超时,防御式) ----------
+  function fetchWithTimeout(url, init, timeoutMs) {
+    var opts = init ? Object.assign({}, init) : {};
+    var ctl = null;
+    if (typeof AbortController === "function") {
+      ctl = new AbortController();
+      opts.signal = ctl.signal;
+    }
+    var timer = null;
+    if (ctl) {
+      timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, timeoutMs || 15000);
+    }
+    return new Promise(function (resolve) {
+      var done = false;
+      function fin(r) { if (done) return; done = true; if (timer) { try { clearTimeout(timer); } catch (e) {} } resolve(r); }
+      try {
+        fetch(url, opts).then(function (res) {
+          return res.text().then(function (body) {
+            fin({ ok: res.ok, status: res.status, type: res.type, body: body });
+          }, function () { fin({ ok: res.ok, status: res.status, type: res.type, body: "" }); });
+        }, function (err) {
+          fin({ ok: false, corsBlocked: true, error: String((err && err.message) || err), name: String((err && err.name) || "") });
+        });
+      } catch (e) {
+        fin({ ok: false, corsBlocked: true, error: String((e && e.message) || e) });
+      }
+      if (!ctl) {
+        setTimeout(function () { fin({ ok: false, error: "timeout_no_abort", timeout: true }); }, timeoutMs || 15000);
+      }
+    });
+  }
+
+  // ---------- 上游定义 ----------
+  // 免 Key 链(真机 CEF CORS 实测 2026-11-01:bing-edge 200+译文,mymemory 200;deepl-free/公共LT被拦)
+  var PROVIDERS = {
+    "bing-edge": {
+      keyless: true,
+      build: function (text, from, to) {
+        var u = "https://edge.microsoft.com/translate/translatetext?to=" + encodeURIComponent(to || "zh-Hans") + "&isEnterpriseClient=false";
+        return { url: u, init: { method: "POST", mode: "cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify([String(text)]) } };
+      },
+      parse: function (r) {
+        var j = null; try { j = JSON.parse(r.body); } catch (e) {}
+        var t = j && j[0] && j[0].translations && j[0].translations[0] && j[0].translations[0].text;
+        return t ? { ok: true, translation: String(t) } : { ok: false, error: "no_translation" };
+      }
+    },
+    "mymemory": {
+      keyless: true,
+      build: function (text, from, to) {
+        var src = from && from !== "auto" ? from : "en";
+        var dst = to === "zh-Hans" ? "zh-CN" : (to || "zh-CN");
+        var u = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(String(text)) + "&langpair=" + encodeURIComponent(src + "|" + dst);
+        return { url: u, init: { method: "GET", mode: "cors" } };
+      },
+      parse: function (r) {
+        var j = null; try { j = JSON.parse(r.body); } catch (e) {}
+        var t = j && j.responseData && j.responseData.translatedText;
+        return t ? { ok: true, translation: String(t) } : { ok: false, error: "HTTP " + r.status };
+      }
+    },
+    "openai": {
+      keyless: false, needs: "openaiKey",
+      build: function (text, from, to, cfg) {
+        var key = (cfg && cfg.openaiKey) || "";
+        return { url: "https://api.openai.com/v1/chat/completions",
+          init: { method: "POST", mode: "cors",
+            headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+            body: JSON.stringify({ model: "gpt-4o-mini",
+              messages: [{ role: "system", content: "You are a translator. Output only the translation." },
+                         { role: "user", content: "Translate to " + (to || "zh-Hans") + ": " + String(text) }] }) } };
+      },
+      parse: function (r) {
+        var j = null; try { j = JSON.parse(r.body); } catch (e) {}
+        var t = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+        return t ? { ok: true, translation: String(t).trim() } : { ok: false, error: "HTTP " + r.status + " " + String(r.body || "").slice(0, 120) };
+      }
+    }
+  };
+
+  // ---------- 健康表 + 限流退避 ----------
+  // 失败 → 指数冷却 min(60s * 2^n, 600s);成功 → 清零。429/5xx/CORS 拒/超时都算失败。
+  var HEALTH = {};
+  function healthOf(name) {
+    if (!HEALTH[name]) HEALTH[name] = { fails: 0, cooldownUntil: 0, lastError: null, lastMs: 0, ok: 0 };
+    return HEALTH[name];
+  }
+  function inCooldown(name) {
+    var h = healthOf(name);
+    return h.cooldownUntil && Date.now() < h.cooldownUntil;
+  }
+  function markFail(name, err) {
+    var h = healthOf(name);
+    h.fails += 1;
+    h.lastError = String(err || "").slice(0, 120);
+    h.cooldownUntil = Date.now() + Math.min(60000 * Math.pow(2, h.fails), 600000);
+  }
+  function markOk(name, ms) {
+    var h = healthOf(name);
+    h.fails = 0; h.cooldownUntil = 0; h.lastError = null; h.lastMs = ms; h.ok += 1;
+  }
+  function chainOrder(cfg) {
+    var order = ["bing-edge", "mymemory"];
+    if (cfg && cfg.openaiKey) order.push("openai"); // Key 是可选增强,排最后(兜底)
+    return order;
+  }
+  function renderHealth() {
+    var cfg = getCfg();
+    var lines = chainOrder(cfg).map(function (n) {
+      var h = healthOf(n);
+      var cd = inCooldown(n) ? (" cooldown=" + Math.round((h.cooldownUntil - Date.now()) / 1000) + "s") : "";
+      return pad(n, 12) + " ok=" + h.ok + " fails=" + h.fails + cd + (h.lastError ? " last=" + h.lastError : "");
+    });
+    setText("health", lines.join("\n"));
+    setText("chain", chainOrder(cfg).join(" → "));
+  }
+  function pad(s, n) { s = String(s); while (s.length < n) s += " "; return s; }
+
+  // ---------- 配置(localStorage) ----------
+  var CFG_KEYS = ["openaiKey", "targetLanguage", "uiLang", "outgoing", "outgoingTarget", "enabled", "displayMode", "force", "translateOwn"]; // 评审修复(sec-3):白名单=全配置键(原 3 键是配置流缺口)
+  function getCfg() {
+    var c = {};
+    if (LS_OK) {
+      for (var i = 0; i < CFG_KEYS.length; i++) {
+        try { var v = localStorage.getItem("btcCfg." + CFG_KEYS[i]); if (v) c[CFG_KEYS[i]] = v; } catch (e) {}
+      }
+    }
+    return c;
+  }
+  function setCfg(k, v) {
+    if (!LS_OK) return false;
+    try {
+      if (v === null || v === "") localStorage.removeItem("btcCfg." + k);
+      else localStorage.setItem("btcCfg." + k, String(v));
+      return true;
+    } catch (e) { return false; }
+  }
+  // 旧 POC 键迁移(一次性)
+  try {
+    if (LS_OK && !localStorage.getItem("btcCfg.openaiKey") && localStorage.getItem("pocKey")) {
+      localStorage.setItem("btcCfg.openaiKey", localStorage.getItem("pocKey"));
+    }
+  } catch (e) {}
+
+  // ---------- 翻译:多上游轮换 ----------
+  function callProvider(name, text, from, to, cfg) {
+    var p = PROVIDERS[name];
+    if (!p) return Promise.resolve({ ok: false, error: "unknown_provider:" + name });
+    var spec = p.build(text, from, to, cfg);
+    var t0 = Date.now();
+    return fetchWithTimeout(spec.url, spec.init, 15000).then(function (r) {
+      var ms = Date.now() - t0;
+      if (r.corsBlocked) return { ok: false, error: "CORS/" + (r.error || "blocked") };
+      if (r.status === 429 || r.status >= 500) return { ok: false, error: "HTTP " + r.status, retryable: true };
+      if (r.status !== 200) return { ok: false, error: "HTTP " + r.status + " " + String(r.body || "").slice(0, 100) };
+      var out = p.parse(r);
+      out.ms = ms;
+      return out;
+    });
+  }
+
+  function translateAuto(text, from, to) {
+    var cfg = getCfg();
+    var order = chainOrder(cfg).filter(function (n) { return !(PROVIDERS[n].needs && !(cfg && cfg[PROVIDERS[n].needs])); });
+    var tried = [], lastErr = null, i = 0;
+    function next() {
+      if (i >= order.length) {
+        return Promise.resolve({ ok: false, error: "all_upstreams_failed: " + tried.map(function (t) { return t.name + ":" + (t.error || "?").slice(0, 40); }).join(" | "), tried: tried });
+      }
+      var name = order[i++];
+      if (inCooldown(name)) { tried.push({ name: name, error: "cooldown" }); return next(); }
+      return callProvider(name, text, from, to, cfg).then(function (r) {
+        if (r && r.ok) { markOk(name, r.ms || 0); renderHealth(); r.provider = name; r.tried = tried; return r; }
+        var err = (r && r.error) || "unknown";
+        markFail(name, err);
+        tried.push({ name: name, error: err });
+        renderHealth();
+        return next();
+      });
+    }
+    renderHealth();
+    return next();
+  }
+
+  // ---------- POC 诊断端点(复跑用,保留) ----------
+  var ENDPOINTS = {
+    "bing-edge": { url: "https://edge.microsoft.com/translate/translatetext?to=zh-Hans&isEnterpriseClient=false", method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(["hello world"]) },
+    "openai": { url: "https://api.openai.com/v1/chat/completions", method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer no-key-poc" }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: "translate to Chinese: hello" }] }) },
+    "deepl-free": { url: "https://api-free.deepl.com/v2/translate", method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "text=hello&target_lang=ZH" },
+    "google-v2": { url: "https://translation.googleapis.com/language/translate/v2?key=no-key-poc&q=hello&target=zh-CN", method: "GET" },
+    "mymemory": { url: "https://api.mymemory.translated.net/get?q=hello%20world&langpair=en|zh-CN", method: "GET" },
+    "libretranslate-com": { url: "https://libretranslate.com/translate", method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q: "hello world", source: "en", target: "zh", format: "text" }) },
+    "libretranslate-terraprint": { url: "https://translate.terraprint.co/translate", method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q: "hello world", source: "en", target: "zh", format: "text" }) }
+  };
+  function corsProbe(name) {
+    var e = ENDPOINTS[name];
+    var init = { method: e.method, mode: "cors", credentials: "omit" };
+    if (e.headers) init.headers = e.headers;
+    if (e.body != null && e.method !== "GET") init.body = e.body;
+    var t0 = Date.now();
+    return fetchWithTimeout(e.url, init, 15000).then(function (r) {
+      r.ms = Date.now() - t0;
+      r.endpoint = name;
+      return r;
+    });
+  }
+
+  // ---------- hash 上行命令通道(#LCTQ: + encodeURIComponent(JSON)) ----------
+  var hashSeq = 0, lastHash = null;
+  function onHash(msg) {
+    var d = (msg && msg.d) || {};
+    var id = msg && msg.id;
+    var op = String((msg && msg.op) || "");
+    log("cmd " + op);
+    try {
+      if (op === "echo") { reply(id, { ok: true, echo: d.text, seq: ++hashSeq, at: Date.now(), alive: ALIVE }); return; }
+      if (op === "alive") { reply(id, { ok: true, alive: ALIVE, pageVersion: PAGE_VERSION, bootCount: BOOT_COUNT, lsOk: LS_OK }); return; }
+      if (op === "status") {
+        reply(id, { ok: true, pageVersion: PAGE_VERSION, bootCount: BOOT_COUNT, lsOk: LS_OK,
+          health: chainOrder(getCfg()).map(function (n) { var h = healthOf(n); return { name: n, ok: h.ok, fails: h.fails, cooldown: inCooldown(n) }; }) });
+        return;
+      }
+      if (op === "cfg") {
+        if (d.set) {
+          var keys = Object.keys(d.set), okAll = true;
+          for (var i = 0; i < keys.length; i++) { if (!setCfg(keys[i], d.set[keys[i]])) okAll = false; }
+          renderHealth();
+          reply(id, { ok: okAll, keys: keys });
+        } else {
+          var out = getCfg();
+          if (out.openaiKey) out.openaiKey = "***set***"; // 不回传明文 Key
+          reply(id, { ok: true, cfg: out });
+        }
+        return;
+      }
+              if (op === "cfgcode") {
+          // 游戏侧 /tr code <base64> 导入:base64(JSON{键:值}) 逐键写 localStorage
+          var okAll2 = true, keys2 = [];
+          try {
+          var raw = atob(String(d.code || "").replace(/\s+/g, ""));
+          var obj = JSON.parse(decodeURIComponent(escape(raw)));
+          for (var k2 in obj) {
+            if (CFG_KEYS.indexOf(k2) === -1 || !Object.prototype.hasOwnProperty.call(obj, k2)) continue; // 评审修复(sec-3):白名单+自有属性
+            if (setCfg(k2, obj[k2])) keys2.push(k2); else okAll2 = false;
+          }
+          } catch (eCC) { okAll2 = false; }
+          renderHealth();
+          reply(id, { ok: okAll2, keys: keys2, error: okAll2 ? null : "parse_or_write_failed" });
+          return;
+        }
+      if (op === "store") {
+        var sv = "store_failed";
+        try { localStorage.setItem(String(d.k), String(d.v)); sv = "stored:" + String(d.v); } catch (e) { sv = "store_error:" + e.message; }
+        reply(id, { ok: sv.indexOf("stored") === 0, result: sv, lsOk: LS_OK });
+        return;
+      }
+      if (op === "load") {
+        var lv = null, le = null;
+        try { lv = localStorage.getItem(String(d.k)); } catch (e) { le = e.message; }
+        reply(id, { ok: le === null, value: lv, bootCount: BOOT_COUNT, lsOk: LS_OK, error: le });
+        return;
+      }
+      if (op === "cors") {
+        corsProbe(d.endpoint).then(function (r) {
+          reply(id, { ok: !r.corsBlocked, corsBlocked: !!r.corsBlocked, status: r.status || 0,
+            error: r.error || null, ms: r.ms || 0, body: String(r.body || "").slice(0, 300) });
+        });
+        return;
+      }
+      if (op === "translate") {
+        var t0 = Date.now();
+        var from = d.from || d.source || "auto";   // 主线载荷字段:source
+        var to = d.to || d.targetLanguage || d.target || "zh-Hans"; // 主线字段:targetLanguage
+        var pr;
+        if (d.provider && PROVIDERS[d.provider]) {
+          pr = callProvider(d.provider, d.text || "", from, to, getCfg()).then(function (r) {
+            if (r && r.ok) markOk(d.provider, r.ms || 0); else markFail(d.provider, (r && r.error) || "?");
+            renderHealth();
+            return r;
+          });
+        } else {
+          pr = translateAuto(d.text || "", from, to); // 免 Key 轮换:bing-edge → mymemory → 用户 Key
+        }
+        pr.then(function (r) { r.ms = Date.now() - t0; reply(id, r); });
+        return;
+      }
+      reply(id, { ok: false, error: "unknown_op:" + op });
+    } catch (e) {
+      reply(id, { ok: false, error: "handler_threw:" + (e && e.message) });
+    }
+  }
+
+  function handleFragment(rawHash) {
+    var h = String(rawHash || "");
+    if (h.charAt(0) === "#") h = h.slice(1);
+    if (h.indexOf("LCTQ:") !== 0) return;
+    var msg = null;
+    try { msg = JSON.parse(decodeURIComponent(h.slice(5))); } catch (e) { log("fragment parse error: " + e.message); return; }
+    if (!msg || !msg.q) return;
+    if (msg.q === lastHash) return; // 同 q 去重(与游戏侧一致)
+    lastHash = msg.q;
+    onHash(msg);
+  }
+
+  // ---------- 页面启动 ----------
+  setStatus(ALIVE);
+  // 游戏侧契约(lingua_chat.js):alive 标题必须**严格等于** "lct-alive" ——
+  // 事件路径 `t === TITLE_ALIVE` 与 pollTitle 的 `title === TITLE_ALIVE` 都是严格比较,
+  // 带后缀(时间戳/版本)的 ALIVE 永远settle不了探针 → 通道被判死 → 无桥形态下等于不翻译。
+  // 带时间戳的形式只用于页面状态行(setStatus),不进 title。
+  setTitle("lct-alive");
+  log("boot lsOk=" + LS_OK + " bootCount=" + BOOT_COUNT);
+  renderHealth();
+
+  try {
+    if (typeof window !== "undefined" && window && typeof window.addEventListener === "function") {
+      window.addEventListener("hashchange", function () { handleFragment(location.hash); });
+    }
+  } catch (e) {}
+  try { handleFragment(location.hash); } catch (e) {}
+
+  // ---------- 导出(供仿真/调试) ----------
+  var API = {
+    alive: ALIVE, pageVersion: PAGE_VERSION, log: log, ENDPOINTS: ENDPOINTS, corsProbe: corsProbe,
+    translateAuto: translateAuto, handleFragment: handleFragment,
+    getCfg: getCfg, setCfg: setCfg, health: function () { return JSON.parse(JSON.stringify(HEALTH)); }
+  };
+  try { globalThis.BTC_PAGE = API; } catch (e) {}
+  try { window.BTC_PAGE = API; } catch (e) {}
+
+  // ---------- UI 接线 ----------
+  var keyInput = el("cfgKey");
+  if (keyInput) {
+    var cur = getCfg();
+    keyInput.value = cur.openaiKey || "";
+    setText("keyState", cur.openaiKey ? "(已设置)" : "(未设置,免 Key 模式)");
+  }
+  var saveBtn = el("saveKey");
+  if (saveBtn) saveBtn.onclick = function () {
+    var v = (keyInput && keyInput.value) || "";
+    setCfg("openaiKey", v.trim());
+    setText("keyState", v.trim() ? "(已设置)" : "(未设置,免 Key 模式)");
+    renderHealth();
+    log("cfg openaiKey " + (v.trim() ? "set" : "cleared"));
+  };
+  var goBtn = el("go");
+  if (goBtn) goBtn.onclick = function () {
+    var txt = (el("tx") && el("tx").value) || "hello world";
+    var tgt = (el("tgt") && el("tgt").value) || "zh-Hans";
+    setText("transOut", "…");
+    translateAuto(txt, "auto", tgt).then(function (r) {
+      setText("transOut", r.ok ? ("[" + r.provider + " " + r.ms + "ms] " + r.translation) : ("FAILED: " + r.error));
+      log("ui translate -> " + (r.ok ? r.translation : r.error));
+    });
+  };
+  var expBtn = el("expCode");
+  if (expBtn) expBtn.onclick = function () {
+    try {
+      var cfg = getCfg();
+      delete cfg.openaiKey; // 评审修复(sec-1):Key 永不进配置码(聊天框广播风险),在页面 UI 单独填写
+      var json = JSON.stringify(cfg);
+      var b64 = btoa(unescape(encodeURIComponent(json)));
+      var out = el("codeOut");
+      if (out) out.value = b64;
+      log("config code exported (" + b64.length + " chars)");
+    } catch (e) { log("export failed: " + e.message); }
+  };
+
+  var corsBtn = el("cors");
+  if (corsBtn) corsBtn.onclick = function () {
+    var names = Object.keys(ENDPOINTS), lines = [], i = 0;
+    setText("corsOut", "running…");
+    (function next() {
+      if (i >= names.length) { setText("corsOut", lines.join("\n")); return; }
+      corsProbe(names[i++]).then(function (r) {
+        var verdict = r.corsBlocked ? "BLOCKED" : ("HTTP " + r.status + (r.ok ? " OK" : ""));
+        lines.push(pad(r.endpoint, 26) + pad(verdict, 30) + r.ms + "ms");
+        setText("corsOut", lines.join("\n"));
+        next();
+      });
+    })();
+  };
+})();
+</script>
+</body>
+</html>

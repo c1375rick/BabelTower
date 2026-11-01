@@ -1,5 +1,10 @@
 # https 面板通道 v1(2026-10-15)
 
+> **状态**:现行 · **适用版本**:1.2.5 · **最后核对**:2026-11-01
+> **上游/证据**:实车日志(2026-10-15/16/20/30)、`tests/https_panel_guard.test.js`、DLCT 发行包对账
+> **一句话**:通道 ① 的全部细节:拓扑、选路、排障、标题通道行为、配置差分与再评估。
+> 已撤回结论见 [CORRECTIONS.md](CORRECTIONS.md);部署形态决议见 [cef-cost-decision.md](cef-cost-decision.md)。
+
 BTIPC 位泵是**唯一零摩擦可用**的下行通道,也是本通道的兜底,`core/btipc/*` 冻结面一概不动。
 本文件描述**并行的**第二条下行:让游戏内的隐藏 HTML 面板加载一个 https 页面,由**页面在桥这一侧**
 取走整条翻译结果,一次写进 `document.title`,于是下行从位泵的
@@ -78,10 +83,15 @@ DLCT 的 `LICENSE_NOTICE.md` 中还列有它的上游参考:翻译流程设计�
 | 6726 版 | 面板 `SetURL` 对所有 http 一律失效 | 只测过 http,没测过 https |
 | 6739/6740 | http 与公网 https 一律失效 | **这两轮从未发出过 https 请求**:本地无监听、无证书,"全灭"的结论超前了(后查明本地 https 臂打到了没监听的端口) |
 | 6743 | 拦点是证书链 `error:-202`(`ERR_CERT_AUTHORITY_INVALID`) | — |
+| 2026-11-01 | (长期隐含前提)https 面板 = 只能加载本机页,公网页须另开方案 | `poc/RESULTS.md` 真机 S1–S5:公网 https 托管页 **2/2** 加载、同秒回 title、hash 回环 12/12;被引擎拦的是 **`http` scheme**,与主机是本地/远程无关 |
 
 **"全灭"里混着"打空",会把两类结论搅成一种** —— 这是那两轮白跑的原因,也是为什么
 `scripts\probe_https_server.js` 要求先确认当次真的在监听再采信结论。
 重开这条路的依据:先复现了可行先例,再独立定位拦点(§4.1)。
+
+**"必须装证书"不是 CEF 的门槛,而是"页面必须从本机同源加载"这个选择的门槛。**
+公网 CA 签发的页面零安装(引擎信任库本来就有);只有自签才要写 `CurrentUser\Root`
+并完全重启 Steam。这笔部署形态的成本账见 [cef-cost-decision.md](cef-cost-decision.md)。
 
 ### 2.5 零代码重叠的审计基线(对 DeadlockTranslate 0.6.19)
 

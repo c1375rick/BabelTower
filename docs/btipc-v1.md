@@ -1,5 +1,9 @@
 # BTIPC v1 Protocol Specification(冻结版 2026-10-02)
 
+> **状态**:冻结 · **适用版本**:协议 v1(2026-10-02 定稿) · **最后核对**:2026-11-01
+> **上游/证据**:`docs/ipc-downlink-benchmark-6734D.md`、`docs/ipc-multivalue-benchmark-6734E.md`、`docs/ipc-checklist-6726.md` §7–§8
+> **一句话**:BTIPC 的帧格式、状态机与冻结参数;改动需独立授权,只允许追加变更记录。
+
 > 状态:**冻结 + 已实现并实车验收**(规格即契约,实现须逐条对齐;改动需升版本)。
 > **落地**:随 `1.0.7 (2026-10-03)` 发布,承载出站翻译 / 入站聊天翻译 / 配置读写(`op=config`,`op=test`)。
 > 当前游戏版本已移除 `$.AsyncWebRequest`、6726 更新又废掉面板 `SetURL` 导航,

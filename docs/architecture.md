@@ -1,5 +1,9 @@
 # 架构文档
 
+> **状态**:现行 · **适用版本**:1.2.5 · **最后核对**:2026-11-01
+> **上游/证据**:实车日志(2026-10-15/30)、[btipc-https-v1.md](btipc-https-v1.md)、[btipc-v1.md](btipc-v1.md)
+> **一句话**:当前版本的进程拓扑、三条通信通道与桥端点;通道选型的长期决议见 [cef-cost-decision.md](cef-cost-decision.md)。
+
 ## 1. 总览
 
 ```text
@@ -93,11 +97,15 @@
 | --- | --- | --- | --- |
 | ① | **https 面板**(终结于 `core/bridge_https.js` 8792) | 出站翻译、入站聊天翻译、配置读写、测试、读数 | ✅ **优先**:探针**事件驱动秒级 ALIVE**;hash 快通道(常驻页 1 RTT,漂移自愈);标题回程经 `CitadelHTMLPanel` + 面板绑定复活。10-29 曾三连击全灭,教训与纯 CEF 评估见 [btipc-https-v1.md](btipc-https-v1.md) §11 |
 | ② | **BTIPC**(协议 [btipc-v1.md](btipc-v1.md),实现在 `core/btipc/`) | 同上全部(https 硬失败时原样交回,不扣重试;探针判死则全程走它) | ✅ **兜底**:`BTIPC TRQ w=.. op=config` + `boot: config synced from bridge`。上/下行机制(日志 tail + 128×Image 位信号)与 CEF 层隔离,10-29 全程存活——**不退役**(见 §11.1) |
-
-> 四路线(https / BTIPC / 纯 CEF 无桥 / OCR)的专门总对照见
-> [routes-comparison.md](routes-comparison.md)(2026-10-31,含分层模型与各路线触发器)。
 | ③ | http 面板 `SetURL` → `/bridge` + `document.title` 轮询 | BTIPC 恰好接不下(busy/too_long)时 | ⚠️ 判死冷却 10min,最后一级 |
 | ✕ | 直连 `$.AsyncWebRequest` → `/api/v1/*` | 无(仅留探测) | ❌ 游戏已移除该 API,调用即抛 `AsyncWebRequest has been removed.` |
+
+> 四路线(https / BTIPC / 纯 CEF 无桥 / OCR)的专门总对照见
+> [routes-comparison.md](routes-comparison.md)(2026-11-01 修订,含分层模型与各路线触发器)。
+>
+> **上表描述的是 1.2.5 的实现。** 2026-11-01 的部署决议把**默认形态**改为"③ 纯托管页
+> (无本机桥、无证书)",本机桥(①②)降为高级/离线模式;实现在后续版本落地前,本节仍以
+> 现有代码为准。取舍与触发器见 [cef-cost-decision.md](cef-cost-decision.md)。
 
 - **① 的上行硬依赖 `-condebug`**:游戏→桥只能读 `game/citadel/console.log`(桥
   `startGameLogTail()` 每秒尾随),而该文件**只在游戏带 `-condebug` 启动时**才会生成。

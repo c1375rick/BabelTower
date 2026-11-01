@@ -1,6 +1,10 @@
 # Deadlock 6726 Panorama 接口普查
 ## 读消息文本 / 对外通信能力全景(BabelTower 视角)
 
+> **状态**:历史(版本快照) · **适用版本**:6726(2026-09-30) · **最后核对**:2026-11-01
+> **说明**:§3"对外通信通道"是 6726 当期的普查;2026-11-01 真机 POC 已补充"公网 https 托管页可直载"
+> (见 [cef-cost-decision.md](cef-cost-decision.md) §1)。本篇不再更新。
+
 > 生成:2026-10-01 · 游戏版本 6726(City Never Sleeps,9/29 构建)
 > 方法:Source2Viewer-CLI 19.2.0 解包 `pak01_dir.vpk` 全部 panorama 内容(434 XML + 438 CSS 全量解包分析)
 > + exp6726b~h 七轮游戏内实车验证(console.log + 桥日志双源)
