@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Babel Tower bridgeless POC layout (generated from mod/panorama/layout by poc/make_poc_layouts.js).
+  DO NOT EDIT BY HAND. The game-original structure is preserved verbatim; only the script
+  include, an unused stylesheet include, the HTML panel id and the submit handler differ.
+-->
+<!-- Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0 -->
+<!--
+  Babel Tower: Deadlock 聊天布局覆盖
+  本文件以原版 panorama/layout/chat.xml 的反编译重建结构为基础(Valve 素材,
+  保留原结构以保证聊天功能与引擎数据绑定正常),额外加入 LinguaChat 的
+  样式/脚本引用、设置按钮与设置面板。所有原版 ID / class / 属性保持不变。
+  原版结构参考: references/poker_chat.xml(同源重建,Apache-2.0 仓库)
+  注意:Panorama 的 Button 不渲染 text 属性,按钮文字必须用内嵌 <Label>。
+-->
+<root>
+	<styles>
+		<include src="s2r://panorama/styles/citadel_base_styles.vcss_c" />
+		<include src="s2r://panorama/styles/chat.vcss_c" />
+	</styles>
+	<scripts>
+		<include src="s2r://panorama/scripts/poc_boot.vjs_c" />
+	</scripts>
+	<snippets>
+		<snippet name="ChatMessageSource">
+			<Panel>
+				<Label class="ChannelName" text="[{s:channel_name}]" />
+				<Label class="SenderName" text="{s:sender_name}" />
+			</Panel>
+		</snippet>
+		<snippet name="ChatMessageContents_Text">
+			<Panel class="Text">
+				<Label text="{s:message_text}" />
+			</Panel>
+		</snippet>
+		<snippet name="ChatMessageContents_Ping">
+			<Panel class="Ping">
+				<!-- 2026-10-03 游戏更新(buildid 25689475)补的面板,本重建(源自
+				     poker_chat 同源重建)没有 -> 任何 FindChildInLayoutFile("#TargetHeroImage")
+				     查不到就 FATAL "Unable to find child 'TargetHeroImage' in layout
+				     file panorama\layout\chat.xml" -> tier0!Plat_FatalError ->
+				     RaiseException(0x80000003) -> 游戏进程崩溃(今日 9 次 dump)。
+				     游戏 CSS 为证(chat.vcss_c):
+				     .ChatMessage .MessageBody #MessageContents.Ping #TargetHeroImage
+				       {width:20px;height:20px;margin-right:6px;visibility:collapse;}
+				     ... #TargetHeroImage.IsHeroPing {visibility:visible;}
+				     必须放 Ping snippet 内(注入进 MessageContents 的是这段内容,
+				     放静态子节点会被注入抹掉),且置于 Label 前,与 flow-right 排布一致。 -->
+				<Image id="TargetHeroImage" />
+				<!-- html="true" = 富文本渲染开关,游戏当前 chat.vxml 的 PingLabel 带此属性
+				     (实证:抠游戏编译产物 logs/game_chat.vxml_c,字符串序列
+				     ... TargetHero / ping / html / true ...;而我们编译出的同段是
+				     ... TargetHero / ping ... 没有 html。与
+				     docs/panorama-api-census-6726.md 记录一致——html="true" 富文本 Label
+				     仅 Ping 行 PingLabel 使用,消息正文是普通 Label,所以正文不加)。
+				     漏掉它 -> ping_text 里的 <span class="highlight"> 标记不被渲染,
+				     聊天行原样显示 HTML 源码(2026-10-04 实车截图:
+				     <span class="highlight">Abrams</span>的大招好了)。 -->
+				<Label id="PingLabel" text="{s:ping_text}" html="true" />
+			</Panel>
+		</snippet>
+		<snippet name="ChatMessageSender_HeroImage">
+			<Panel class="SenderHeroImage">
+				<CitadelHeroImage id="HeroImage" heroimagestyle="small" />
+			</Panel>
+		</snippet>
+		<snippet name="ChatMessageSender_AvatarImage">
+			<Panel class="SenderAvatarImage">
+				<CitadelAvatarImage id="AvatarImage" />
+			</Panel>
+		</snippet>
+		<snippet name="ChatMessageSender_LocalClient">
+			<Panel class="SenderLocalClient" />
+		</snippet>
+		<snippet name="ChatMessage">
+			<Panel class="ChatMessage Expired">
+				<Panel id="SenderImage" />
+				<Panel class="MessageBody">
+					<Panel id="MessageSource" />
+					<Panel id="MessageContents" />
+				</Panel>
+			</Panel>
+		</snippet>
+	</snippets>
+	<CitadelChat defaultfocus="ChatInput" hittest="false">
+		<Panel id="ChatLinesArea" hittest="false">
+			<Panel class="ChatLinesWrapper" hittest="false">
+				<Panel id="ChatMessages" hittest="false" />
+			</Panel>
+		</Panel>
+		<Label class="ChatDisabledLabel" text="#Citadel_Hud_ChatDisabled" hittest="false" />
+		<Panel id="ChatControls">
+			<Label id="ChatTargetLabel" text="#citadel_chat_placeholder" />
+			<TextEntry id="ChatInput" oninputsubmit="CitadelChatSubmit();" onblur="CitadelChatInputBlur();" placeholder="" maxchars="1024" />
+			<Label id="LCTOutgoingFailTip" class="LCTOutgoingFailTip" text="" />
+			<Panel id="LCTBridgeDot" class="LCTBridgeDot" />
+			<Button id="LCTSettingsButton" class="LCTSettingsButton" onactivate="">
+				<Label text="译" />
+			</Button>
+		</Panel>
+		<!-- Babel Tower 桥接 HTML 面板通道(CitadelHTMLPanel;游戏内设置面板已移除,设置走网页 /tr) -->
+		<CitadelHTMLPanel id="LCTPocPanel" class="LCTPocPanel" hittest="false" acceptsfocus="false" />
+	</CitadelChat>
+</root>

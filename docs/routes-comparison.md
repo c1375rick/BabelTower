@@ -123,5 +123,12 @@ MIT,Tesseract + OpenCV);同类:RSTGameTranslation / TranslateOverlay。
 3. **③ 保留为"Key 用户"可选形态**:若未来做,先解决 Bing 免 Key 的 CORS 中继
    (Cloudflare Worker 类)并把诊断面做进页面;触发器 = GB 用户证书类工单占比过高时
    (无证书是它唯一的决定性优势)。
+   - **POC 2026-11-01 数据(无桥直载托管页,真机 CEF)**:公网页加载 + title 回程 2/2(同秒);
+     hash 回环 12/12(通道 RTT 2–24ms);localStorage 跨游戏重启持久(bootCount 递增);
+     CORS 矩阵——免 Key 的 `edge.microsoft.com`(现状桥用的**同一上游**)与 `mymemory` **直连通**,
+     OpenAI(401)/Google(400)/LibreTranslate(400)响应**可读**(Key 路径亦可用),仅 DeepL Free 与
+     公共 LibreTranslate 被拦。**即上文"先解决 Bing 免 Key 的 CORS 中继"被真机证伪为不必要**
+     (§3"致命伤 1"以真机数据为准);遗留风险 = 免 Key 上游限流 / 托管单点 / 无 bridge.log 诊断面。
+     详见 `poc/RESULTS.md`。
 4. **④ 触发器**:`scanChatMessages` 连续两次引擎更新失效(获取层死了才需要它)。
 5. 复审:每次引擎更新后回填本表的"10-29 存活性"一行;两条触发器任一触发即升 P1。

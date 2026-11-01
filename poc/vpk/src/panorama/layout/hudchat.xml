@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Babel Tower bridgeless POC layout (generated from mod/panorama/layout by poc/make_poc_layouts.js).
+  DO NOT EDIT BY HAND. The game-original structure is preserved verbatim; only the script
+  include, an unused stylesheet include, the HTML panel id and the submit handler differ.
+-->
+<!-- Contributor: Thirt927 (https://github.com/Thirt927/BabelTower), merged 2026-08-13 under GPL-3.0 -->
+
+<!--
+  Babel Tower: Deadlock 大厅(HUD)聊天布局覆盖
+  基于原版 panorama/layout/hudchat.xml 的反编译重建结构(Valve 素材,保留原结构),
+  额外加入 LinguaChat 的样式/脚本引用、设置按钮与设置面板(与 chat.xml 一致),
+  使大厅聊天同样支持翻译/日志/发送前翻译。
+  原版结构(反编译):CitadelHudChat > FullChatContainer > ChatMainPanel >
+    ChatLinesArea > (ChatLinesContainer > ChatLinesWrapper > ChatLinesPanel) | ChatDisabled | ChatControls
+  注意:Panorama 的 Button 不渲染 text 属性,按钮文字必须用内嵌 <Label>。
+-->
+<root>
+	<styles>
+		<include src="s2r://panorama/styles/citadel_base_styles.vcss_c" />
+		<include src="s2r://panorama/styles/hudchat.vcss_c" />
+	</styles>
+	<scripts>
+		<include src="s2r://panorama/scripts/poc_boot.vjs_c" />
+	</scripts>
+	<CitadelHudChat defaultfocus="ChatInput" hittest="false">
+		<Panel id="FullChatContainer" hittest="false">
+			<Panel id="ChatMainPanel" hittest="false">
+				<Panel id="ChatLinesArea" hittest="false">
+					<Panel id="ChatLinesContainer" hittest="false">
+						<Panel id="ChatLinesWrapper" hittest="false">
+							<Panel id="ChatLinesPanel" hittest="false" />
+						</Panel>
+					</Panel>
+					<Panel id="ChatLinesOverlay" hittest="false" />
+				</Panel>
+				<Panel id="ChatDisabled">
+					<Label text="#Citadel_Hud_ChatDisabled" />
+				</Panel>
+				<Panel id="ChatControls">
+					<Label id="ChatTargetLabel" text="#citadel_chat_placeholder" />
+					<TextEntry id="ChatInput" oninputsubmit="CitadelChatSubmit();" onblur="CitadelChatTextBlur();" placeholder="" maxchars="1024" />
+					<Label id="LCTOutgoingFailTip" class="LCTOutgoingFailTip" text="" />
+					<Panel id="LCTBridgeDot" class="LCTBridgeDot" />
+					<Button id="LCTSettingsButton" class="LCTSettingsButton" onactivate="">
+						<Label text="译" />
+					</Button>
+				</Panel>
+			</Panel>
+		</Panel>
+		<!-- Babel Tower 桥接 HTML 面板通道(CitadelHTMLPanel;游戏内设置面板已移除,设置走网页 /tr) -->
+		<CitadelHTMLPanel id="LCTPocPanel" class="LCTPocPanel" hittest="false" acceptsfocus="false" />
+	</CitadelHudChat>
+</root>
