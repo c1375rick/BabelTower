@@ -56,6 +56,22 @@
   .hide { display: none; }
   details summary { cursor: pointer; color: var(--dim); font-size: 12.5px; }
   #testOut { white-space: pre-wrap; }
+  .secnav { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 16px; }
+  .secnav a { color: var(--dim); text-decoration: none; font-size: 12.5px;
+    border: 1px solid var(--line); border-radius: 99px; padding: 3px 12px; }
+  .secnav a:hover { color: var(--fg); border-color: var(--accent); }
+  .savebar { position: sticky; bottom: 0; z-index: 5; display: flex; gap: 12px;
+    align-items: center; flex-wrap: wrap; margin-top: 10px; padding: 12px 0 6px;
+    background: linear-gradient(to top, var(--bg) 72%, rgba(20,22,26,0)); }
+  .savebar button { box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  .savebar.dirty button#save { box-shadow: 0 0 0 2px rgba(110,168,255,.55), 0 0 16px rgba(110,168,255,.45); }
+  .dirty { color: var(--warn); font-size: 12.5px; }
+  @media (max-width: 640px) {
+    .wrap { padding: 16px 12px 48px; }
+    .grid { grid-template-columns: 1fr; }
+    .k { flex-basis: 132px; }
+    .topbar { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
@@ -68,37 +84,13 @@
     </div>
   </div>
   <div class="sub" data-i18n="top_note"></div>
+  <nav class="secnav">
+    <a href="#sec-service" data-i18n="tr_title"></a>
+    <a href="#sec-behaviour" data-i18n="bh_title"></a>
+    <a href="#sec-health" data-i18n="health_title"></a>
+  </nav>
 
-  <div class="card">
-    <h2><span data-i18n="health_title"></span>
-      <span class="badge" id="gameState">…</span>
-      <span class="badge hide" id="gameLangBadge"></span>
-    </h2>
-    <div class="row">
-      <div class="dot idle" id="dot-btpcDl"></div>
-      <div class="k"><span data-i18n="ch_btpc_dl"></span><small data-i18n="ch_btpc_dl_sub"></small></div>
-      <div class="v" id="age-btpcDl">—</div>
-    </div>
-    <div class="row">
-      <div class="dot idle" id="dot-consoleLog"></div>
-      <div class="k"><span data-i18n="ch_console"></span><small data-i18n="ch_console_sub"></small></div>
-      <div class="v" id="age-consoleLog">—</div>
-    </div>
-    <div class="row">
-      <div class="dot idle" id="dot-bridgeNav"></div>
-      <div class="k"><span data-i18n="ch_nav"></span><small data-i18n="ch_nav_sub"></small></div>
-      <div class="v" id="age-bridgeNav">—</div>
-    </div>
-    <div class="row">
-      <div class="dot idle" id="dot-gameFetch"></div>
-      <div class="k"><span data-i18n="ch_fetch"></span><small data-i18n="ch_fetch_sub"></small></div>
-      <div class="v" id="age-gameFetch">—</div>
-    </div>
-    <div class="note"><span id="healthNote"></span></div>
-    <div class="note" id="dupNote" style="display:none;color:#c0392b;font-weight:600"></div>
-  </div>
-
-  <div class="card">
+  <div class="card" id="sec-service">
     <h2 data-i18n="tr_title"></h2>
     <div class="grid">
       <div>
@@ -154,15 +146,13 @@
       <label><input type="checkbox" id="chatLog"> <span data-i18n="tr_chatlog"></span></label>
     </div>
     <div class="btns">
-      <button id="save" data-i18n="tr_save"></button>
       <button class="ghost" id="reload" data-i18n="tr_reload"></button>
       <button class="ghost" id="test" data-i18n="tr_test"></button>
-      <span class="status" id="cfgStatus"></span>
     </div>
     <div class="note" id="testOut"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="sec-behaviour">
     <h2 data-i18n="bh_title"></h2>
     <div class="grid">
       <div>
@@ -221,7 +211,36 @@
     <div class="note" data-i18n="bh_sync"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="sec-health">
+    <h2><span data-i18n="health_title"></span>
+      <span class="badge" id="gameState">…</span>
+      <span class="badge hide" id="gameLangBadge"></span>
+    </h2>
+    <div class="row">
+      <div class="dot idle" id="dot-btpcDl"></div>
+      <div class="k"><span data-i18n="ch_btpc_dl"></span><small data-i18n="ch_btpc_dl_sub"></small></div>
+      <div class="v" id="age-btpcDl">—</div>
+    </div>
+    <div class="row">
+      <div class="dot idle" id="dot-consoleLog"></div>
+      <div class="k"><span data-i18n="ch_console"></span><small data-i18n="ch_console_sub"></small></div>
+      <div class="v" id="age-consoleLog">—</div>
+    </div>
+    <div class="row">
+      <div class="dot idle" id="dot-bridgeNav"></div>
+      <div class="k"><span data-i18n="ch_nav"></span><small data-i18n="ch_nav_sub"></small></div>
+      <div class="v" id="age-bridgeNav">—</div>
+    </div>
+    <div class="row">
+      <div class="dot idle" id="dot-gameFetch"></div>
+      <div class="k"><span data-i18n="ch_fetch"></span><small data-i18n="ch_fetch_sub"></small></div>
+      <div class="v" id="age-gameFetch">—</div>
+    </div>
+    <div class="note"><span id="healthNote"></span></div>
+    <div class="note" id="dupNote" style="display:none;color:#c0392b;font-weight:600"></div>
+  </div>
+
+  <div class="card" id="sec-adv">
     <details>
       <summary data-i18n="adv_summary"></summary>
       <label for="raw" data-i18n="adv_label"></label>
@@ -234,6 +253,12 @@
   </div>
 
   <div class="note" data-i18n="footer_note"></div>
+
+  <div class="savebar" id="savebar">
+    <button id="save" data-i18n="tr_save"></button>
+    <span class="status" id="cfgStatus"></span>
+    <span class="dirty" id="dirtyHint" hidden data-i18n="unsaved"></span>
+  </div>
 </div>
 
 <script>
@@ -259,6 +284,7 @@
 
   var I18N = {
     "zh-Hans": {
+      unsaved: "有未保存的更改",
       title: "Babel Tower 设置",
       top_note: "本页由桥直接提供（HTTP 直连 127.0.0.1，不经过游戏内任何接口）。注意：这里能证明“浏览器 ↔ 桥”通，不能证明“游戏 ↔ 桥”通；后者看下面这张心跳表。",
       lang_label: "语言",
@@ -339,6 +365,7 @@
       footer_note: "游戏内 /tr 面板与本页读的是同一份 config.json:保存后游戏会在十几秒内自动同步(面板显示也一起更新),不用重启游戏。"
     },
     "zh-Hant": {
+      unsaved: "有未儲存的變更",
       title: "Babel Tower 設定",
       top_note: "本頁由橋直接提供（HTTP 直連 127.0.0.1，不經過遊戲內任何介面）。注意：這裡能證明「瀏覽器 ↔ 橋」通，不能證明「遊戲 ↔ 橋」通；後者請看下方心跳表。",
       lang_label: "語言",
@@ -419,6 +446,7 @@
       footer_note: "遊戲內 /tr 面板與本頁讀的是同一份 config.json:儲存後遊戲會在十幾秒內自動同步(面板顯示也一起更新),不用重啟遊戲。"
     },
     "en": {
+      unsaved: "unsaved changes",
       title: "Babel Tower Settings",
       top_note: "Served directly by the bridge (HTTP to 127.0.0.1, no in-game interface involved). Note: this proves browser ↔ bridge, not game ↔ bridge — see the heartbeat table below for that.",
       lang_label: "Language",
@@ -499,6 +527,7 @@
       footer_note: "The in-game /tr panel and this page read the same config.json: after you save, the game re-syncs within seconds (the panel display updates too) — no game restart needed."
     },
     "ja": {
+      unsaved: "未保存の変更",
       title: "Babel Tower 設定",
       top_note: "このページはブリッジが直接配信しています（HTTP で 127.0.0.1 に接続、ゲーム内のインターフェースは使いません）。ここで確認できるのは「ブラウザ ↔ ブリッジ」であり、「ゲーム ↔ ブリッジ」は下のハートビート表で確認してください。",
       lang_label: "言語",
@@ -579,6 +608,7 @@
       footer_note: "ゲーム内 /tr パネルとこのページは同じ config.json を見ています:保存後数秒以内にゲーム側が自動同期します(パネルの表示も更新されます)。再起動は不要です。"
     },
     "ko": {
+      unsaved: "저장되지 않은 변경 사항",
       title: "Babel Tower 설정",
       top_note: "이 페이지는 브리지가 직접 제공합니다(HTTP로 127.0.0.1에 연결, 게임 내 인터페이스 미사용). 여기서 확인되는 것은 \u201c브라우저 ↔ 브리지\u201d이며, \u201c게임 ↔ 브리지\u201d는 아래 하트비트 표에서 확인하세요.",
       lang_label: "언어",
@@ -659,6 +689,7 @@
       footer_note: "게임 내 /tr 패널과 이 페이지는 같은 config.json 을 봅니다: 저장 후 몇 초 안에 게임이 자동 동기화합니다(패널 표시도 함께 갱신). 게임 재시작은 필요 없습니다."
     },
     "fr": {
+      unsaved: "modifications non enregistrées",
       title: "Réglages Babel Tower",
       top_note: "Cette page est servie directement par le pont (HTTP vers 127.0.0.1, sans interface en jeu). Elle prouve que navigateur ↔ pont fonctionne, pas jeu ↔ pont : voyez le tableau de battements ci-dessous.",
       lang_label: "Langue",
@@ -739,6 +770,7 @@
       footer_note: "Le panneau /tr en jeu et cette page lisent le même config.json : après l'enregistrement, le jeu se resynchronise en quelques secondes (l'affichage du panel suit) — pas besoin de redémarrer."
     },
     "de": {
+      unsaved: "ungespeicherte Änderungen",
       title: "Babel Tower Einstellungen",
       top_note: "Diese Seite wird direkt von der Bridge ausgeliefert (HTTP an 127.0.0.1, ohne Schnittstelle im Spiel). Sie beweist Browser ↔ Bridge, nicht Spiel ↔ Bridge – dafür die Heartbeat-Tabelle unten.",
       lang_label: "Sprache",
@@ -819,6 +851,7 @@
       footer_note: "Das /tr-Panel im Spiel und diese Seite lesen dieselbe config.json: Nach dem Speichern synchronisiert sich das Spiel binnen Sekunden (das Panel aktualisiert sich mit) — kein Neustart nötig."
     },
     "es": {
+      unsaved: "cambios sin guardar",
       title: "Ajustes de Babel Tower",
       top_note: "Esta página la sirve el propio puente (HTTP a 127.0.0.1, sin interfaz del juego). Demuestra navegador ↔ puente, no juego ↔ puente: para eso, mira la tabla de latidos de abajo.",
       lang_label: "Idioma",
@@ -899,6 +932,7 @@
       footer_note: "El panel /tr del juego y esta página leen el mismo config.json: tras guardar, el juego se resincroniza en pocos segundos (el panel se actualiza también) — no hace falta reiniciar."
     },
     "ru": {
+      unsaved: "несохранённые изменения",
       title: "Настройки Babel Tower",
       top_note: "Эту страницу отдаёт сам мост (HTTP на 127.0.0.1, без внутриигрового интерфейса). Она доказывает «браузер ↔ мост», а не «игра ↔ мост» — для второго смотрите таблицу пульса ниже.",
       lang_label: "Язык",
@@ -979,6 +1013,7 @@
       footer_note: "Внутриигровая панель /tr и эта страница читают один config.json: после сохранения игра пересинхронизируется за несколько секунд (панель обновится тоже) — перезапуск не нужен."
     },
     "pt-BR": {
+      unsaved: "alterações não salvas",
       title: "Configurações do Babel Tower",
       top_note: "Esta página é servida pela própria ponte (HTTP para 127.0.0.1, sem interface do jogo). Ela prova navegador ↔ ponte, não jogo ↔ ponte — para isso, veja a tabela de batimentos abaixo.",
       lang_label: "Idioma",
@@ -1196,6 +1231,7 @@
       else cls = gameRunning ? "bad" : "idle";
     }
     dot.className = "dot " + cls;
+    dot.setAttribute("aria-label", rel(ts, now) + (cls === "ok" ? " ✓" : cls === "warn" ? " !" : cls === "bad" ? " ✕" : ""));
     var a = document.createElement("span");
     a.className = "age";
     a.textContent = rel(ts, now);
@@ -1332,6 +1368,7 @@
     $("uiTimeoutMs").value = ui.timeoutMs || 15000;
     $("raw").value = JSON.stringify(cfg, null, 2);
     refreshProviderRows();
+    if (typeof setDirty === "function") setDirty(false);
   }
 
   var OUT_TARGETS = ["en", "zh-Hans", "zh-Hant", "ja", "ko", "fr", "de", "es", "ru", "pt-BR"];
@@ -1458,6 +1495,28 @@
       setStatus("cfgStatus", "st_testfail", null, "bad");
       $("testOut").textContent = t("test_error", { e: e.message || e });
     }).then(function () { btn.disabled = false; });
+  });
+
+  // ---------- 未保存更改提示 ----------
+  var _dirty = false;
+  function setDirty(on) {
+    if (on === _dirty) return;
+    _dirty = on;
+    var bar = $("savebar");
+    if (bar) bar.classList.toggle("dirty", on);
+    var hint = $("dirtyHint");
+    if (hint) hint.hidden = !on;
+  }
+  ["provider","apiKey","region","endpoint","baseUrl","model","fallback","timeoutMs","sourceLanguage",
+   "targetLanguage","translateOwn","chatLog","uiEnabled","displayMode","outgoing","outgoingTarget",
+   "outgoingTargetCustom","force","uiTimeoutMs","raw"].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener("input", function () { setDirty(true); });
+    el.addEventListener("change", function () { setDirty(true); });
+  });
+  window.addEventListener("beforeunload", function (e) {
+    if (_dirty) { e.preventDefault(); e.returnValue = ""; }
   });
 
   // ---------- 启动 ----------
