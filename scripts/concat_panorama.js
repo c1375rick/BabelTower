@@ -13,7 +13,7 @@
 //
 // 作用域模型(关键:别照"缩进 ≤ 2"的直觉改)
 //   Panorama 的跨 script 契约只有**全局层**。各文件现在都是自包 IIFE
-//   (main/panel/exp 是 `(() => {`,btipc 是 `var LCTBTIPC = (function () {`),
+//   (main/exp 是 `(() => {`,btipc 是 `var LCTBTIPC = (function () {`),
 //   IIFE 体内的 indent-2 顶层在拼接后**仍然是各 IIFE 自己的函数作用域**,彼此不共享。
 //   所以本工具按"声明落在哪个作用域"分组,而不是按缩进:
 //     - GLOBAL:括号深度 ≤1 且函数嵌套深度 0 的声明(裸文件 = 直接落进拼接文件顶层;
@@ -22,9 +22,9 @@
 //       自己的 IIFE,跨文件永远不撞;但未来把模块**拼进**该 IIFE 时就会撞 → 作为
 //       "提示"(不阻塞)报出来,供增量模块化时人工过目。
 //   这是与"深度 0-1 一刀切"的唯一偏离,原因见下(实测发现):
-//     lingua_chat_panel.js 第 33 行 `const { State, t, findChild, ... } = L;` 与主文件
-//     的 `const State / function t` 同名——它们各自在自己的 IIFE 里,拼接后语义安全。
-//     一刀切会把真机四文件报成 14 组重名,工具当场变成噪音源(详见交付报告)。
+//     lingua_chat_exp.js 的 `const { State, t, findChild, ... } = L;` 与主文件的
+//     `const State / function t` 同名——它们各自在自己的 IIFE 里,拼接后语义安全。
+//     一刀切会把真机文件报成多组重名,工具当场变成噪音源(详见交付报告)。
 //
 // 声明识别:逐行看括号深度;深度 ≤1 且不在嵌套函数里才算"顶层",再匹配
 //   const/let/var/function/async function。字符串、注释、正则字面量先被抹成空格

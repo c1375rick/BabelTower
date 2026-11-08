@@ -5,7 +5,7 @@
 //   误报重名 → 没人敢拼;漏报 → 拼接后同一作用域重复声明,游戏里直接 SyntaxError。
 //   所以用例分两层:
 //     ① 合成夹具:顺序/横幅、真重名、IIFE 内同名(不该报)、const 前向引用、函数体内引用;
-//     ② 真机冒烟:当前 4 个运行时文件(i18n → btipc → 主 → panel)零重名、零前向引用,
+//     ② 真机冒烟:当前 3 个运行时文件(i18n → btipc → 主)零重名、零前向引用,
 //        产物过 node --check。这一层是"拼接形态语义等价"的现状钉。
 "use strict";
 
@@ -148,20 +148,19 @@ test("⑥ 真机四文件:--check-only 通过,拼接产物 node --check 通过",
     "lingua_chat_i18n.js",
     "lingua_chat_btipc.js",
     "lingua_chat.js",
-    "lingua_chat_panel.js",
   ].map((f) => path.join(scripts, f));
   if (headMain) real[2] = headMain;
 
   const r = runCli(["--files", ...real, "--check-only"]);
-  assert.strictEqual(r.status, 0, "真机四文件必须零重名: " + r.all);
+  assert.strictEqual(r.status, 0, "真机三文件必须零重名: " + r.all);
   assert.match(r.stdout, /重名检测: 0 组/, "重名数应为 0:\n" + r.all);
   assert.match(r.stdout, /前向引用警告: 0 条/, "前向引用应为 0 条:\n" + r.all);
 
   const out = path.join(tmpRoot, "real-bundle.js");
   const r2 = runCli(["--files", ...real, "--out", out]);
-  assert.strictEqual(r2.status, 0, "真机四文件应可拼接: " + r2.all);
+  assert.strictEqual(r2.status, 0, "真机三文件应可拼接: " + r2.all);
   const bundle = fs.readFileSync(out, "utf8");
-  for (const f of ["lingua_chat_i18n.js", "lingua_chat_btipc.js", "lingua_chat.js", "lingua_chat_panel.js"]) {
+  for (const f of ["lingua_chat_i18n.js", "lingua_chat_btipc.js", "lingua_chat.js"]) {
     assert.ok(bundle.includes(f), "产物缺横幅: " + f);
   }
   assert.ok(bundle.split(/\r?\n/).length > 5000, "产物行数可疑(应约 6100 行)");

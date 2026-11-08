@@ -87,7 +87,6 @@ const SYNTAX_TARGETS = [
   "mod/panorama/scripts/lingua_chat_btipc.js",
   "mod/panorama/scripts/lingua_chat_i18n.js",
   "mod/panorama/scripts/lingua_chat.js",
-  "mod/panorama/scripts/lingua_chat_panel.js",
   "mod/panorama/scripts/lingua_chat_exp.js",
   "scripts/concat_panorama.js",
 ];

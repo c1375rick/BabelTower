@@ -4291,12 +4291,10 @@ function injectTranslation(row, sig, text, fragment) {
     }
   }
 
-  // ================= 设置面板 UI(2026-10-28 任务②C-1 分家)=================
-  // 面板函数(开关/下拉/输入框/回填/保存/测试)已拆至 lingua_chat_panel.vjs_c:
-  // 那里经 globalThis.LCTNS 导入本文件的宿主符号,再把自己的函数名挂回 globalThis(晚绑定)。
-  // 本文件只留业务侧/块外高频:setStatus、bridgePost、BTIPC_GET_OPS、applyUILang、LCTPickUILang;
-  // 块外调用点(openSettingsPanel / fieldValue / setSelectText …)
-  // 保持裸标识符零改写 —— 面板文件装载后即解析到 globalThis 挂载(顺序由 XML 保证)。
+  // ================= 设置入口(2026-10-31 面板移除)=================
+  // 游戏内设置面板(lingua_chat_panel.vjs_c)已按用户决定移除,配置面统一到网页 /tr。
+  // 本文件保留业务侧/块外高频:setStatus、bridgePost、BTIPC_GET_OPS、applyUILang、LCTPickUILang;
+  // applyUILang 仍按 SETTINGS_PANEL_ID 查找面板(不存在时 findChild 落回 root,全部为无操作)。
 
   // btipc07:health / gamenames / quickchat 三接口迁 BTIPC。TRQ 信封白名单冻结
   // (core/btipc/transport.js 只认 op=config|test),所以新语义一律塞进 op=config 的
@@ -4875,8 +4873,8 @@ function injectTranslation(row, sig, text, fragment) {
 
   // ---- P4a 分区:向探针文件 lingua_chat_exp.vjs_c 发布核心顶层绑定(2026-10-12)----
   // 名单与探针文件头的别名导入由同一份计算生成、逐项对账,tests/lc_p4_partition.test.js 钉死。
-  // 2026-10-28(任务②C-1):设置面板拆分后,面板文件(lingua_chat_panel.vjs_c)也经 LCTNS 导入宿主符号;
-  // 对账语义改为「发布 ⊇ 各消费方导入名单」(见同一测试),这里追加面板所需的名字。
+  // 2026-10-31:设置面板已移除,当前消费方只剩探针一份;对账语义为「发布 ⊇ 探针导入名单」
+  // (tests/lc_p4_partition.test.js 钉死)。
   globalThis.LCTNS = globalThis.LCTNS || {};
   LCTNS.BRIDGE_HOST = BRIDGE_HOST;
   LCTNS.BRIDGE_PORT = BRIDGE_PORT;
@@ -4920,8 +4918,7 @@ function injectTranslation(row, sig, text, fragment) {
   LCTNS.updateBridgeStatusUI = updateBridgeStatusUI;
 
   // 导出给 XML 布局调用的全局函数
-  // 2026-10-28(任务②C-1):设置面板那批(LCTToggleSettings/LCTOnToggle/LCTSave …)已随面板迁到
-  // lingua_chat_panel.vjs_c,由那边挂 globalThis —— 这里不能再 exportGlobal(装载期求值会 ReferenceError)。
+  // 2026-10-31:设置面板(LCTToggleSettings/LCTOnToggle/LCTSave …)已随面板移除,不再有这些全局导出。
   // 教训:每个导出必须独立 try/catch——曾有虚构事件注册抛异常被吞,
   // 导致后续导出全部跳过(按钮点击报 is not defined)。
   function exportGlobal(name, fn) {
@@ -4939,8 +4936,8 @@ function injectTranslation(row, sig, text, fragment) {
   exportGlobal("showOutgoingFailTip", showOutgoingFailTip);
   exportGlobal("markBridgeUp", markBridgeUp);
 
-  // 2026-10-28(任务②C-1):boot 延迟 0.1s —— 设置面板已拆到 lingua_chat_panel.vjs_c,boot 链
-  // (applyUILang → setSelectText/setToggleText/labelFor/closeSelectMenus)需要面板挂的全局。
+  // boot 延迟 0.1s —— 原为等待面板挂载其全局(setSelectText/setToggleText 等);面板移除后
+  // 此延迟仅为保留既有启动时序(applyUILang 已无面板可作用)。
   // boot 内部本就是 Schedule 探针(最早 1.2s),延 0.1s 无实质影响;取消失败则退回同步直调。
   try { $.Schedule(0.1, boot); } catch (eB) { boot(); }
 })();

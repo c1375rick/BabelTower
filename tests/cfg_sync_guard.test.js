@@ -19,11 +19,8 @@ function ok(cond, label) {
 }
 
 const LC = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
-// 2026-10-28(任务②C-1):设置面板 UI(pick/toggle/cycle/save …)已拆到 lingua_chat_panel.js。
-// 本测试的面板类断言按源码文本匹配,故与主文件拼接后统一读(与 lc_btipc_guard 的跨文件拼读同法);
-// 主文件在前,aliveBody 的 indexOf 切片仍只落在主文件段内。
-const PANEL = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_panel.js");
-const lc = fs.readFileSync(LC, "utf8") + "\n" + fs.readFileSync(PANEL, "utf8");
+// 2026-10-31:游戏内设置面板已移除(用户决定),面板类断言随之删除;本测试只读核心主文件。
+const lc = fs.readFileSync(LC, "utf8");
 const aliveBody = lc.slice(lc.indexOf("function onBridgeAlive(src)"), lc.indexOf("function onBridgeDown()"));
 
 console.log("--- 启动门(等探针定论,once) ---");
@@ -47,17 +44,10 @@ ok(/boot: config sync THREW/.test(lc), "同步抛有日志且按重试走");
 
 console.log("--- 脏标记(窗口内 picks 不被拍回) ---");
 ok(/function markCfgDirty\(key\)/.test(lc), "markCfgDirty 已定义");
-ok(/function LCTPickProvider\(value\) \{\s*\n\s*State\.cfg\.provider = value;\s*\n\s*markCfgDirty\("provider"\);/.test(lc), "选服务商置脏");
-ok(/markCfgDirty\(which\);\s*\n\s*saveUiConfig\(\);\s*\n\s*log\("toggle:/.test(lc), "toggle 置脏");
-ok(/markCfgDirty\(which\);\s*\n\s*saveUiConfig\(\);\s*\n\s*log\("cycle:/.test(lc), "cycle 置脏");
-// 2026-10-31:pickLang 在 saveUiConfig 后新增推桥块(推桥+清 dirty),行序断言放宽
-ok(/markCfgDirty\(field\);\s*\n\s*saveUiConfig\(\);\s*\n[\s\S]*?closeSelectMenus\(\);\s*\n\s*log\("pickLang:/.test(lc), "pickLang 置脏(含推桥块)");
-ok(/pick persist: 推桥同步/.test(lc), "pickLang 推桥块存在");
-ok(/markCfgDirty\(field\);\s*\n\s*saveUiConfig\(\);\s*\n\s*closeSelectMenus\(\);\s*\n\s*log\("pickOption:/.test(lc), "pickOption 置脏");
-ok((lc.match(/!dirty\.provider/g) || []).length >= 2, "sync 落地与 _mask 回填都跳过脏 provider(两处)");
+// 2026-10-31:面板置脏调用点已随面板移除;核心里保留脏键的消费侧(bridge 回填跳过)。
+ok((lc.match(/!dirty\.provider/g) || []).length >= 1, "sync 落地跳过脏 provider");
 ok(/!dirty\.translateOwn/.test(lc) && /!dirty\.chatLog/.test(lc), "顶层开关同样跳脏");
 ok(/State\.cfgDirty = \{\};/.test(lc), "保存成功清零脏标记");
-ok(/State\.cfg\._mask = null;/.test(lc), "保存成功作废旧 _mask(下次开面板快读)");
 
 console.log("RESULT: PASS " + pass + " / FAIL " + fail);
 process.exit(fail ? 1 : 0);

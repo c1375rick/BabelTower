@@ -28,8 +28,6 @@ const SCRIPT_BTIPCS = path.join(__dirname, "..", "mod", "panorama", "scripts", "
 const SCRIPT_I18N = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_i18n.js");
 // P4a(2026-10-12):实验探针区独立文件 —— 与游戏 include 顺序对齐(主脚本先行)
 const SCRIPT_EXP = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_exp.js");
-// 2026-10-28(任务②C-1):设置面板 UI —— 晚于主脚本(经 LCTNS 导入宿主符号),早于探针
-const SCRIPT_PANEL = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_panel.js");
 
 // ---------------- Mock 面板 ----------------
 // 环境隔离(2026-09-17):真实引擎里 UI 重载会销毁整个 JS 上下文,旧轮询链/挂起回调随之死亡;
@@ -148,7 +146,6 @@ function freshEnv(cfg) {
   delete require.cache[require.resolve(SCRIPT_BTIPCS)];
   delete require.cache[require.resolve(SCRIPT_I18N)];
   delete require.cache[require.resolve(SCRIPT_EXP)];
-  delete require.cache[require.resolve(SCRIPT_PANEL)];
 
   const contextPanel = new MockPanel("ContextPanel");
   const chatPanel = contextPanel.addChild(new MockPanel("Chat"));
@@ -159,12 +156,6 @@ function freshEnv(cfg) {
   chatControls.addChild(new MockPanel("ChatInput"));
   chatControls.addChild(new MockPanel("LCTOutgoingFailTip"));
   chatControls.addChild(new MockPanel("LCTBridgeDot"));
-  // 设置面板(与 chat.xml 同构):TextEntry 焦点处理测试用
-  const settingsPanel = contextPanel.addChild(new MockPanel("LCTSettingsPanel"));
-  const settingsBody = settingsPanel.addChild(new MockPanel("LCTSettingsBody"));
-  settingsBody.addChild(new MockPanel("LCTEnabled"));
-  settingsBody.addChild(new MockPanel("LCTApiKey"));
-  settingsBody.addChild(new MockPanel("LCTTimeout"));
   const bridgePanel = contextPanel.addChild(new MockPanel("LCTBridgePanel"));
   // HUD 顶栏聊天(与真实 citadel_hud_top_bar_chat.vxml 同构)
   // 关键:CitadelHudTopBarChat 是面板 TYPE 不是 class → FindChildrenWithClassTraverse 找不到,
@@ -261,13 +252,12 @@ function freshEnv(cfg) {
   require(SCRIPT_BTIPCS); // 传输层:先装载,主脚本顶层 const 别名解构 LCTBTIPC
   require(SCRIPT_I18N); // UI 文案/选项表数据(任务①E):无声明赋值挂全局,主脚本读别名
   require(SCRIPT);
-  require(SCRIPT_PANEL); // 设置面板 UI(任务②C-1):晚于主脚本,经 globalThis.LCTNS 导入宿主符号
   require(SCRIPT_EXP); // 探针文件:依赖核心先求值发布的 LCTNS,顺序不可倒
 
   return {
     cfg, // 场景配置快照:waitBootSync 后回写 State.cfg(桥同步会以真机偏好覆盖)
     panelSim, // 面板页面仿真状态(httpsBroken / aliveOnly / navUrls),见上方说明
-    contextPanel, messagesPanel, hudMessages, hudMessages2, settingsPanel, dispatchLog,
+    contextPanel, messagesPanel, hudMessages, hudMessages2, dispatchLog,
     setFocusedPanel(p) { focusedPanel = p; },
     addRow(kind, sender, text, opts) {
       const row = new MockPanel(null).setClass("ChatMessage", "Expired");
@@ -693,55 +683,6 @@ async function test15_bridgeUpDotGreen() {
   assert("dot not fail", !dot._classes.has("LCTBridgeFail"));
 }
 
-async function test16_entryBlurDropsFocusOnEntryItself() {
-  console.log("[16] TextEntry blur => entry DropInputFocus + stock ChatInput blur path (engine keyboard restore)");
-  const env = freshEnv(CFG.bilingual);
-  const entry = env.settingsPanel.FindChildTraverse("LCTApiKey");
-  const chatInput = env.contextPanel.FindChildTraverse("ChatInput");
-  assert("LCTApiKey entry exists", !!entry);
-  assert("stock ChatInput exists in tree", !!chatInput);
-  env.setFocusedPanel(entry); // 模拟点击输入框后焦点在 TextEntry 上
-  env.dispatchLog.length = 0;
-  globalThis.LCTEntryBlur(entry);
-  const blurEvt = env.dispatchLog.filter((d) => d.name === "CitadelChatInputBlur");
-  const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
-  assert("CitadelChatInputBlur dispatched (engine keyboard restore)", blurEvt.length >= 1, "count=" + blurEvt.length);
-  assert("CitadelChatInputBlur targets stock ChatInput (not our entry)",
-    blurEvt.length >= 1 && blurEvt[0].target === chatInput,
-    blurEvt.length ? (blurEvt[0].target && blurEvt[0].target._id) : "none");
-  assert("DropInputFocus dispatched for our entry", drops.length >= 1 && drops.some((d) => d.target === entry),
-    "count=" + drops.length);
-  assert("DropInputFocus dispatched for stock ChatInput", drops.some((d) => d.target === chatInput),
-    "count=" + drops.length);
-  assert("no SetFocus to settings panel (keyboard must return to game)",
-    !env.settingsPanel._focused, "panel focused=" + env.settingsPanel._focused);
-}
-
-async function test17_entryEscReleasesFocusThenClosesPanel() {
-  console.log("\n[17] ESC in TextEntry => stock ChatInput blur path, close panel, no root.SetFocus");
-  const env = freshEnv(CFG.bilingual);
-  const entry = env.settingsPanel.FindChildTraverse("LCTTimeout");
-  const chatInput = env.contextPanel.FindChildTraverse("ChatInput");
-  const panel = env.contextPanel.FindChildTraverse("LCTSettingsPanel");
-  assert("settings panel exists", !!panel);
-  panel.AddClass("LCTVisible"); // 模拟面板已打开
-  env.setFocusedPanel(entry);
-  env.dispatchLog.length = 0;
-  globalThis.LCTEntryKey({ key: "Escape", KeyCode: 27 }, entry);
-  const blurEvt = env.dispatchLog.filter((d) => d.name === "CitadelChatInputBlur");
-  const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
-  assert("CitadelChatInputBlur dispatched before closing", blurEvt.length >= 1, "count=" + blurEvt.length);
-  assert("CitadelChatInputBlur targets stock ChatInput",
-    blurEvt.length >= 1 && blurEvt[0].target === chatInput,
-    blurEvt.length ? (blurEvt[0].target && blurEvt[0].target._id) : "none");
-  assert("DropInputFocus dispatched for entry", drops.some((d) => d.target === entry), "count=" + drops.length);
-  assert("DropInputFocus dispatched for stock ChatInput", drops.some((d) => d.target === chatInput),
-    "count=" + drops.length);
-  assert("panel hidden after ESC", !panel._classes.has("LCTVisible"), [...panel._classes]);
-  assert("no SetFocus to root after close (keyboard returns to game)",
-    !env.contextPanel._focused, "root focused=" + env.contextPanel._focused);
-}
-
 // 新:混合消息(中文+英文专名,典型:英文英雄名设置下的快捷语音渲染)
 // 中文部分原样保留,只把非中文片段送去翻译;原文气泡不折叠
 async function test18_mixedMessageFragmentTranslation() {
@@ -884,8 +825,6 @@ async function main() {
     ["13", test13_outgoingWithoutGlobalSetTimeout],
     ["14", test14_outgoingFailShowsTip],
     ["15", test15_bridgeUpDotGreen],
-    ["16", test16_entryBlurDropsFocusOnEntryItself],
-    ["17", test17_entryEscReleasesFocusThenClosesPanel],
     ["18", test18_mixedMessageFragmentTranslation],
     ["19", test19_pureChineseStillSkipped],
     ["20", test20_quickchatWhitelistSkip],
