@@ -263,6 +263,16 @@ function runBtipcGet(o) {
     configHistoryPush(visible, fp); // 自愈:历史缺当前版就补上
     return syncData.syncGet("config", { visible: visible, fp: fp }, configHistoryBaseline(clientFp), clientFp, o.off, o.lim, expect);
   }
+  // 2026-11-08:游戏内自检汇总落桥日志(见 mod/panorama/scripts/lingua_chat_selftest.js)。
+  // 走既有 op=config + get 折叠通道,信封/帧冻结不变。
+  if (kind === "selftest") {
+    const report = String(o.report || "");
+    const lines = report ? report.split("\n") : [];
+    for (let i = 0; i < lines.length; i++) {
+      try { log("info", "SELFTEST " + lines[i]); } catch (eSe) {}
+    }
+    return { ok: true, logged: lines.length };
+  }
   if (kind !== "gamenames" && kind !== "quickchat") return { ok: false, error: "unknown_get" };
   const current = readSyncConfig(kind);
   if (!current) return { ok: false, error: kind + "_not_found" };

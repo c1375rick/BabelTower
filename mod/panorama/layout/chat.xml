@@ -26,11 +26,11 @@
 		<!-- UI 文案/选项表数据(2026-10-28 任务①E 外置):数据文件,必须先于 lingua_chat.vjs_c —— 主文件顶部读全局别名 -->
 		<include src="s2r://panorama/scripts/lingua_chat_i18n.vjs_c" />
 		<include src="s2r://panorama/scripts/lingua_chat.vjs_c" />
-		<!-- 设置面板 UI(2026-10-28 任务②C-1 拆分):必须晚于 lingua_chat.vjs_c —— 经 LCTNS 导入宿主符号,
-		     并且必须在 lingua_chat_exp 探针之前(boot 延迟 0.1s,面板全局挂载先就绪) -->
 		<!-- P4a 实验探针区(2026-10-12 分家):必须晚于 lingua_chat.vjs_c —— 核心先发布 LCTNS
-		     装载顺序:fallback 三件 → lingua_chat_btipc → lingua_chat_i18n → lingua_chat(核心)→ panel → 探针 -->
+		     装载顺序:fallback 三件 → lingua_chat_btipc → lingua_chat_i18n → lingua_chat(核心)→ 探针 → 自检 -->
 		<include src="s2r://panorama/scripts/lingua_chat_exp.vjs_c" />
+		<!-- 游戏内自检(2026-11-08):手动 !lctselftest 触发;晚于主脚本,经 LCTNS 懒取宿主符号 -->
+		<include src="s2r://panorama/scripts/lingua_chat_selftest.vjs_c" />
 	</scripts>
 	<snippets>
 		<snippet name="ChatMessageSource">

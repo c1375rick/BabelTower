@@ -160,7 +160,7 @@ ok(iGet > 0 && iWrite > 0, "op=config 分支既有 get 也有写");
 
 // ---------- ⑤ 游戏侧接线 ----------
 console.log("--- 游戏侧:差分同步接线 ---");
-ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1, configsync: 1 \};/.test(lc),
+ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1, configsync: 1, selftest: 1 \};/.test(lc),
   "configsync 是 get 类 op(走 50s 读死线)");
 ok(/function syncConfigDelta\(onDone\)/.test(lc), "syncConfigDelta 已定义");
 ok(/function applyConfigPayload\(text, res\)/.test(lc), "applyConfigPayload 已定义");

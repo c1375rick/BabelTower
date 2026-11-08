@@ -26,6 +26,13 @@ const SCRIPTS = [
   path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_i18n.js"),
   path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat.js"),
 ];
+// 场景 E:游戏内自检(!lctselftest 的宿主函数)—— 载入回退语料 + 自检文件后跑 runSelfTest
+const SCRIPT_SELFTEST = path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_selftest.js");
+const SCRIPT_FALLBACKS = [
+  path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_gamenames_fallback.js"),
+  path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_gamenames_pairs_fallback.js"),
+  path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_quickchat_fallback.js"),
+];
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
@@ -190,6 +197,28 @@ async function main() {
       return n.url.indexOf("op=health") >= 0 && n.url.indexOf("LCTQ:") >= 0;
     });
     check("D3 自愈整页加载(hashBase+#LCTQ)已发生", driftRecovery);
+
+    // 场景 E:游戏内自检(!lctselftest 宿主函数)—— 真实桥 + 真脚本沙箱里完整跑一遍。
+    // 载入回退语料(游戏 XML 首行装载)与自检文件,再调 LCTNS.runSelfTest;断言本地项
+    // (env.* / ui.lang)+ bridge.health + btipc.echo 全 PASS(网络翻译项不硬断言,见日志)。
+    sim.runScripts(SCRIPT_FALLBACKS.concat([SCRIPT_SELFTEST]));
+    let stSummary = null, stDone = false;
+    try {
+      LCTNS.runSelfTest({ onDone: function (s) { stSummary = s; stDone = true; } });
+    } catch (e) { stDone = true; console.log("  [sim] runSelfTest THREW: " + (e && e.message)); }
+    await sim.waitFor(function () { return stDone; }, 150000, "selftest complete")
+      .catch(function (e) { check("E1 自检完整跑完", false, e.message); });
+    check("E1 自检完整跑完", !!stSummary,
+      stSummary ? ("total=" + stSummary.total + " pass=" + stSummary.pass + " fail=" + stSummary.fail + " skip=" + stSummary.skip)
+                : "no summary");
+    if (stSummary) {
+      const byName = {};
+      stSummary.items.forEach(function (it) { byName[it.name] = it; });
+      const mustPass = ["env.globals", "env.fallback", "env.version", "env.config", "ui.lang", "bridge.health"];
+      const bad = mustPass.filter(function (n) { return !byName[n] || byName[n].status !== "pass"; });
+      check("E2 自检关键项全 PASS", bad.length === 0,
+        bad.length ? ("not pass: " + bad.map(function (n) { return n + "=" + (byName[n] ? byName[n].status : "missing"); }).join(",")) : "ok");
+    }
 
     // 汇总
     console.log("\nSIM RESULT: PASS " + pass + " / FAIL " + fail);

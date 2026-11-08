@@ -4183,6 +4183,21 @@ function injectTranslation(row, sig, text, fragment) {
       return;
     }
 
+    // !lctselftest: 游戏内自检(见 lingua_chat_selftest.js)。逐项跑真实链路并汇总,
+    // 有副作用(outgoing 可能真发一条消息)——手动命令,请在训练场/单人跑。不发送。
+    if (trimmed === "!lctselftest" || trimmed.indexOf("!lctselftest ") === 0) {
+      const stArg = trimmed.slice(12).trim();
+      clearInput();
+      const LN = globalThis.LCTNS;
+      if (LN && typeof LN.runSelfTest === "function") {
+        try { LN.runSelfTest({ quick: stArg === "quick" }); }
+        catch (eSt) { log("selftest: threw " + (eSt && eSt.message ? eSt.message : String(eSt))); }
+      } else {
+        log("selftest: lingua_chat_selftest 未加载(检查 VPK / 布局 include)");
+      }
+      return;
+    }
+
     // 发送前翻译(off=发原文 / translation=仅译文 / bilingual=原文|译文)
     // 按配置的发送前翻译模式处理
     const outgoingMode = State.cfg.outgoing || "off";
@@ -4302,7 +4317,7 @@ function injectTranslation(row, sig, text, fragment) {
   // 上层(healthCheck / syncGameNames / syncQuickChat)的调用方式也完全不变。
   // configsync(btipc11):配置差分同步。op 名与 op=config 的**写**语义分开 ——
   // 桥端 op=config 分支按 get 优先解释 body,写与 get 不能共用一个 op 名。
-  const BTIPC_GET_OPS = { health: 1, gamenames: 1, quickchat: 1, configsync: 1 };
+  const BTIPC_GET_OPS = { health: 1, gamenames: 1, quickchat: 1, configsync: 1, selftest: 1 };
 
   function bridgePost(op, payload, done) {
     const isGet = !!BTIPC_GET_OPS[op];
@@ -4367,19 +4382,22 @@ function injectTranslation(row, sig, text, fragment) {
     lbl = find("LCTSaveBtnLabel"); if (lbl) try { lbl.text = t("btnSave"); } catch (e) {}
     lbl = find("LCTTestBtnLabel"); if (lbl) try { lbl.text = t("btnTest"); } catch (e) {}
     lbl = find("LCTKeyHint"); if (lbl) try { lbl.text = t("btnHint"); } catch (e) {}
-    // 同步选择控件当前值的显示文本
-    setSelectText("LCTProviderSelect", labelFor(PROVIDER_OPTIONS, State.cfg.provider || "bing"));
-    setSelectText("LCTTargetLangSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.targetLanguage || "zh-Hans"));
-    setSelectText("LCTDisplayModeSelect", labelFor(DISPLAY_MODES, State.cfg.displayMode || "bilingual"));
-    setSelectText("LCTOutgoingSelect", labelFor(OUTGOING_MODES, State.cfg.outgoing || "off"));
-    setSelectText("LCTOutgoingTargetSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.outgoingTarget || "en"));
-    setSelectText("LCTUILangSelect", labelFor(UI_LANG_OPTIONS, uiLangPref() || "auto"));
-    // 同步开关文本
-    setToggleText("LCTEnabled", !!State.cfg.enabled);
-    setToggleText("LCTForce", !!State.cfg.force);
-    setToggleText("LCTTranslateOwn", State.cfg.translateOwn !== false);
-    setToggleText("LCTChatLog", State.cfg.chatLog !== false);
-    // 同步桥状态
+    // 同步选择控件当前值的显示文本。2026-10-31:面板移除后 setSelectText/labelFor/setToggleText
+    // 不再挂 globalThis —— 无面板时整块跳过(否则 boot 每次 ReferenceError)。
+    if (panel) {
+      setSelectText("LCTProviderSelect", labelFor(PROVIDER_OPTIONS, State.cfg.provider || "bing"));
+      setSelectText("LCTTargetLangSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.targetLanguage || "zh-Hans"));
+      setSelectText("LCTDisplayModeSelect", labelFor(DISPLAY_MODES, State.cfg.displayMode || "bilingual"));
+      setSelectText("LCTOutgoingSelect", labelFor(OUTGOING_MODES, State.cfg.outgoing || "off"));
+      setSelectText("LCTOutgoingTargetSelect", labelFor(LANGUAGE_OPTIONS, State.cfg.outgoingTarget || "en"));
+      setSelectText("LCTUILangSelect", labelFor(UI_LANG_OPTIONS, uiLangPref() || "auto"));
+      // 同步开关文本
+      setToggleText("LCTEnabled", !!State.cfg.enabled);
+      setToggleText("LCTForce", !!State.cfg.force);
+      setToggleText("LCTTranslateOwn", State.cfg.translateOwn !== false);
+      setToggleText("LCTChatLog", State.cfg.chatLog !== false);
+    }
+    // 同步桥状态(桥圆点在聊天控件区,与面板无关,始终更新)
     updateBridgeStatusUI();
   }
 
@@ -4391,7 +4409,7 @@ function injectTranslation(row, sig, text, fragment) {
     State.cfg.ui.uiLang = value;
     saveUiConfig();
     applyUILang();
-    closeSelectMenus();
+    if (typeof closeSelectMenus === "function") closeSelectMenus();
     try {
       bridgePost("config", { config: { ui: { uiLang: value } } }, function (res) {
         log("pickUILang persist: " + (res && res.ok ? "ok" : (res && res.error) || "failed"));
@@ -4891,6 +4909,7 @@ function injectTranslation(row, sig, text, fragment) {
   LCTNS.UI_LANG_OPTIONS = UI_LANG_OPTIONS;
   LCTNS.VERSION = VERSION;
   LCTNS.boot = boot;
+  LCTNS.applyUILang = applyUILang;
   LCTNS.bridgePost = bridgePost;
   LCTNS.childAt = childAt;
   LCTNS.childCount = childCount;
@@ -4915,6 +4934,8 @@ function injectTranslation(row, sig, text, fragment) {
   LCTNS.setStatus = setStatus;
   LCTNS.t = t;
   LCTNS.triggerStockSubmit = triggerStockSubmit;
+  LCTNS.injectHudTestMessage = injectHudTestMessage;
+  LCTNS.translateOutgoing = translateOutgoing;
   LCTNS.updateBridgeStatusUI = updateBridgeStatusUI;
 
   // 导出给 XML 布局调用的全局函数

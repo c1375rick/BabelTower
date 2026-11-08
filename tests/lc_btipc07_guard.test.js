@@ -39,7 +39,7 @@ console.log("--- 信封折叠(core/btipc 信封白名单冻结,新语义只能�
 // 的**写**语义分开 —— 桥端 op=config 分支按 get 优先解释 body,写与 get 不能共用一个 op 名)。
 ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1/.test(lc),
   "BTIPC_GET_OPS 覆盖 health / gamenames / quickchat");
-ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1, configsync: 1 \};/.test(lc),
+ok(/const BTIPC_GET_OPS = \{ health: 1, gamenames: 1, quickchat: 1, configsync: 1, selftest: 1 \};/.test(lc),
   "BTIPC_GET_OPS 含 configsync(btipc11 配置差分同步)");
 ok(/enqueueBridge\(isGet \? "config" : op, data, done, isGet\)/.test(lc),
   "bridgePost 把 get 折进 op=config");
