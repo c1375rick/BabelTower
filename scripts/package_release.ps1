@@ -65,6 +65,7 @@ try {
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
 New-Item -ItemType Directory -Path (Join-Path $Stage "core\providers") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Stage "config") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $Stage "data") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Stage "scripts") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Stage "portable-node") -Force | Out-Null
 
@@ -96,10 +97,16 @@ foreach ($f in $syncBaselines) {
 Write-Host "==> 复制配置示例与脚本..."
 Copy-Item (Join-Path $Root "config\config.example.json") (Join-Path $Stage "config\")
 Copy-Item (Join-Path $Root "config\dictionary.json") (Join-Path $Stage "config\")
-# 内置词典(Thirt927 特性, core/dictionary.js 运行时读取, 必须随包发布)
-Copy-Item (Join-Path $Root "config\dictionary.builtin.json") (Join-Path $Stage "config\")
-# 游戏专有名词映射(名称保护运行时读取, 由 core/game_names.js 生成)
-Copy-Item (Join-Path $Root "config\gamenames.json") (Join-Path $Stage "config\")
+# 随包数据(data\),2026-11-09 从 config\ 拆出:它们不是用户配置,而是
+# "内置 / 随游戏派生"的只读数据,混在 config\ 里会让四类生命周期不同的文件难以分辨。
+#   内置词典(Thirt927 特性): core/dictionary.js 运行时读取, 必须随包发布
+Copy-Item (Join-Path $Root "data\dictionary.builtin.json") (Join-Path $Stage "data\")
+#   游戏专有名词映射: 名称保护运行时读取, 由 core/game_names.js 生成
+Copy-Item (Join-Path $Root "data\gamenames.json") (Join-Path $Stage "data\")
+# 随包数据进包断言: 缺了桥不崩, 但内置词典静默为空 / 名称保护静默失效
+foreach ($f in @("data\dictionary.builtin.json", "data\gamenames.json")) {
+  if (-not (Test-Path (Join-Path $Stage $f))) { Fail "发行包缺随包数据 $f(core 运行时读取,缺则功能静默退化)" }
+}
 Copy-Item (Join-Path $Root "scripts\autostart.ps1") (Join-Path $Stage "scripts\")
 # 一键重启桥(autostart 安装成功提示与说明文档都指引它,漏打用户包里就没有)
 Copy-Item (Join-Path $Root "restart_bridge.bat") (Join-Path $Stage "restart_bridge.bat")
@@ -198,7 +205,7 @@ for ($w = 0; $w -lt 40; $w++) {
 # 清理冒烟测试产物,不随包发布
 # (quickchat.json 是桥启动时从游戏本地化重新生成的,每次启动都会覆盖,不该进包固化)
 Remove-Item (Join-Path $Stage "config\config.json") -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path $Stage "config\quickchat.json") -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $Stage "data\quickchat.json") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $Stage "logs") -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ("==> 冒烟测试通过 (127.0.0.1:{0})" -f $smokePort)
 

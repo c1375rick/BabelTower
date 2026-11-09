@@ -3,7 +3,7 @@
 //
 // 为什么不能把 HTTP 那三个 handler 原样搬过来:
 //   BTIPC 下行实测只有 ~12.6 B/s(docs/btipc-v1.md §9:一轮 = 16B,真机 0.79s/帧),
-//   而 config/quickchat.json 38988B、config/gamenames.json 9542B —— 全量同步要
+//   而 data/quickchat.json 38988B、data/gamenames.json 9542B —— 全量同步要
 //   13~50 分钟,物理不可行。所以三接口一律两段式:
 //     ① 握手:客户端报自己的指纹 → 桥回 same / mode(常态 same = 1 帧级开销);
 //     ② 仅当指纹不同才取数:桥按 off/lim 切片下发,gzip+base64
@@ -265,7 +265,7 @@ function evictPayloadCache() {
 /**
  * 构造当前数据的下发文本。
  * @param {string} kind      gamenames | quickchat
- * @param {object} current   桥侧现值(config/gamenames.json 或 config/quickchat.json)
+ * @param {object} current   桥侧现值(data/gamenames.json 或 data/quickchat.json)
  * @param {object|null} baseline { fingerprint, data } 客户端那一版兜底(mod/…/*_fallback.js)
  * @param {string|null} clientFp 客户端上报的指纹
  * @returns {{fp,count,mode,text}}

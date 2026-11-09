@@ -239,7 +239,7 @@ function startAutoFlush() {
 // 注意:若内置文件已显式带 en 段,以文件为准(不覆盖手动维护的 en)。
 function loadBuiltin() {
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "config", "dictionary.builtin.json"), "utf8"));
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "dictionary.builtin.json"), "utf8"));
     if (raw && raw.user && typeof raw.user === "object") {
       const builtin = raw.user;
       // 自动生成双向 en 段(zh 段反转),仅当文件未自带 en 段时

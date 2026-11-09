@@ -172,7 +172,7 @@ function buildExtraNames(root) {
 // 严禁各自手写 JSON.stringify —— 漏带 fingerprint 会让客户端握手永远走告警路径
 // (2026-09-25 实锢: watcher 路径漏写指纹,quickchat_handshake 测试间歇性红)。
 function writeBridgeConfig(r) {
-  const out = path.join(__dirname, "..", "config", "quickchat.json");
+  const out = path.join(__dirname, "..", "data", "quickchat.json");
   fs.writeFileSync(out, JSON.stringify({ version: 3, fingerprint: r.fingerprint, langs: ["schinese", "english"], templates: r.templates }, null, 2) + "\n", "utf8");
   return out;
 }

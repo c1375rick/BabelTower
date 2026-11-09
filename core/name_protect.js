@@ -4,14 +4,14 @@
 //
 // 数据来源:Deadlock 游戏自带本地化(game/citadel/resource/localization 下
 //   citadel_gc_hero_names + citadel_gc_mod_names 的 english/schinese txt),
-// 由 core/game_names.js 扫描生成 config/gamenames.json ({ 英文原名->中文译名 })。
+// 由 core/game_names.js 扫描生成 data/gamenames.json ({ 英文原名->中文译名 })。
 // 比客户端硬编码的 18 英雄名单全量(285 条)且随游戏更新自动刷新。
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const gameNames = require("./game_names");
 
-const CONFIG_PATH = path.join(__dirname, "..", "config", "gamenames.json");
+const GAMENAMES_PATH = path.join(__dirname, "..", "data", "gamenames.json");
 
 let NAME_MAP = [];      // [{ en, zh }]
 let PROTECT_RE = null;  // 匹配英文原名的正则(按长度降序,避免子串误匹配)
@@ -30,15 +30,15 @@ function buildRegex(names) {
 function load() {
   // 1. 优先读缓存的 gamenames.json
   let map = null;
-  if (fs.existsSync(CONFIG_PATH)) {
-    try { map = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); } catch (e) { map = null; }
+  if (fs.existsSync(GAMENAMES_PATH)) {
+    try { map = JSON.parse(fs.readFileSync(GAMENAMES_PATH, "utf8")); } catch (e) { map = null; }
   }
   // 2. 没有或读坏,现场生成
   if (!map || typeof map !== "object" || Object.keys(map).length === 0) {
     const built = gameNames.build();
     if (built.ok) {
       map = built.map;
-      try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(map, null, 2) + "\n", "utf8"); } catch (e) {}
+      try { fs.writeFileSync(GAMENAMES_PATH, JSON.stringify(map, null, 2) + "\n", "utf8"); } catch (e) {}
     }
   }
   if (!map) { loaded = true; NAME_MAP = []; PROTECT_RE = null; return; }
@@ -106,7 +106,7 @@ function watchLocalization() {
         const built = gameNames.build();
         if (built.ok) {
           try {
-            fs.writeFileSync(CONFIG_PATH, JSON.stringify(built.map, null, 2) + "\n", "utf8");
+            fs.writeFileSync(GAMENAMES_PATH, JSON.stringify(built.map, null, 2) + "\n", "utf8");
             // 重新载入内存
             load();
           } catch (e) {}

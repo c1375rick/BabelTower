@@ -26,8 +26,8 @@
 
 | 数据 | 紧凑 JSON(UTF-8) | 说明 |
 |---|---|---|
-| `config/gamenames.json` | 8 052 B / 292 条 | 全量 ≈107 片 |
-| `config/quickchat.json` 模板 | 13 536 B / 735 条 | 全量 ≈151 片 |
+| `data/gamenames.json` | 8 052 B / 292 条 | 全量 ≈107 片 |
+| `data/quickchat.json` 模板 | 13 536 B / 735 条 | 全量 ≈151 片 |
 
 按片长 90 B、每片约 11 s(9 帧 × 0.79 s + 3.5 s 固定开销)估算:
 **全量同步 = 18~25 分钟**,期间每片还会占住单槽队列(`MAX_ACTIVE_REQUESTS = 1`)约 7 s。
@@ -115,7 +115,7 @@ delta 的目标值是绝对值(新增/改译名直接给新值),在"客户端确
 
 新增 `core/game_names.js → writeClientFallback()` 生成
 `lingua_chat_gamenames_pairs_fallback.js`(292 条 `英文 → 中文` + 指纹),
-与 `config/gamenames.json` 同批同源,所以常态指纹必然相同:
+与 `data/gamenames.json` 同批同源,所以常态指纹必然相同:
 
 ```
 pairs entries=292 fp=fnv1a-cde876fa
@@ -164,7 +164,7 @@ config fp=fnv1a-cde876fa -> match: true
    ⚠️ 首轮这条日志不存在(已修);⚠️ 实际因 config 同步重复占槽被挤到 07:01:27(已修);
 3. 状态栏在线时应显示 `桥已连接 · <provider>` —— ✅ 由 `setBridgeStatus` 写
    `LCTBridgeStatus`,`markBridgeUp` 同步刷新 `LCTBridgeStatusLabel` 与圆点;
-4. 人为制造不一致(改 `config/gamenames.json` 一条译名后重启桥)→ 应看到
+4. 人为制造不一致(改 `data/gamenames.json` 一条译名后重启桥)→ 应看到
    `mode=delta`、3 片左右收齐、`gamenames applied … via delta`,期间发消息翻译不卡 —— ⬜ 未测
    (桥级 E2E 已覆盖同一条链路,29 PASS);
 5. 老包场景(删掉发布包里的 `mod\` 目录)→ 应退 `mode=full`,分片有进度、有预算护栏 —— ⬜ 未测;

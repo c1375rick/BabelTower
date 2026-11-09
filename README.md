@@ -327,7 +327,7 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 本项目合并了 [Thirt927](https://github.com/Thirt927) 的 `optimizations` 分支核心功能,包括:
 
 - **多翻译接口支持**:DeepL / Google / OpenAI 兼容接口(可在设置面板切换,支持回退链)
-- **内置词典**:`config/dictionary.builtin.json`(2801 条,JSON 文件无法内联注释,贡献记录于此)
+- **内置词典**:`data/dictionary.builtin.json`(2801 条,JSON 文件无法内联注释,贡献记录于此)
 - **大厅聊天翻译**:HUD 顶栏与大厅聊天记录支持(`hudchat.xml`)
 - **聊天日志**:按比赛 ID 落盘到 `logs/chat/`
 

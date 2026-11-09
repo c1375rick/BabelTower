@@ -58,9 +58,9 @@ Add-Type -Assembly System.IO.Compression.FileSystem
 $entries = @(
   @{ Path = "dist\pak01_dir.vpk"; Zip = "pak01_dir.vpk" }
   @{ Path = "config\config.example.json"; Zip = "config\config.example.json" }
-  @{ Path = "config\dictionary.builtin.json"; Zip = "config\dictionary.builtin.json" }
+  @{ Path = "data\dictionary.builtin.json"; Zip = "data\dictionary.builtin.json" }
   @{ Path = "config\dictionary.json"; Zip = "config\dictionary.json" }
-  @{ Path = "config\gamenames.json"; Zip = "config\gamenames.json" }
+  @{ Path = "data\gamenames.json"; Zip = "data\gamenames.json" }
 )
 
 # core/ directory (recursive)

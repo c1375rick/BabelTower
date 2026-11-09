@@ -81,7 +81,7 @@ ok(v.reload === true, "本地无指纹:即使模板数相同也走重拉路径(�
 
 // ---------- 生成产物跨文件指纹一致性(需真实生成文件;缺文件 skip+warning) ----------
 console.log("--- 生成产物指纹一致性 ---");
-const qcJsonPath = path.join(__dirname, "..", "config", "quickchat.json");
+const qcJsonPath = path.join(__dirname, "..", "data", "quickchat.json");
 const fbJsPath = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat_quickchat_fallback.js");
 if (fs.existsSync(qcJsonPath) && fs.existsSync(fbJsPath)) {
   const qcJson = JSON.parse(fs.readFileSync(qcJsonPath, "utf8"));

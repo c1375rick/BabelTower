@@ -199,6 +199,7 @@ try {
   exit 1
 }
 $need = @("core\bridge_server.js", "core\bridge_https.js", "core\web\ui.html", "portable-node\node.exe", "pak01_dir.vpk",
+  "data\dictionary.builtin.json", "data\gamenames.json",
   "scripts\restart_bridge.ps1", "scripts\gen_bridge_cert.ps1", "scripts\update_babeltower.ps1")
 $missing = @()
 foreach ($f in $need) { if (-not (Test-Path (Join-Path $unzip $f))) { $missing += $f } }
@@ -210,10 +211,10 @@ Say "包内容校验通过(" + $need.Count + " 个必需文件都在)"
 
 # ---------- 覆盖安装目录(保留用户数据) ----------
 # 保留清单:配置、词典、quickchat、日志。证书状态在 %LOCALAPPDATA%,不在这里,天然不受影响。
-$keep = @("config\config.json", "config\quickchat.json", "config\dictionary.json", "logs")
-Say "覆盖 core\ / scripts\ / mod\ / portable-node\ / 顶层 bat 与文档;保留: " + ($keep -join ", ")
+$keep = @("config\config.json", "config\dictionary.json", "data\quickchat.json", "logs")
+Say "覆盖 core\ / scripts\ / mod\ / portable-node\ / data\ / 顶层 bat 与文档;保留: " + ($keep -join ", ")
 $copied = 0
-foreach ($item in @("core", "scripts", "mod", "portable-node")) {
+foreach ($item in @("core", "scripts", "mod", "portable-node", "data")) {
   $src = Join-Path $unzip $item
   if (-not (Test-Path $src)) { continue }
   try {

@@ -84,7 +84,7 @@
 | `/ui` | GET | **网页设置页**(`core/web/ui.html`):`/tr` 用系统浏览器打开的就是它 |
 | `/api/v1/health` | GET | 健康检查 |
 | `/api/v1/quickchat` | GET | 快捷语音模板语料(桥从本机游戏 loc 实时生成,含指纹) |
-| `/api/v1/gamenames` | GET | 英雄/物品名保护名单(`config/gamenames.json`) |
+| `/api/v1/gamenames` | GET | 英雄/物品名保护名单(`data/gamenames.json`) |
 | `/api/v1/log` | GET/POST | 游戏侧日志上报(诊断探针) |
 | `/api/v1/version-check` | GET | 版本检查 |
 

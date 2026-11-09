@@ -731,7 +731,7 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 | 包内自报 | `README.md` 记 `1.2.1 (2026-10-20)`;zip 内 `VERSION` = `1.2.1`(package_release.ps1 的 `$requiredUserEntry` 强制携带),`core/web/ui.html` 在包内(网页设置页,缺它 `/tr` 会开 404) |
 | 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `2842631F…`);备份 `pak15_dir.vpk.bak-20261020-v121` |
 | 补发 | 23:03 安装/更新/诊断脚本补上「网页设置页」这条线(commit `7538e94`)→ 重打发行包(37,129,507B)→ GitHub `--clobber` 覆盖 + GB 换文件(`0b6da` → `cf16c`,条目 `466593` → `466602`)。**VPK 未变**(脚本改动不进 VPK),装车不需重做 |
-| 一致性 | 34/34 全链(停桥铁律:`git checkout -- config/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`) |
+| 一致性 | 34/34 全链(停桥铁律:`git checkout -- data/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`) |
 
 **本版内容(三条主线)**
 
@@ -757,7 +757,7 @@ VERSION 前计算(独立运行产出 `BabelTower--win64` 空版本目录)、冒�
 | GameBanana | 上传 `babeltower-120-win64_3df0e.zip`(`File_1850082`)→ 文件行版本 `1.2.0`;描述(中英合并短版)已替换;更新条目(`scripts/archive/gb_add_update6.js`,派生自 add5/1.1.0):6 条 changelog(1×Feature + 3×Bugfix + 1×Improvement + 1×Adjustment)+ blurb(377 字)+ 绑定 `File_1850082`;**回读复验**:列表页 Updates 最新为 `1.2.0`、主描述含 `Real-time Chat Translator for Deadlock` 与 `队友外语秒翻`、旧长文案与 "Installation (3 steps)" 已消失;编辑页文件行 18 行、末行 `1.2.0` |
 | 包内自报 | `README.md` → `1.2.0`;zip 内 `VERSION` 已随 `package_release.ps1` 的 `$requiredUserEntry` 强制携带(1.0.9~1.1.0 **全部发行包都漏过**,致 health 恒 `unknown`、version-check 的 `currentVersion` 恒 `null`) |
 | 装车 | `pak15_dir.vpk` == `dist/pak01_dir.vpk`(SHA256 `55ED30ED69665C…` 双向一致);备份 `pak15_dir.vpk.bak-cfgsync-20261016-0100` |
-| 一致性 | 34/34 全链(停桥铁律:`git checkout -- config/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`);`https_panel_guard` 88/88、`release_entry_guard` 68/68、`launcher_entry_guard` 44/44 |
+| 一致性 | 34/34 全链(停桥铁律:`git checkout -- data/quickchat.json` → `node tests\run-tests.js` → `restart_bridge.ps1`);`https_panel_guard` 88/88、`release_entry_guard` 68/68、`launcher_entry_guard` 44/44 |
 
 **本版内容(三条主线)**
 
@@ -1000,7 +1000,7 @@ quickchat 桥侧 84ms / 客户端 8555ms。**下行节拍慢是通道固有,不�
 **零分片复核**:本轮所有 `DONE` 只有三类 —— 单帧 echo(1 frame)、握手(11 frames/110B)、
 health 明细(5 frames/47B),外加 config(38 frames/375B)。
 **没有一条 `mode=delta` / `mode=full`** ⇒ 292 条名称保护 + 735 模板仍是烘焙兜底在扛
-(§8 第 4 条 delta 分片**尚未测**,用户还没改 `config/gamenames.json`)。
+(§8 第 4 条 delta 分片**尚未测**,用户还没改 `data/gamenames.json`)。
 
 **health 回声 8s 死线 vs STORM(老问题,本轮复现 1 次)**:
 09:07:41 RETRY crc consec=1 → 09:07:42 consec=2 进 STORM(`tClose=2500 rounds=4`,合计 10s)
@@ -1078,10 +1078,11 @@ Node.js 于 2026-10-21 发安全公告(26.12.1 / 24.22.1 / 22.23.4),我们随包
   在 .gitignore 里(不进 git,只随包分发,用户不必自装 Node)。
 - 升级后全链路实测:全链 35/35 ✓;诊断脚本报 Node v26.12.1 ✓;http 8791 ✓、https 8792
   (TCP+TLS+HTTP 200)✓、出站 bing 翻译 ✓、api.github.com 版本检查 ✓、BTIPC 位泵 ✓。
-- **踩坑记一笔(与 node 无关,但同一天踩到)**:测前若桥在跑,桥会重写 `config/quickchat.json`
+- **踩坑记一笔(与 node 无关,但同一天踩到)**:测前若桥在跑,桥会重写 `data/quickchat.json`
   (指纹 `fnv1a-f9ec2bc3` → `fnv1a-197a3523`),兜底指纹随即对不上 → `btipc07_sync` 与
-  `quickchat_handshake` **假红**。按铁律「停桥 → `git checkout -- config/quickchat.json` →
+  `quickchat_handshake` **假红**。按铁律「停桥 → `git checkout -- data/quickchat.json` →
   测 → 启桥」即可复绿。这条以前只在本机踩过,这次差点被误判成 node 升级引入的回归。
+  (注:2026-11-09 起 `quickchat.json` 已从 git 脱管并移到 `data/`,它不再随桥启动变脏,该铁律已作废。)
 - **发布影响**:已发布的 1.2.1 随包仍是 26.1.0;本次升级随 **1.2.2** 出。
 
 #### 18.6.1 三条 TLS 主机名校验绕过,我们的代码要不要改?—— 要,但改的是**护栏**不是逻辑

@@ -21,7 +21,7 @@ function skip(label) {
 }
 function readJson(p) { return JSON.parse(fs.readFileSync(p, "utf8")); }
 
-const CFG_DIR = path.join(__dirname, "..", "config");
+const DATA_DIR = path.join(__dirname, "..", "data");
 const MOD_DIR = path.join(__dirname, "..", "mod", "panorama", "scripts");
 
 // ---------- 与 core/quickchat.js 的指纹同源(sync_data 刻意内联了一份,防循环依赖) ----------
@@ -46,8 +46,8 @@ ok(syncData.extractAssignment("var X = notjson;", "X") === null, "非 JSON 字�
 
 const pairsPath = path.join(MOD_DIR, "lingua_chat_gamenames_pairs_fallback.js");
 const qcFbPath = path.join(MOD_DIR, "lingua_chat_quickchat_fallback.js");
-const gnPath = path.join(CFG_DIR, "gamenames.json");
-const qcPath = path.join(CFG_DIR, "quickchat.json");
+const gnPath = path.join(DATA_DIR, "gamenames.json");
+const qcPath = path.join(DATA_DIR, "quickchat.json");
 
 let pairs = null, pairsFp = null, qcTpl = null, qcFp = null;
 let gn = null, qc = null;

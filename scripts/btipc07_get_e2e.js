@@ -9,7 +9,7 @@
 //   ① 握手 same(零传输)—— gamenames / quickchat 打包基线与桥同源时的常态
 //   ② 握手 full(指纹不同)+ 取第 1 片 + 分片预算 lim
 //   ③ exp 指纹不符 -> fp_changed(拉到一半配置被重建)
-//   ④ delta 全程:临时让 config/gamenames.json 与基线分叉,收齐、解析、施加、对指纹
+//   ④ delta 全程:临时让 data/gamenames.json 与基线分叉,收齐、解析、施加、对指纹
 //      (config 文件在 finally 里恢复,另有一份模块级兜底副本)
 //   ⑤ get=health / 未知 get / op=config {} 回归(分流不影响原读)
 const fs = require("node:fs");
@@ -30,12 +30,12 @@ const T_CLOSE_MS = Number(process.env.BT_CLOSE_MS || 600);
 const MAX_ROUNDS = Number(process.env.BT_MAX_ROUNDS || 400);
 
 const ROOT = path.join(__dirname, "..");
-const GN_PATH = path.join(ROOT, "config", "gamenames.json");
+const GN_PATH = path.join(ROOT, "data", "gamenames.json");
 const PAIRS_PATH = path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_gamenames_pairs_fallback.js");
-const QC_PATH = path.join(ROOT, "config", "quickchat.json");
+const QC_PATH = path.join(ROOT, "data", "quickchat.json");
 const QCFB_PATH = path.join(ROOT, "mod", "panorama", "scripts", "lingua_chat_quickchat_fallback.js");
 
-// 模块级兜底副本:脚本任何位置崩掉都要能把 config/gamenames.json 还回去
+// 模块级兜底副本:脚本任何位置崩掉都要能把 data/gamenames.json 还回去
 let gnRawBackup = "";
 try { gnRawBackup = fs.readFileSync(GN_PATH, "utf8"); } catch (e) { /* ignore */ }
 
@@ -225,7 +225,7 @@ function parse(res, label) {
 
   // ---------- 恢复校验 ----------
   const after = fs.readFileSync(GN_PATH, "utf8");
-  ok(after === gnRaw, "config/gamenames.json 已原样恢复(字节相同)");
+  ok(after === gnRaw, "data/gamenames.json 已原样恢复(字节相同)");
   ok(syncData.namesFingerprint(JSON.parse(after)) === syncData.namesFingerprint(gn),
     "恢复后指纹回到 " + syncData.namesFingerprint(gn));
 

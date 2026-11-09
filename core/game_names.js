@@ -76,7 +76,7 @@ function build() {
 
 // 烘焙客户端兜底:btipc07 要做「指纹协商」,游戏侧必须自带一份桥认得的名单,
 // 否则每次开局都要花 10+ 分钟把 292 条名字过一遍 12.6 B/s 的下行通道。
-// 本文件与 config/gamenames.json 同源同批生成 → 指纹相同 → 握手 1 帧秒回 same。
+// 本文件与 data/gamenames.json 同源同批生成 → 指纹相同 → 握手 1 帧秒回 same。
 function writeClientFallback(map, outPath) {
   const pairs = {};
   const keys = Object.keys(map || {}).filter((k) => k !== "english" && k !== "schinese").sort();
@@ -95,11 +95,11 @@ function writeClientFallback(map, outPath) {
 
 module.exports = { build, findDeadlockRoot, cleanZh, writeClientFallback };
 
-// 直接运行:生成并落盘 config/gamenames.json(桥侧缓存)+ 客户端兜底名单
+// 直接运行:生成并落盘 data/gamenames.json(桥侧缓存)+ 客户端兜底名单
 if (require.main === module) {
   const r = build();
   if (!r.ok) { console.error("BUILD FAIL:", r.error); process.exit(1); }
-  const out = path.join(__dirname, "..", "config", "gamenames.json");
+  const out = path.join(__dirname, "..", "data", "gamenames.json");
   fs.writeFileSync(out, JSON.stringify(r.map, null, 2) + "\n", "utf8");
   console.log("wrote", out, "entries:", r.count);
   const fb = writeClientFallback(r.map);

@@ -35,6 +35,12 @@ tmp_vpk_*.txt
 
 config/dictionary.json.bak
 
+# 游戏派生缓存(桥每次启动从游戏本地化重生成,内容随游戏版本变)
+# 放在 data/ 但不入库:它每次启动都会被重写,入库只会让工作树反复变脏
+# (旧铁律「停桥 -> git checkout -- config/quickchat.json」正是这么来的)。
+# 其余 data/*.json(dictionary.builtin / gamenames)是随包数据,仍入库。
+data/quickchat.json
+
 tmp_*.js
 tmp_*.ps1
 tmp_*.b64

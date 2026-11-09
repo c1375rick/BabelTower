@@ -134,7 +134,7 @@ const SYNC_KINDS = {
 
 function readSyncConfig(kind) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "config", SYNC_KINDS[kind].cfg), "utf8"));
+    return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", SYNC_KINDS[kind].cfg), "utf8"));
   } catch (e) {
     return null;
   }
@@ -1374,7 +1374,7 @@ if (p === "/api/v1/health") {
       sendJson(res, 405, { ok: false, error: "method_not_allowed" });
       return;
     }
-    const gamenamesPath = path.join(__dirname, "..", "config", "gamenames.json");
+    const gamenamesPath = path.join(__dirname, "..", "data", "gamenames.json");
     try {
       const data = JSON.parse(fs.readFileSync(gamenamesPath, "utf8"));
       // btipc07:补 fingerprint(与 BTIPC get=gamenames 同源),客户端可离线判断兜底是否过期
@@ -1390,7 +1390,7 @@ if (p === "/api/v1/health") {
       sendJson(res, 405, { ok: false, error: "method_not_allowed" });
       return;
     }
-    const quickchatPath = path.join(__dirname, "..", "config", "quickchat.json");
+    const quickchatPath = path.join(__dirname, "..", "data", "quickchat.json");
     try {
       const data = JSON.parse(fs.readFileSync(quickchatPath, "utf8"));
       // v3(2026-09-17): 原始模板数组(免正则,客户端分段比对);兼容读取旧 v2 patterns 字段
