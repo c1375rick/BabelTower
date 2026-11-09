@@ -1135,3 +1135,37 @@ Node.js 于 2026-10-21 发安全公告(26.12.1 / 24.22.1 / 22.23.4),我们随包
   保留了 direct-input → fileChooser 的回退链。
 - **GB 条目的文件勾选键要去点**:上传后的文件名 GB 会加哈希后缀(`babeltower-122-win64.zip`,
   历史版本如 `babeltower-121-win64_cf16c.zip`),所以按**前缀** `babeltower-122-win64` 匹配。
+
+## 20. 存储布局重构:config/ 按生命周期拆分(2026-11-09)
+
+一次"只挪文件、不改协议"的结构整理。起因:`config/` 里混了四类生命周期完全不同的东西,
+其中 `quickchat.json` 每次桥启动都被重写却入了 git,工作树反复变脏,逼出一条
+「停桥 → `git checkout -- config/quickchat.json`」的运维铁律(§18.6 踩坑条)。
+
+| 目录 | 文件 | 生命周期 |
+|---|---|---|
+| `config/` | `config.json`(脱管)、`config.example.json`、`dictionary.json` | 用户状态 / 模板 |
+| `data/` | `dictionary.builtin.json`、`gamenames.json`(入库)、`quickchat.json`(**脱管**) | 随包数据 / 游戏派生缓存 |
+
+- 迁徙:`config/{dictionary.builtin,gamenames,quickchat}.json` → `data/`;删 `config/dictionary.json.bak`。
+- `data/quickchat.json` 进 `.gitignore` —— 它每次启动被重写,不再脏化工作树,**停桥铁律作废**。
+- 引用点:内核 6(`dictionary` / `name_protect`(`CONFIG_PATH`→`GAMENAMES_PATH`)/ `game_names` /
+  `quickchat` / `bridge_server` 同步读 + 两个 HTTP 端点 / `sync_data` 注释)、脚本 4
+  (`package_release` 建 `Stage\data` + 进包断言 + 清理、`make_release_zip`、`update_babeltower`
+  的 `$need`/`$keep`/拷贝循环、`btipc07_get_e2e`)、测试 2 + 新增 `storage_layout_guard`、文档 4。
+- 发版影响:`package_release.ps1` 把 `data\` 打进包并断言两数据文件在包;`update_babeltower.ps1`
+  必需清单加两数据、覆盖循环加 `data`;脱管的 `data\quickchat.json` 不进包,覆盖时不会动用户已有的。
+
+### 20.1 验证
+
+- `node tests\run-tests.js` = **41/41**(新增 `tests/storage_layout_guard.test.js`,20 项断言:
+  存在性 + 源码钉 + 防回潮,登记进 `tests/run-tests.js`)。
+- 桥重启(新代码)`health ok=True`;实车 `gamenames/quickchat sync: fingerprint match, no transfer`(§17 那两条通道指纹仍同源)。
+- **桥运行中**再跑全套仍 **41/41**,且 `config/` 全程干净 —— 直接证明铁律已废除。
+
+### 20.2 踩坑:旧进程写回
+
+重构验证时 `storage_layout_guard` 的两条"已移出"恒红 —— 排查发现是两个 08:56 启动、
+**加载改动前旧代码**的桥进程(PID 1508/20724)仍按 `config/` 路径写回。停桥后清掉复活文件
+即复绿。教训:**验证目录类改动前,务必先确认运行中的进程已加载新代码**(旧进程会把判定
+"已删除"的文件持续写回来)。
