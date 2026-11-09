@@ -20,6 +20,7 @@ const BATS = [
   "StartDeadlock.bat",
   "run-bridge.bat",
   "restart_bridge.bat",
+  "install-babeltower.bat",
   "BabelTower-维护菜单.bat",
 ];
 

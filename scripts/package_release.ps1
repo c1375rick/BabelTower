@@ -118,6 +118,9 @@ Copy-Item (Join-Path $Root "run-bridge.bat") (Join-Path $Stage "run-bridge.bat")
 # 下一步」串成一次双击,并在失败时明说"还剩什么能用"。
 Copy-Item (Join-Path $Root "scripts\gen_bridge_cert.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "scripts\install_babeltower.ps1") (Join-Path $Stage "scripts\")
+# 一键安装入口(2026-11-09):此前文档引用「双击 install-babeltower.bat」,但仓库根目录
+# 根本没有这个文件 —— 用户照文档做会找不到入口。补上,并进打包清单。
+Copy-Item (Join-Path $Root "install-babeltower.bat") (Join-Path $Stage "install-babeltower.bat")
 
 # 卸载侧(2026-10-15):此前只有 remove-autostart.bat(只删自启),"卸载"这件事散落五处
 # (mod 包 / 自启 / 常驻桥 / 信任库里的证书 / 状态目录),用户只能手动删文件,很容易留残件。
@@ -144,7 +147,7 @@ Copy-Item (Join-Path $Root "VERSION") (Join-Path $Stage "VERSION") -Force
 # 因此这里显式点名每个用户会双击或被文档指引的文件,缺一个就拒绝出包。
 $requiredUserEntry = @(
   "restart_bridge.bat", "StartDeadlock.bat", "run-bridge.bat",
-  "BabelTower-维护菜单.bat",
+  "install-babeltower.bat", "BabelTower-维护菜单.bat",
   "scripts\restart_bridge.ps1", "scripts\bridge_health.ps1", "scripts\autostart.ps1",
   "scripts\gen_bridge_cert.ps1", "scripts\install_babeltower.ps1",
   "scripts\uninstall_babeltower.ps1", "scripts\update_babeltower.ps1",

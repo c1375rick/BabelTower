@@ -11,7 +11,11 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\install_babeltower.ps1 -Status      # 只看现状,不改任何东西
 #   powershell -ExecutionPolicy Bypass -File scripts\install_babeltower.ps1 -Yes         # 非交互(信任库改动已在上层确认)
 #   powershell -ExecutionPolicy Bypass -File scripts\install_babeltower.ps1 -SkipCert    # 只重启桥,不碰信任库
-#   powershell -ExecutionPolicy Bypass -File scripts\install_babeltower.ps1 -InstallMod  # 游戏已关时顺手装 mod
+#   powershell -ExecutionPolicy Bypass -File scripts\install_babeltower.ps1 -SkipMod     # 只装证书+桥,不动 addons 里的 mod
+#
+# 注意:**默认就会装 mod**(证书 + 桥 + mod 一次到位),这是用户最可能的入口(双击
+# install-babeltower.bat)。想只装证书与桥的用 -SkipMod。旧参数 -InstallMod 保留为兼容
+# 别名(等同于默认行为,不报错)。
 #
 # 设计约束(都是踩过的坑换来的):
 #   * 路径一律相对 $PSScriptRoot 的上级 —— 发行包里没有 F:\BabelTower 这个概念,
@@ -28,7 +32,8 @@ param(
   [switch]$Status,      # 只体检不改任何东西
   [switch]$SkipCert,    # 不碰信任库
   [switch]$Yes,         # 免交互确认(证书那一步)
-  [switch]$InstallMod,  # 游戏已关时把 pak01_dir.vpk 装到 addons\
+  [switch]$SkipMod,     # 显式跳过装 mod(只装证书 + 桥)
+  [switch]$InstallMod,  # 兼容别名:默认已会装 mod,此开关等同默认,不报错
   [string]$GameRoot = $(if ($env:DEADLOCK_ROOT) { $env:DEADLOCK_ROOT } else { "" })
 )
 
@@ -111,8 +116,11 @@ if ($Status) {
     Write-Host "  作用域 : 仅当前 Windows 用户,不涉及系统级与企业级信任库"
     Write-Host "  用途   : 让游戏内隐藏 HTML 面板能加载本机 https 页面(否则只能走 BTIPC 位泵)"
     Write-Host "  撤销   : scripts\gen_bridge_cert.ps1 -Untrust"
-    $ans = Read-Host "确认加入信任库?输入 YES 继续"
-    $ok = ($ans -ceq "YES")
+    $ans = Read-Host "确认加入信任库?输入 y 继续,直接回车取消"
+    $a = ""
+    if ($ans) { $a = $ans.Trim().ToLower() }
+    # 大小写不敏感地接受 y / yes;直接回车(空)或任何其它输入 = 取消。
+    $ok = ($a -eq "y" -or $a -eq "yes")
   }
   if ($ok) {
     Say "开始生成并信任证书…"
@@ -133,14 +141,50 @@ if ($Status) {
   }
 }
 
-# ---------- 2. 装 mod(可选) ----------
-if ($InstallMod) {
-  if (-not $GameRoot) { Say "没有游戏根,跳过装 mod。" "warn" }
-  elseif (Get-Process -Name deadlock -ErrorAction SilentlyContinue) {
-    Say "游戏正在运行 —— **绝不**在游戏运行时替换 vpk。跳过装 mod,退出游戏后重跑本脚本(带 -InstallMod)。" "warn"
+# ---------- 2. 装 mod(默认就装;显式 -SkipMod 可跳过) ----------
+# 2026-11-09:默认装 mod。此前只有带 -InstallMod 才装,而用户最可能的入口(双击
+# install-babeltower.bat / 维护菜单选 1)不会带参数 —— 结果"装了没反应"。现在默认装,
+# 想只装证书+桥的用 -SkipMod;旧参数 -InstallMod 保留为兼容别名(等同默认,不报错)。
+if ($Status) {
+  # STATUS 模式只读:绝不动 addons 里的任何文件
+} elseif ($SkipMod) {
+  Say "按要求跳过装 mod(-SkipMod):只处理证书与桥。"
+} else {
+  $gameRunning = [bool](Get-Process -Name deadlock -ErrorAction SilentlyContinue)
+  if ($gameRunning) {
+    # 游戏在跑时替换 vpk 会留下损坏的半截文件 —— 结果块要醒目,并给一个**有界的等待**:
+    # 提示后轮询最多约 60 秒(每秒一次),退出了就继续装;超时仍跳过并指路。
+    Write-Host ""
+    Write-Host "================================================================"
+    Write-Host " !! 检测到 Deadlock 正在运行 —— 绝不 在游戏运行时替换 vpk"
+    Write-Host ""
+    Write-Host " 运行中替换会留下损坏的半截 vpk,所以现在不动 addons 里的文件。"
+    Write-Host " 我会等你退出游戏,最多等约 60 秒(每 1 秒检查一次)…"
+    Write-Host "================================================================"
+    Write-Host ""
+    Say "游戏正在运行 —— 绝不 在游戏运行时替换 vpk;最多等约 60 秒等它退出。" "warn"
+    for ($w = 1; $w -le 60; $w++) {
+      Start-Sleep -Seconds 1
+      if (-not (Get-Process -Name deadlock -ErrorAction SilentlyContinue)) { $gameRunning = $false; break }
+    }
+    if (-not $gameRunning) { Say "游戏已退出,继续装 mod。" }
+  }
+
+  if (-not $GameRoot) {
+    Say "没有游戏根,跳过装 mod(只装桥不影响已装好的 mod)。" "warn"
+  } elseif ($gameRunning) {
+    Write-Host ""
+    Write-Host "================================================================"
+    Write-Host " 等满 60 秒游戏仍在运行 —— 本次跳过装 mod。"
+    Write-Host " 退出游戏后重跑本脚本即可自动安装。"
+    Write-Host "================================================================"
+    Write-Host ""
+    Say "等待超时,游戏仍在运行:本次跳过装 mod。退出游戏后重跑本脚本即可自动安装。" "warn"
   } else {
-    $src = Join-Path $Root "pak01_dir.vpk"
-    if (-not (Test-Path $src)) { Say "发行包里没有 pak01_dir.vpk,跳过装 mod(只装桥不影响已装好的 mod)。" "warn" }
+    # 先找 build.ps1 的产物 dist\pak01_dir.vpk,再找包根的同名文件(取第一个存在的)。
+    $src = Join-Path $Root "dist\pak01_dir.vpk"
+    if (-not (Test-Path $src)) { $src = Join-Path $Root "pak01_dir.vpk" }
+    if (-not (Test-Path $src)) { Say "发行包里没有 pak01_dir.vpk(也没找到 dist\pak01_dir.vpk),跳过装 mod(只装桥不影响已装好的 mod)。" "warn" }
     else {
       $addons = Join-Path $GameRoot "game\citadel\addons"
       if (-not (Test-Path $addons)) { Say ("找不到 addons 目录: " + $addons + ",跳过装 mod。") "warn" }
@@ -178,17 +222,6 @@ if ($InstallMod) {
           Die ("装 mod 失败: " + $_.Exception.Message)
         }
       }
-    }
-  }
-} elseif (-not $Status) {
-  if ($GameRoot) {
-    $addons = Join-Path $GameRoot "game\citadel\addons"
-    $present = @(Get-ChildItem $addons -Filter "pak*_dir.vpk" -ErrorAction SilentlyContinue)
-    if ($present.Count) {
-      Say ("addons 里已有 " + $present.Count + " 个 pak 目录包。要装本包请重跑并加 -InstallMod(游戏须已退出)。")
-    } else {
-      Say ("addons 里没有 pak 目录包 —— 游戏内功能还没装上。把 " + (Join-Path $Root "pak01_dir.vpk") +
-        " 复制到 " + (Join-Path $addons "pak15_dir.vpk") + ",或重跑本脚本加 -InstallMod。") "warn"
     }
   }
 }
@@ -270,22 +303,16 @@ if (-not $Status) {
   Say ("网页设置页    : " + $(if ($httpOk) { "http://127.0.0.1:8791/ui  (游戏内按 /tr 就打开它)" } else { "桥不通,先修桥" }))
 }
 Write-Host ""
-if ($certTrusted) {
-  Write-Host "★ 还差最后一步(顺序不能换):"
-  Write-Host "  1) **完全退出 Steam**(托盘图标也退掉)"
-  Write-Host "  2) 重新打开 Steam"
-  Write-Host "  3) 启动游戏,进对局发一条消息"
-  Write-Host "  设置:游戏内按 /tr —— 浏览器会打开网页设置页(服务商/语言/游戏内行为都在那儿;"
-  Write-Host "        改完点保存,**游戏 1 秒内生效**,不用重启)"
-  Write-Host "  原因:信任库由 Steam 宿主缓存,**只重启游戏不生效**(实测)。"
-  Write-Host "  验没验上:游戏 console.log 里出现 [LCT] https panel: ALIVE 即成功;"
-  Write-Host "           出现 https panel: not usable 说明还有问题,把那一行发给我们。"
-} else {
-  Write-Host "下一步:把上面的 pak01_dir.vpk 复制到 addons\pak15_dir.vpk(游戏退出状态下),"
-  Write-Host "        然后启动游戏即可。想要低延迟通道,再跑一次本脚本并同意加入证书信任。"
-  Write-Host "设置:游戏内按 /tr —— 浏览器会打开网页设置页(服务商/语言/游戏内行为都在那儿;"
-  Write-Host "      改完点保存,游戏 1 秒内生效,不用重启。"
-}
+Write-Host "★ 下一步(三步,顺序不能换):"
+Write-Host "  1) 完全退出 Steam(含托盘图标)后重新打开 Steam"
+Write-Host "  2) 双击 StartDeadlock.bat 启动游戏"
+Write-Host "  3) 进对局后按 /tr 打开网页设置页"
+Write-Host ""
+# 技术细节(BTIPC 位泵 / https panel: ALIVE 等)只进日志,不写进上面用户可见的编号步骤,
+# 免得开发术语吓到普通用户。证书与 https 通道的现状在下面这条日志里。
+Say ("技术细节:桥 " + $(if ($httpOk) { "可用" } else { "不通(看 logs\bridge.log)" }) +
+  ";证书 " + $(if ($certTrusted) { "已信任 " + $certThumb } else { "未信任(翻译仍走 BTIPC,功能不受影响)" }) +
+  ";https 面板通道 " + $(if ($httpsOk) { "端口通(进游戏看 console.log 有没有 https panel: ALIVE)" } else { "不可用 —— 翻译走 BTIPC 位泵(3~27s)" }) + "。")
 Write-Host ""
 Say "日志: $LogFile"
 exit 0

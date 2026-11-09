@@ -13,7 +13,8 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
 
 1. 把整个文件夹解压到你喜欢的位置(路径可含中文,但不要带空格,如 D:\BabelTower)
 
-2. 安装游戏内 Mod —— 槽位固定为 addons\pak15_dir.vpk,按下面三步做:
+2. 安装游戏内 Mod —— **默认就会装**:双击 install-babeltower.bat 会一次把证书 + 桥 + Mod
+   都装好(请在游戏退出状态下运行)。想手动装,槽位固定为 addons\pak15_dir.vpk,按下面三步做:
    **① 先完全退出 Deadlock**(游戏运行中覆盖会留下损坏的半截 VPK)
    **② 把 addons 里现有的 pak15_dir.vpk 改名备份**(如 pak15_dir.vpk.bak-日期)
    **③ 再把包里的 pak01_dir.vpk 改名为 pak15_dir.vpk 放进去**
@@ -33,7 +34,9 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
      卸载自启:BabelTower-维护菜单.bat → 选 6
    方法 B(临时):双击 StartDeadlock.bat(每次玩之前都要双击一次)
 
-3.5【可选,但强烈建议】开低延迟通道 —— 双击 **BabelTower-维护菜单.bat → 选 1**(一键安装)
+3.5【可选,但强烈建议】开低延迟通道 —— 双击 **install-babeltower.bat**
+    (等同 BabelTower-维护菜单.bat → 选 1)。它默认把证书 + 桥 + Mod 一次装好;
+    只想装证书与桥、不动 Mod 的,运行 scripts\install_babeltower.ps1 时加 -SkipMod。
    不做这步也完全能用,只是译文会慢(3~27 秒)。做了之后实测**约 1 秒以内**
    (服务端只占 0.06 秒,余下是游戏内页面加载 + 0.3 秒的结果轮询粒度)。
 
@@ -42,7 +45,7 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
    隐藏 HTML 面板能加载本机 https 页面 —— 那是低延迟回程的唯一拦点
    (引擎报 error:-202 = ERR_CERT_AUTHORITY_INVALID)。
 
-   ⚠ 它会请你确认后才写入信任库。输入 YES 继续;不确认就直接跳过,
+   ⚠ 它会请你确认后才写入信任库。输入 y 继续;直接回车(或输入其它内容)即取消,
      翻译仍然走原来的通道,功能不受影响。
 
    ⚠ 它**不需要管理员权限**。证书写的是"当前用户"的库,Steam 和游戏用同一个
@@ -221,6 +224,7 @@ A: 游戏部分:Mod Manager 里禁用/删除,或删掉 addons 里对应的 vpk�
   core\                  本地翻译桥(不要删)
   portable-node\         内置 Node.js 运行时(不要删)
   BabelTower-维护菜单.bat        双击打开维护菜单(安装/更新/卸载/诊断/自启开关)
+  install-babeltower.bat 一键安装:证书 + 桥 + Mod(首次设置直接双击它)
   restart_bridge.bat     一键重启桥 + 健康检查(桥没起来先点它)
   run-bridge.bat         诊断启动器(报错不闪退;反馈问题前先跑它)
   StartDeadlock.bat      手动启动(桥 + 游戏)

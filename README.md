@@ -75,6 +75,7 @@ BabelTower/
 ├── scripts/diagnose_babeltower.ps1 一键检测:只读,输出脱敏报告(每条结论带判据)
 ├── scripts/uninstall_babeltower.ps1 卸载/还原:mod + 自启 + 桥 + 证书 + 状态目录,默认保守逐项确认
 ├── BabelTower-维护菜单.bat  维护总入口(先选语言再进菜单:安装/更新/卸载/诊断/自启开关,也支持带参数)
+├── install-babeltower.bat  一键安装:证书 + 桥 + Mod(首次设置直接双击它)
 ├── StartDeadlock.bat       手动启动:桥 + 游戏
 ├── docs/                   架构与开发文档(入口:docs/README.md)
 │   ├── README.md             文档索引:读法 / 状态图例 / 冲突优先级 / 维护规则
@@ -110,8 +111,9 @@ BabelTower/
    Steam 库 → Deadlock 右键 → 属性 → 常规 → **启动选项** 填 `-condebug`
    > 桥若检测到游戏已运行 90s 仍无本次启动的 `console.log`，会在 `logs\bridge.log` 打一条
    > `[… ] [warn] 缺少 -condebug` 告警
-4. 双击 **`BabelTower-维护菜单.bat`**（中文菜单先选语言），按菜单走：
-   - **选 1 一键安装**：环境检查 → 证书信任（https 低延迟通道的唯一拦点）→ 起桥 → 验收
+4. 双击 **`install-babeltower.bat`**(或 `BabelTower-维护菜单.bat` 选 1),按提示走：
+   - **一键安装(默认)**:环境检查 → 证书信任（https 低延迟通道的唯一拦点，输入 `y` 确认，直接回车取消）→ 起桥 → **自动把 Mod 装进 addons** → 验收
+   - 只想装证书与桥、不动 Mod：`scripts\install_babeltower.ps1 -SkipMod`
    - **选 5** 装开机自启（之后 Steam 直接启动游戏即可，桥常驻；不想装也行，用选 6 关）
 5. 日常使用（都在同一个维护菜单里，不用记多个脚本）：
    | 事项 | 做法 |
