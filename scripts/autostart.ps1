@@ -73,9 +73,10 @@ If Not fso.FileExists(node) Then node = "node"
 If fso.FileExists(server) Then
   sh.Run """" & node & """ """ & server & """", 0, False
 End If
-' 2026-10-16: https 面板通道的 TLS 终结进程。开机只起 bridge_server 会导致
-' 8792 无监听,游戏探针判死、全天退回 BTIPC(08:47 实车)。缺证书时它 exit(3)
-' 自退,无影响;文件不存在(老包)则跳过。
+' 2026-10-16: TLS terminator for the https panel channel. Booting only
+' bridge_server leaves 8792 with no listener, the probe fails and the whole
+' day falls back to BTIPC (seen live 08:47). Exits 3 by itself when the cert
+' is missing (no harm); skipped when the file is absent (old package).
 If fso.FileExists(https) Then
   sh.Run """" & node & """ """ & https & """", 0, False
 End If
